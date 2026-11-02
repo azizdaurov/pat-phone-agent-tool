@@ -1,0 +1,36 @@
+
+Estimating what was heard: 2 microseconds each
+Piper, one sentence: first audio 0.223 s, whole piece 0.223 s (median of 4)
+Note added to Haiku's next message: 132 characters
+
+=== Russian (Piper, length known)
+   1.8/7.1s audio says  2 words | estimate  2 at margin 0,  1 at margin 0.5 | 'Здравствуйте'
+   3.6/7.1s audio says  6 words | estimate  6 at margin 0,  4 at margin 0.5 | 'Здравствуйте, звоню узнать, работает'
+   5.3/7.1s audio says 10 words | estimate  9 at margin 0,  9 at margin 0.5 | 'Здравствуйте, звоню узнать, работает ли ваша клиника в это'
+   1.6/6.4s audio says  1 words | estimate  2 at margin 0,  1 at margin 0.5 | 'Спасибо'
+   3.2/6.4s audio says  5 words | estimate  5 at margin 0,  5 at margin 0.5 | 'Спасибо, осмотр стоит сто тысяч'
+   4.8/6.4s audio says  8 words | estimate  9 at margin 0,  8 at margin 0.5 | 'Спасибо, осмотр стоит сто тысяч сумов, я передам'
+   1.3/5.4s audio says  1 words | estimate  1 at margin 0,  1 at margin 0.5 | 'Подскажите'
+   2.7/5.4s audio says  3 words | estimate  4 at margin 0,  3 at margin 0.5 | 'Подскажите, пожалуйста, можно'
+   4.0/5.4s audio says  9 words | estimate  8 at margin 0,  7 at margin 0.5 | 'Подскажите, пожалуйста, можно ли прийти на приём'
+   1.3/5.1s audio says  1 words | estimate  2 at margin 0,  2 at margin 0.5 | 'Понял, вы'
+   2.5/5.1s audio says  5 words | estimate  5 at margin 0,  4 at margin 0.5 | 'Понял, вы работаете с'
+   3.8/5.1s audio says  9 words | estimate  9 at margin 0,  8 at margin 0.5 | 'Понял, вы работаете с девяти утра до трёх'
+  estimate ahead of the audio: margin 0: 4/12, real margin: 1/12; words behind at real margin: median 0, most 2, least -1
+  speaking rate: 11.7-14.2 characters per second
+
+=== English (Pocket TTS, length guessed)
+   1.1/4.4s audio says  2 words | estimate  4 at margin 0,  2 at margin 0.5 | 'Hello, I'
+   2.2/4.4s audio says 10 words | estimate  8 at margin 0,  6 at margin 0.5 | 'Hello, I am calling to find'
+   3.3/4.4s audio says 14 words | estimate 12 at margin 0,  9 at margin 0.5 | 'Hello, I am calling to find out whether your'
+   1.3/5.2s audio says  5 words | estimate  5 at margin 0,  3 at margin 0.5 | 'Thank you, the'
+   2.6/5.2s audio says  6 words | estimate  8 at margin 0,  7 at margin 0.5 | 'Thank you, the check up costs one'
+   3.9/5.2s audio says 14 words | estimate 13 at margin 0, 11 at margin 0.5 | 'Thank you, the check up costs one hundred thousand, and I'
+   0.9/3.8s audio says  6 words | estimate  3 at margin 0,  1 at margin 0.5 | 'Could'
+   1.9/3.8s audio says 10 words | estimate  7 at margin 0,  4 at margin 0.5 | 'Could you tell me'
+   2.8/3.8s audio says 15 words | estimate 10 at margin 0,  8 at margin 0.5 | 'Could you tell me whether it is possible'
+   1.1/4.2s audio says  4 words | estimate  3 at margin 0,  1 at margin 0.5 | 'I'
+   2.1/4.2s audio says 10 words | estimate  7 at margin 0,  5 at margin 0.5 | 'I understand, you are open'
+   3.2/4.2s audio says 15 words | estimate 11 at margin 0,  9 at margin 0.5 | 'I understand, you are open from nine in the'
+  estimate ahead of the audio: margin 0: 2/12, real margin: 1/12; words behind at real margin: median 4, most 7, least -1
+  speaking rate: 18.7-23.4 characters per second

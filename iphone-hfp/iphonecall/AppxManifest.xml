@@ -1,0 +1,58 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Package for iphonecall.exe, installed from pkg\ in Developer Mode by build.ps1.
+     Windows only lets packaged apps use the hands-free calling APIs. Every capability and the
+     phoneCallActivation extension below were needed for (or present when) calling with laptop voice
+     was verified; removing any of them is untested. See ..\README.md, "Things that matter". -->
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:uap13="http://schemas.microsoft.com/appx/manifest/uap/windows10/13"
+  xmlns:desktop="http://schemas.microsoft.com/appx/manifest/desktop/windows10"
+  xmlns:desktop4="http://schemas.microsoft.com/appx/manifest/desktop/windows10/4"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 uap13 desktop desktop4 rescap">
+
+  <Identity Name="AzizDaurov.iPhoneCall" Publisher="CN=AzizDaurov" Version="1.0.0.0" ProcessorArchitecture="x64" />
+
+  <Properties>
+    <DisplayName>iPhone Call</DisplayName>
+    <PublisherDisplayName>Aziz Daurov</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+  </Properties>
+
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.22000.0" MaxVersionTested="10.0.26200.0" />
+  </Dependencies>
+
+  <Resources>
+    <Resource Language="en-us" />
+  </Resources>
+
+  <Applications>
+    <Application Id="iPhoneCall" Executable="iphonecall.exe" EntryPoint="Windows.FullTrustApplication"
+                 desktop4:Subsystem="console" desktop4:SupportsMultipleInstances="true">
+      <uap:VisualElements DisplayName="iPhone Call" Description="Dial and answer iPhone calls from the terminal"
+                          BackgroundColor="transparent" AppListEntry="none"
+                          Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
+      <Extensions>
+        <uap3:Extension Category="windows.appExecutionAlias" Executable="iphonecall.exe" EntryPoint="Windows.FullTrustApplication">
+          <uap3:AppExecutionAlias>
+            <desktop:ExecutionAlias Alias="iphonecall.exe" />
+          </uap3:AppExecutionAlias>
+        </uap3:Extension>
+        <!-- Without this, RegisterApp() silently does nothing on Windows 11 (IsRegistered stays false). -->
+        <uap13:Extension Category="windows.phoneCallActivation" />
+      </Extensions>
+    </Application>
+  </Applications>
+
+  <Capabilities>
+    <rescap:Capability Name="runFullTrust" />
+    <rescap:Capability Name="phoneLineTransportManagement" />
+    <uap:Capability Name="phoneCall" />
+    <DeviceCapability Name="microphone" />
+    <DeviceCapability Name="bluetooth" />
+    <DeviceCapability Name="radios" />
+  </Capabilities>
+</Package>

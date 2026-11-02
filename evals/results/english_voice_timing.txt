@@ -1,0 +1,120 @@
+
+=== Pocket TTS peter_yearsley: loaded in 7.3 s
+Claude: Hello, this is Daurove's AI assistant Claude.
+Claude: I'm calling to find out what time tomorrow's meeting starts and where it's located.
+  first audio 0.90 s, silence inside reply 0.00 s
+Claude: Great, thank you.
+Claude: So the meeting is at eleven in the morning tomorrow.
+Claude: Now, where will the meeting be held?
+  first audio 1.77 s, silence inside reply 0.00 s
+Claude: And where is the meeting located?
+  first audio 0.81 s, silence inside reply 0.00 s
+Claude: Perfect, so the meeting is at the office on Navoi street, third floor.
+Claude: Is there anything else important about tomorrow's meeting that Daurove should know?
+  first audio 0.95 s, silence inside reply 0.00 s
+Claude: Thank you for confirming.
+Claude: Is there anything else important about the meeting I should let Daurove know?
+  first audio 0.80 s, silence inside reply 0.00 s
+Claude: Got it, I'll pass that on to Daurove.
+Claude: Thanks for your help, and goodbye.
+  first audio 0.85 s, silence inside reply 0.00 s
+  == Pocket TTS peter_yearsley: first audio median 0.87 s, slowest 1.77 s | silence inside a reply median 0.00 s, longest pause 0.00 s | audio gaps reported 0
+
+=== Pocket TTS alba: loaded in 1.3 s
+Claude: Hello, this is Daurove's AI assistant Claude, and I'm calling to find out what time tomorrow's meeting starts and where it is.
+  first audio 1.69 s, silence inside reply 0.00 s
+Claude: Great, so the meeting starts at eleven in the morning.
+Claude: Now, where is the meeting being held?
+  first audio 0.85 s, silence inside reply 0.00 s
+Claude: Thanks for confirming.
+Claude: Where is the meeting located?
+  first audio 0.85 s, silence inside reply 0.00 s
+Claude: Perfect, so the meeting is at the office on Navoi street on the third floor.
+Claude: Is there anything else important about this meeting that Daurove should know?
+  first audio 1.67 s, silence inside reply 0.00 s
+Claude: Got it.
+Claude: Is there anything else important I should tell Daurove about this meeting?
+  first audio 0.83 s, silence inside reply 0.00 s
+Claude: I'll pass that on to Daurove.
+Claude: Thank you for all this information, and goodbye.
+  first audio 1.05 s, silence inside reply 0.00 s
+  == Pocket TTS alba: first audio median 0.95 s, slowest 1.69 s | silence inside a reply median 0.00 s, longest pause 0.00 s | audio gaps reported 0
+
+=== Pocket TTS bill_boerst: loaded in 1.6 s
+Claude: Hello, this is Daurove's AI assistant Claude.
+Claude: I'm calling to find out what time tomorrow's meeting starts and where it is.
+  first audio 1.15 s, silence inside reply 0.00 s
+Claude: Great, so the meeting starts at eleven in the morning.
+Claude: Where is it being held?
+  first audio 0.97 s, silence inside reply 0.00 s
+Claude: And where is the meeting located?
+  first audio 1.27 s, silence inside reply 0.00 s
+Claude: Perfect, so it's at the office on Navoi street, third floor.
+Claude: Is there anything else important Daurove should know about this meeting?
+  first audio 1.08 s, silence inside reply 0.00 s
+Claude: Thank you, I have everything.
+Claude: The meeting is tomorrow at eleven in the morning at the office on Navoi street, third floor.
+Claude: I'll pass this on to Daurove.
+Claude: Goodbye.
+  first audio 1.17 s, silence inside reply 0.00 s
+  == Pocket TTS bill_boerst: first audio median 1.15 s, slowest 1.27 s | silence inside a reply median 0.00 s, longest pause 0.00 s | audio gaps reported 0
+
+=== Pocket TTS michael: loaded in 1.3 s
+Claude: Hello, this is Daurove's AI assistant Claude.
+Claude: I'm calling to find out what time tomorrow's meeting starts and where it is.
+  first audio 0.96 s, silence inside reply 0.00 s
+Claude: Great, so the meeting starts at eleven in the morning.
+Claude: Now, where is the meeting taking place?
+  first audio 1.00 s, silence inside reply 0.00 s
+Claude: Thank you.
+Claude: Where is the meeting located?
+  first audio 0.78 s, silence inside reply 0.00 s
+Claude: Perfect, so it's at the office on Navoi street on the third floor.
+Claude: Is there anything else important about the meeting that Daurove should know?
+  first audio 0.93 s, silence inside reply 0.00 s
+Claude: Thank you for that information.
+Claude: I have everything I need—the meeting is tomorrow at eleven in the morning at the office on Navoi street, third floor.
+Claude: I'll pass this on to Daurove.
+Claude: Goodbye.
+  first audio 0.91 s, silence inside reply 0.00 s
+  == Pocket TTS michael: first audio median 0.93 s, slowest 1.00 s | silence inside a reply median 0.00 s, longest pause 0.00 s | audio gaps reported 0
+
+=== Pocket TTS anna: loaded in 1.3 s
+Claude: Hello, this is Daurove's AI assistant Claude calling to find out what time tomorrow's meeting starts and where it is.
+  first audio 1.20 s, silence inside reply 0.00 s
+Claude: Great, so the meeting starts at eleven in the morning.
+Claude: Now, where is the meeting taking place?
+  first audio 0.87 s, silence inside reply 0.00 s
+Claude: Thanks for confirming.
+Claude: Where is the meeting located?
+  first audio 0.86 s, silence inside reply 0.00 s
+Claude: Perfect, so the meeting is at the office on Navoi street, third floor.
+Claude: Is there anything else important about tomorrow's meeting that Daurove should know?
+  first audio 0.91 s, silence inside reply 0.00 s
+Claude: Thanks for confirming.
+Claude: Is there anything else important about the meeting that Daurove should know?
+  first audio 0.77 s, silence inside reply 0.00 s
+Claude: Got it, I'll pass that on to Daurove—he should bring a suit because it's a formal meeting.
+Claude: Thanks for your help!
+  first audio 1.01 s, silence inside reply 0.00 s
+  == Pocket TTS anna: first audio median 0.89 s, slowest 1.20 s | silence inside a reply median 0.00 s, longest pause 0.00 s | audio gaps reported 0
+
+=== Pocket TTS charles: loaded in 1.5 s
+Claude: Hello, this is Daurove's AI assistant Claude calling to find out what time tomorrow's meeting starts and where it is.
+  first audio 1.22 s, silence inside reply 0.00 s
+Claude: Great, thanks!
+Claude: So the meeting starts at eleven in the morning tomorrow.
+Claude: Where is it being held?
+  first audio 0.86 s, silence inside reply 0.00 s
+Claude: And where is the meeting located?
+  first audio 0.81 s, silence inside reply 0.00 s
+Claude: Perfect, so it's at the office on Navoi Street, third floor.
+Claude: Is there anything else important about the meeting that Daurove should know?
+  first audio 0.99 s, silence inside reply 0.00 s
+Claude: Thanks for confirming that.
+Claude: Is there anything else important about the meeting that Daurove should know?
+  first audio 0.93 s, silence inside reply 0.00 s
+Claude: Got it, I'll pass that on to Daurove.
+Claude: Thanks for your help, and goodbye.
+  first audio 1.00 s, silence inside reply 0.00 s
+  == Pocket TTS charles: first audio median 0.96 s, slowest 1.22 s | silence inside a reply median 0.00 s, longest pause 0.00 s | audio gaps reported 0

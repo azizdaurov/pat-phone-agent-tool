@@ -1,0 +1,3 @@
+michael          14.1-21.4 characters per second, median 16.8 | guess 13 | estimate ahead of the audio on 3/36 cuts
+anna             11.2-20.0 characters per second, median 16.8 | guess 13 | estimate ahead of the audio on 4/36 cuts
+charles          13.7-20.7 characters per second, median 16.6 | guess 13 | estimate ahead of the audio on 1/36 cuts

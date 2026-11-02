@@ -1,0 +1,15 @@
+limit 800
+call 1: 2.4s | Notes updated: 0 old + 238 transcript -> 222 characters. | all transcripts so far 238
+call 2: 2.5s | Notes updated: 222 old + 258 transcript -> 242 characters. | all transcripts so far 496
+call 3: 2.2s | Notes updated: 242 old + 240 transcript -> 213 characters. | all transcripts so far 736
+call 4: 2.1s | Notes updated: 213 old + 244 transcript -> 195 characters. | all transcripts so far 980
+call 5: 2.2s | Notes updated: 195 old + 242 transcript -> 248 characters. | all transcripts so far 1222
+call 6: 2.5s | Notes updated: 248 old + 266 transcript -> 266 characters. | all transcripts so far 1488
+call 7: 2.2s | Notes updated: 266 old + 216 transcript -> 234 characters. | all transcripts so far 1704
+call 8: 2.5s | Notes updated: 234 old + 252 transcript -> 270 characters. | all transcripts so far 1956
+---- final notes
+WHO: Рустам, сантехник, русский язык, обращаться на ты
+FACTS: чинит кран за 600000 сумов, предлагает заменить бойлер за 2000000 сумов, второй номер 9007770
+OPEN: Daurove должен решить о замене бойлера до 20 ноября
+LAST: 2026-11-08, Рустам просит ответ о бойлере к 20 ноября
+---- 270 characters vs 1956 if appended: 7.2x smaller

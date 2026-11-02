@@ -1,0 +1,3 @@
+peter_yearsley   16.5-20.8 characters per second, median 17.4 | guess 15 | estimate ahead of the audio on 2/36 cuts
+alba             14.4-23.4 characters per second, median 20.4 | guess 15 | estimate ahead of the audio on 0/36 cuts
+bill_boerst      13.4-21.2 characters per second, median 18.3 | guess 13 | estimate ahead of the audio on 1/36 cuts

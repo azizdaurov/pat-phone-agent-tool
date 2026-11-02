@@ -1,0 +1,175 @@
+....................Claude: Здравствуйте, это Клод.
+Cicero: speech started, 1.8 s into the call
+Cicero: speech ended after 4.8 s
+Them: столица канады это оттава а самый большой город страны
+Claude: Извините, я звоню от Daurove, чтобы узнать,
+Claude: как у вас дела.
+Claude: Как ваши дела?
+Cicero: first audio 3.44 s after their speech ended, plus 0.7 s of waiting to be sure they had
+Cicero: call over: time limit, loudest sound heard 0.992 of 1
+............Cicero: Sonnet correct (broke a limit): Take back the promise.
+Claude: (cut off, heard only: Да, запишите)
+Claude: Минутку, пожалуйста.
+Claude: Поправка.
+.Claude: (cut off, heard only: Daurove вас)
+Claude: Хорошо.
+Claude: Хорошо.
+.Claude: (cut off, heard nothing of this reply)
+Claude: Хорошо.
+.Claude: Хорошо.
+.[Claude error: down]
+.Claude: До свидания!
+Claude: (cut off, heard nothing of this reply)
+Claude: Да, слушаю.
+.Claude: До свидания!
+.Claude: (cut off, heard nothing of this reply)
+Cicero: not spoken: До свидания!
+Claude: Что вы хотели спросить?
+.Claude: (cut off, heard only: Как у вас)
+Claude: Продолжу.
+..............Cicero: Haiku asks Sonnet: Что сказать?
+Claude: Одну минуту.
+Cicero: Sonnet answers: Ask them again whether you've reached the right person.
+Claude: Это Рустам?
+.Claude: Рустам рядом?
+Claude: Подожду.
+.Claude: Не дождался ответа. Мы перезвоним. До свидания.
+Cicero: call over: nobody there, loudest sound heard 0.000 of 1
+.Claude: Здравствуйте.
+Claude: Мы перезвоним.
+Claude: До свидания.
+.Claude: а
+Claude: б
+Claude: в
+.Claude: Кто это?
+Status: person confirmed; the task starts now
+Claude: Звоню узнать про встречу.
+.Status: person confirmed; the task starts now
+Claude: Звоню.
+Claude: Да.
+.Claude: Извините.
+Claude: До свидания.
+.......Cicero: first audio 1.00 s after their speech ended, plus 0.7 s of waiting to be sure they had
+...Claude: Здравствуйте.
+Cicero: no speech for 0.1 s, checking they're still there
+Claude: Вы здесь?
+Cicero: no speech for 0.1 s, checking they're still there
+Claude: Вы меня слышите?
+.Claude: Здравствуйте.
+.Claude: Здравствуйте.
+...Claude: Хорошо.
+.Cicero: Sonnet correct (broke a limit): Take back the promise.
+Claude: Минутку, пожалуйста.
+Claude: Извините, я ошибся.
+.Cicero: Sonnet correct (broke a limit): Take back the promise.
+Claude: Одну секунду.
+Claude: Поправка.
+Claude: Ответ.
+.Claude: До свидания.
+.Cicero: Haiku asks Sonnet: Можно?
+Claude: Одну секунду.
+Cicero: Sonnet answers: Tell them you can't decide this and will pass it on to Daurove.
+Claude: Я передам Daurove.
+.Cicero: Haiku asks Sonnet: Можно ли назначить, скажем, на вторник?
+Claude: Одну секунду.
+Cicero: Sonnet answers: Say no.
+Claude: На вторник нельзя.
+.Cicero: Haiku asks Sonnet: Можно?
+Claude: Секундочку.
+Cicero: Sonnet answers: Tell them you can't decide this and will pass it on to Daurove.
+Claude: Я передам Daurove.
+.Cicero: not spoken: Ответ.
+.Claude: Хорошо.
+Claude: Хорошо.
+Claude: Хорошо.
+.Claude: Одну секунду.
+Claude: Одну минуту.
+Claude: Одну минуту.
+Claude: Одну минуту.
+Claude: Секундочку.
+Claude: Секундочку.
+Claude: Минутку, пожалуйста.
+Claude: Одну секунду.
+Claude: Секундочку.
+Claude: Секундочку.
+Claude: Извините, одну секунду.
+Claude: Минутку, пожалуйста.
+Claude: Минутку, пожалуйста.
+Claude: Минутку, пожалуйста.
+Claude: Секундочку.
+Claude: Одну минуту.
+Claude: Одну минуту.
+Claude: Одну минуту.
+Claude: Секундочку.
+Claude: Секундочку.
+Claude: Одну минуту.
+Claude: Минутку, пожалуйста.
+Claude: Извините, одну секунду.
+Claude: Минутку, пожалуйста.
+Claude: Секундочку.
+Claude: Одну минуту.
+Claude: Одну секунду.
+Claude: Минутку, пожалуйста.
+Claude: Извините, одну секунду.
+Claude: Одну секунду.
+Claude: Минутку, пожалуйста.
+Claude: Секундочку.
+Claude: Извините, одну секунду.
+Claude: Одну секунду.
+Claude: Одну секунду.
+Claude: Одну минуту.
+Claude: Одну минуту.
+Claude: Извините, одну секунду.
+Claude: Одну секунду.
+Claude: Одну минуту.
+.Cicero: Sonnet steer (drifting): Ask about Sunday.
+Claude: Хорошо.
+Claude: Хорошо.
+.Claude: Здравствуйте.
+Cicero: speech started, 0.0 s into the call
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+Claude: Повторите, пожалуйста.
+Cicero: speech started, 0.0 s into the call
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+Claude: Не расслышал.
+Cicero: speech started, 0.0 s into the call
+Claude: (cut off, heard nothing of this reply)
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+Cicero: speech started, 0.0 s into the call
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+.Claude: Здравствуйте.
+Cicero: speech started, 0.0 s into the call
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+Claude: Повторите, пожалуйста.
+Cicero: speech started, 0.0 s into the call
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+Claude: Не расслышал.
+Cicero: speech started, 0.0 s into the call
+Cicero: speech ended after 0.0 s
+Them: да
+Claude: Третий.
+Cicero: speech started, 0.0 s into the call
+Claude: (cut off, heard nothing of this reply)
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+Claude: Четвёртый.
+Cicero: speech started, 0.0 s into the call
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+Claude: Хорошо.
+.Claude: Здравствуйте.
+Cicero: speech started, 0.0 s into the call
+Cicero: speech ended after 0.0 s
+Cicero: speech detected, but recognition got no words
+Claude: Повторите, пожалуйста.
+..........................................
+----------------------------------------------------------------------
+Ran 131 tests in 43.363s
+
+OK
