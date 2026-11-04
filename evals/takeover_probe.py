@@ -10,19 +10,19 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."
 import numpy as np
 import pyaudiowpatch
 import sounddevice as sd
-import cicero
+import pat
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 pa = pyaudiowpatch.PyAudio()
 loopbacks = {d["name"]: d for d in pa.get_loopback_device_info_generator()}
-silent_speaker = cicero.find_silent_speaker()
+silent_speaker = pat.find_silent_speaker()
 boom = next(d for name, d in loopbacks.items() if silent_speaker in name)
-speaker_index, mic_index = cicero.real_devices()
+speaker_index, mic_index = pat.real_devices()
 print("real speaker:", sd.query_devices(speaker_index)["name"], "| real microphone:", sd.query_devices(mic_index)["name"], flush=True)
 real_name = sd.query_devices(speaker_index)["name"]
 real_loop = next(d for name, d in loopbacks.items() if name.startswith(real_name))
-cable_in = next(i for i, d in enumerate(sd.query_devices()) if "WASAPI" in sd.query_hostapis(d["hostapi"])["name"] and cicero.CABLE_HEAR in d["name"] and d["max_input_channels"] > 0)
-boom_out = cicero.find_output(silent_speaker)
+cable_in = next(i for i, d in enumerate(sd.query_devices()) if "WASAPI" in sd.query_hostapis(d["hostapi"])["name"] and pat.CABLE_HEAR in d["name"] and d["max_input_channels"] > 0)
+boom_out = pat.find_output(silent_speaker)
 rate = int(sd.query_devices(boom_out)["default_samplerate"])
 tone = (0.1 * np.sin(2 * np.pi * 440 * np.arange(int(rate * 1.2)) / rate)).astype(np.float32)
 
@@ -55,9 +55,9 @@ def measure_while(action):
     return {name: round(value, 4) for name, value in peaks.items()}
 
 
-caller = cicero.CallerAudio(device=boom)
+caller = pat.CallerAudio(device=boom)
 print("before taking over:", measure_while(play_on_silent_speaker), flush=True)
-takeover = cicero.LaptopTakeover(caller, speaker_index, mic_index, cicero.find_output(cicero.CABLE_PLAY))
+takeover = pat.LaptopTakeover(caller, speaker_index, mic_index, pat.find_output(pat.CABLE_PLAY))
 takeover.start()
 started = time.perf_counter()
 print("after taking over :", measure_while(play_on_silent_speaker), flush=True)

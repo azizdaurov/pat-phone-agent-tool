@@ -1,0 +1,222 @@
+=== table en claude-haiku-4-5 run 1
+   them: Hello, Bella Cucina, how can I help?
+   pat:  I'm calling for Aziz to book a table for four at eight p.m. on Friday the sixth of November, under the name Aziz. Is that time available?
+   them: Yes, we have a table for four on Friday at eight.
+   pat:  Great, thank you. What do you recommend from your menu?
+   them: Done, it's booked under Aziz. We recommend the grilled sea bass.
+   pat:  Perfect, I'll pass that on to Aziz. Thank you very much, and goodbye.
+
+[END]
+         ^ markdown or list
+   them: You're welcome, bye!
+   pat:  [END]
+=== table en claude-haiku-4-5 run 2
+   them: Hello, Bella Cucina, how can I help?
+   pat:  Hi, I'm calling for Aziz to book a table for four at eight pm on Friday, the sixth of November. Is that possible?
+   them: Yes, we have a table for four on Friday at eight.
+   pat:  Great, thank you. I'd like to book that under the name Aziz. And what do you recommend from your menu?
+   them: Done, it's booked under Aziz. We recommend the grilled sea bass.
+   pat:  Perfect, that's booked under Aziz for four at eight pm on Friday the sixth. Thank you so much, and we'll try the grilled sea bass.
+
+[END]
+         ^ markdown or list
+   them: You're welcome, bye!
+   pat:  Goodbye!
+
+[END]
+         ^ markdown or list
+=== table en claude-haiku-5-5 run 1
+   them: Hello, Bella Cucina, how can I help?
+   pat:  Hi, this is Pat, Aziz's AI assistant. I'm calling to book a table for four at 8 pm this Friday, 2026-11-06, under the name Aziz. Is that time available?
+         ^ a year said, raw date format
+   them: Yes, we have a table for four on Friday at eight.
+   pat:  Great, thank you. Just to confirm, that's a table for four this Friday, 2026-11-06, at 8 pm, under the name Aziz. What do you recommend on your menu?
+         ^ a year said, raw date format
+   them: Done, it's booked under Aziz. We recommend the grilled sea bass.
+   pat:  Thank you so much, that's perfect. I'll pass the grilled sea bass recommendation on to Aziz. Have a great day, goodbye! [END]
+   them: You're welcome, bye!
+   pat:  Goodbye, have a great day!
+=== table en claude-haiku-5-5 run 2
+   them: Hello, Bella Cucina, how can I help?
+   pat:  Hi, this is Pat, Aziz's AI assistant. I'm calling to book a table for four at 8 pm this Friday, November 6th, under the name Aziz. Is that available?
+   them: Yes, we have a table for four on Friday at eight.
+   pat:  Great, thank you. Could you confirm that's a table for four at 8 pm this Friday, November 6th, under the name Aziz? And what would you recommend from your menu?
+   them: Done, it's booked under Aziz. We recommend the grilled sea bass.
+   pat:  Thank you so much, that's perfect. I'll pass the grilled sea bass recommendation on to Aziz. Have a great evening, goodbye! [END]
+   them: You're welcome, bye!
+   pat:  Goodbye, thank you!
+=== table ru claude-haiku-4-5 run 1
+   them: Алло, ресторан Белла, слушаю.
+   pat:  Здравствуйте! Звоню от Азизы, хочу забронировать столик на четверых на пятницу, шесть ноября, в двадцать часов.
+         ^ long sentence
+   them: Да, на пятницу в восемь вечера столик на четверых есть.
+   pat:  Спасибо! Столик на четверых в пятницу, шесть ноября, в двадцать часов — подтверждаю. На какое имя забронировать?
+   them: Записала на Азиза. Советую сибаса на гриле.
+   pat:  Отлично! Записано на Азиза. Спасибо за совет, сибас на гриле — очень хороший выбор!
+
+[END]
+         ^ markdown or list
+   them: Пожалуйста, до свидания!
+   pat:  До свидания!
+
+[END]
+         ^ markdown or list
+=== table ru claude-haiku-4-5 run 2
+   them: Алло, ресторан Белла, слушаю.
+   pat:  Здравствуйте, звоню для Азизы. Нужен столик на четверых на пятницу, шестого ноября, в двадцать часов.
+   them: Да, на пятницу в восемь вечера столик на четверых есть.
+   pat:  Спасибо. Столик на четверых в пятницу в двадцать часов — можно забронировать на имя Азиз?
+   them: Записала на Азиза. Советую сибаса на гриле.
+   pat:  Спасибо, запомню. Сибаса на гриле вы советуете — это рыба?
+   them: Пожалуйста, до свидания!
+   pat:  До свидания, спасибо за помощь!
+
+[END]
+         ^ markdown or list
+=== table ru claude-haiku-5-5 run 1
+   them: Алло, ресторан Белла, слушаю.
+   pat:  Здравствуйте, я виртуальный ассистент. Звоню по поручению Азиза. Хотел бы забронировать столик на четверых в пятницу, шестого ноября, в двадцать часов.
+   them: Да, на пятницу в восемь вечера столик на четверых есть.
+   pat:  Отлично, спасибо. Скажите, пожалуйста, что вы посоветуете из блюд или напитков?
+   them: Записала на Азиза. Советую сибаса на гриле.
+   pat:  Спасибо большое. Подтверждаю: столик на четверых, пятница, шестое ноября, двадцать часов, на имя Азиз. Передам Азизу ваш совет про сибаса на гриле. Всего доброго!
+
+[END]
+         ^ markdown or list
+   them: Пожалуйста, до свидания!
+   pat:  До свидания!
+
+[END]
+         ^ markdown or list
+=== table ru claude-haiku-5-5 run 2
+   them: Алло, ресторан Белла, слушаю.
+   pat:  Здравствуйте, я виртуальный ассистент. Звоню по поручению Азиза. Хотел бы забронировать столик на четверых в пятницу, шестого ноября, в 20:00, на имя Азиз. Есть ли такая возможность?
+         ^ digits in Russian, long sentence
+   them: Да, на пятницу в восемь вечера столик на четверых есть.
+   pat:  Отлично, спасибо. Подскажите, пожалуйста, что вы посоветуете из блюд или напитков?
+   them: Записала на Азиза. Советую сибаса на гриле.
+   pat:  Спасибо большое, запомню. Столик на четверых в пятницу, шестого ноября, в двадцать ноль-ноль, на имя Азиз. Всё верно?
+   them: Пожалуйста, до свидания!
+   pat:  Спасибо за помощь, всего доброго! До свидания.
+
+[END]
+         ^ markdown or list
+=== price ru claude-haiku-4-5 run 1
+   them: Да, клиника, слушаю.
+   pat:  Здравствуйте, звоню от Азизы. Нужно узнать цену чистки зубов и свободное время на этой неделе.
+   them: Чистка стоит 350 тысяч сумов.
+   pat:  Спасибо, триста пятьдесят тысяч сумов. А какое свободное время есть на этой неделе?
+   them: В четверг в 14:30 есть окно.
+   pat:  Четверг — это сегодня, в четырнадцать тридцать. Подходит ли это время?
+   them: Хорошо, всего доброго.
+   pat:  Спасибо, всего хорошего. Передам информацию Азизе.
+
+[END]
+         ^ markdown or list
+=== price ru claude-haiku-4-5 run 2
+   them: Да, клиника, слушаю.
+   pat:  Здравствуйте, звоню для Азизы. Нужно узнать цену чистки зубов и свободное время на этой неделе.
+   them: Чистка стоит 350 тысяч сумов.
+   pat:  Спасибо, триста пятьдесят тысяч сумов. Есть ли свободное время на этой неделе?
+   them: В четверг в 14:30 есть окно.
+   pat:  В четверг четвёртого ноября в четырнадцать тридцать — подходит?
+   them: Хорошо, всего доброго.
+   pat:  Спасибо, до свидания!
+
+[END]
+         ^ markdown or list
+=== price ru claude-haiku-5-5 run 1
+   them: Да, клиника, слушаю.
+   pat:  Здравствуйте, я виртуальный ассистент. Мой пользователь — Азиза. Звоню по поручению Азизы, хочу узнать цену чистки зубов и есть ли свободное время на этой неделе.
+         ^ long sentence
+   them: Чистка стоит 350 тысяч сумов.
+   pat:  Спасибо. Подскажите, пожалуйста, есть ли свободное время на этой неделе?
+   them: В четверг в 14:30 есть окно.
+   pat:  Правильно ли я понимаю, что в четверг, двенадцатого ноября, в четырнадцать тридцать?
+   them: Хорошо, всего доброго.
+   pat:  Спасибо большое, всего доброго. До свидания.
+
+[END]
+         ^ markdown or list
+=== price ru claude-haiku-5-5 run 2
+   them: Да, клиника, слушаю.
+   pat:  Здравствуйте, я виртуальный ассистент. Мой пользователь — Азиза. Звоню по поручению Азизы: хочу узнать цену чистки зубов и есть ли свободное время на этой неделе.
+         ^ long sentence
+   them: Чистка стоит 350 тысяч сумов.
+   pat:  Понял, чистка стоит триста пятьдесят тысяч сумов. Подскажите, пожалуйста, когда у вас есть свободное время на этой неделе?
+   them: В четверг в 14:30 есть окно.
+   pat:  Уточню: четверг — это двенадцатое ноября, верно? Вы имеете в виду четверг двенадцатого, в четырнадцать тридцать?
+   them: Хорошо, всего доброго.
+   pat:  Спасибо большое, всего доброго! До свидания.
+
+[END]
+         ^ markdown or list
+=== price en claude-haiku-4-5 run 1
+   them: Yes, dental clinic.
+   pat:  I'm calling to find out the price of a dental cleaning and whether you have a free appointment slot this week.
+   them: A cleaning is $120.
+   pat:  Great, so a cleaning is $120. Do you have any free slots this week?
+   them: Thursday at 2:30 pm is free.
+   pat:  Perfect, Thursday at 2:30 pm—that's today. Just to confirm, you mean this afternoon at 2:30?
+   them: Okay, take care.
+   pat:  Thank you, and goodbye.
+
+[END]
+         ^ markdown or list
+=== price en claude-haiku-4-5 run 2
+   them: Yes, dental clinic.
+   pat:  I'm calling for Aziz to find out the price of a dental cleaning and whether you have an opening this week. Can you help me with that?
+   them: A cleaning is $120.
+   pat:  Great, so a cleaning is $120. Now, do you have a free slot available this week?
+   them: Thursday at 2:30 pm is free.
+   pat:  Perfect, Thursday at 2:30 pm works. That's today, November 5th at 2:30 pm — I'll pass that on to Aziz. Thank you!
+
+[END]
+         ^ markdown or list
+   them: Okay, take care.
+   pat:  Goodbye!
+
+[END]
+         ^ markdown or list
+=== price en claude-haiku-5-5 run 1
+   them: Yes, dental clinic.
+   pat:  Thanks. I'm calling for Aziz to ask about a dental cleaning. How much does a cleaning cost?
+   them: A cleaning is $120.
+   pat:  Thanks, so that's 120 dollars for a cleaning. Do you have a free slot this week?
+   them: Thursday at 2:30 pm is free.
+   pat:  Thanks. Is that this Thursday, 2026-11-05, or next Thursday, 2026-11-12, at 2:30 pm?
+         ^ a year said, raw date format
+   them: Okay, take care.
+   pat:  Thank you, goodbye. [END]
+=== price en claude-haiku-5-5 run 2
+   them: Yes, dental clinic.
+   pat:  Thanks. Could you tell me how much a dental cleaning costs?
+   them: A cleaning is $120.
+   pat:  Just to confirm, a cleaning is $120. Do you have a free slot this week?
+   them: Thursday at 2:30 pm is free.
+   pat:  Thanks, I have 2:30 pm on Thursday. Do you mean today, Thursday 2026-11-05, or next Thursday, 2026-11-12?
+         ^ a year said, raw date format
+   them: Okay, take care.
+   pat:  Thanks for your help, I'll pass this on to Aziz. Goodbye! [END]
+
+=== totals, replies with each problem
+claude-haiku-4-5: 32 replies, median first text 0.76 s, ended with [END] on the goodbye 8 of 8
+   a year said: 0
+   raw date format: 0
+   markdown or list: 11
+   brackets or marks left: 0
+   parentheses, slash, &: 0
+   emoji: 0
+   digits in Russian: 0
+   Latin in Russian: 0
+   long sentence: 1
+claude-haiku-5-5: 32 replies, median first text 1.46 s, ended with [END] on the goodbye 6 of 8
+   a year said: 4
+   raw date format: 4
+   markdown or list: 5
+   brackets or marks left: 0
+   parentheses, slash, &: 0
+   emoji: 0
+   digits in Russian: 1
+   Latin in Russian: 0
+   long sentence: 3

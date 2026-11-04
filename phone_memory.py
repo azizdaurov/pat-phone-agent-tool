@@ -11,9 +11,11 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 FOLDER = os.path.join(HERE, "contacts")
 SUMMARY_LIMIT = 800  # characters, about 200 tokens: what every later call pays for
 MIN_HEARD_CHARS = 15  # below this ("алло", "угу") there is nothing to remember, so the model isn't called
-PINNED = "## Pinned (yours; Cicero never changes this)"
+PINNED = "## Pinned (yours; Pat never changes this)"
+OLD_PINNED = "## Pinned (yours; Cicero never changes this)"  # notes written before the rename
 SUMMARY = "## Summary (rewritten after each call)"
-ATTEMPTS = "## Attempts (Cicero writes these; the last few are kept)"
+ATTEMPTS = "## Attempts (Pat writes these; the last few are kept)"
+OLD_ATTEMPTS = "## Attempts (Cicero writes these; the last few are kept)"
 MAX_ATTEMPTS = 5
 
 SUMMARY_PROMPT = """You keep short private notes about one phone number, for an AI assistant that speaks for {owner} on phone calls.
@@ -54,7 +56,7 @@ def number_key(text):
 
 
 class ContactNotes:
-    """A plain Markdown file you can read and edit. Delete it to make Cicero forget that number."""
+    """A plain Markdown file you can read and edit. Delete it to make Pat forget that number."""
 
     def __init__(self, key, folder=FOLDER):
         self.key = key
@@ -76,6 +78,7 @@ class ContactNotes:
                 self._parse(f.read())
 
     def _parse(self, text):
+        text = text.replace(OLD_PINNED, PINNED).replace(OLD_ATTEMPTS, ATTEMPTS)
         head, _, rest = text.partition(PINNED)
         self.pinned, _, self.summary = rest.partition(SUMMARY)
         self.summary, _, attempts = self.summary.partition(ATTEMPTS)

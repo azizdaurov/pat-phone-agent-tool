@@ -9,7 +9,7 @@ import wave
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 import numpy as np
-import cicero
+import pat
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 logging.disable(logging.INFO)
@@ -40,7 +40,7 @@ def save(name, voice):
     print(f"{name:22s} first audio {first:.2f} s | length {len(joined) / voice.sample_rate:.1f} s", flush=True)
 
 
-pocket = cicero.PocketVoice(cicero.TTS_LANGUAGE, cicero.TTS_VOICE)
+pocket = pat.PocketVoice(pat.TTS_LANGUAGE, pat.TTS_VOICE)
 list(pocket.stream("Ready.", threading.Event()))
 for name in pocket_names:
     try:

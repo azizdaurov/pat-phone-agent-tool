@@ -8,7 +8,7 @@ import wave
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 import numpy as np
-import cicero
+import pat
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 logging.disable(logging.INFO)
@@ -24,13 +24,13 @@ OPENINGS = {
 }
 folder = os.path.join(HERE, "results", "opening_samples")
 os.makedirs(folder, exist_ok=True)
-ear = cicero.BatchEar(cicero.RU_STT_MODEL, mic=False)
+ear = pat.BatchEar(pat.RU_STT_MODEL, mic=False)
 for voice_name in ("irina", "ruslan"):
-    voice = cicero.PiperVoice(voice_name)
+    voice = pat.PiperVoice(voice_name)
     print(f"--- {voice_name}")
     for name, text in OPENINGS.items():
         audio = np.concatenate(list(voice.stream(text, threading.Event())))
-        heard = ear.model.recognize(cicero.to_16k(audio, 1, voice.sample_rate), sample_rate=cicero.MIC_RATE)
+        heard = ear.model.recognize(pat.to_16k(audio, 1, voice.sample_rate), sample_rate=pat.MIC_RATE)
         print(f"{name:10s} {len(audio) / voice.sample_rate:.1f} s | {heard}", flush=True)
         with wave.open(os.path.join(folder, f"{voice_name}_{name}.wav"), "wb") as f:
             f.setnchannels(1)

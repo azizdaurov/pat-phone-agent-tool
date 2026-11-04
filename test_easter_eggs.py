@@ -9,8 +9,9 @@ import threading
 import time
 import types
 import unittest
+from unittest import mock
 
-import cicero
+import pat
 import note
 import phone_mcp
 from call_card import TEXT_WIDTH, display_width, render_card
@@ -367,6 +368,36 @@ class Poems(unittest.TestCase):
         self.assertEqual(take_next_style(folder), "")
 
 
+class PopupTimeout(DeskCase):
+    def test_no_contact_notice_expires_without_awarding_a_badge_or_calling(self):
+        self.desk._send_to_agent = mock.Mock()
+        with mock.patch("note.time.monotonic", return_value=100):
+            self.desk.submit("Mom")
+            self.assertIsNotNone(self.desk.state()["panel"])
+        with mock.patch("note.time.monotonic", return_value=109):
+            self.assertIsNotNone(self.desk.state()["panel"])
+        with mock.patch("note.time.monotonic", return_value=110):
+            self.assertIsNone(self.desk.state()["panel"])
+            self.desk.press("fine")  # a late click must not award anything
+        self.assertEqual(self.desk.eggs.badges(), [])
+        self.desk._send_to_agent.assert_not_called()
+
+    def test_contact_choice_stays_open_until_the_user_chooses(self):
+        self.desk.private.add_contact("Mom", "+998900000001")
+        with mock.patch("note.time.monotonic", return_value=100):
+            self.desk.submit("Mom")
+        with mock.patch("note.time.monotonic", return_value=1000):
+            panel = self.desk.state()["panel"]
+        self.assertIn("proceed", [button["id"] for button in panel["buttons"]])
+
+    def test_new_reading_panel_is_not_closed_by_an_old_notice_timeout(self):
+        with mock.patch("note.time.monotonic", return_value=100):
+            self.desk.submit("Mom")
+            self.desk.show_facts()
+        with mock.patch("note.time.monotonic", return_value=1000):
+            self.assertEqual(self.desk.state()["panel"]["title"], "Pat facts")
+
+
 class TheNote(DeskCase):
     def setUp(self):
         super().setUp()
@@ -538,14 +569,14 @@ class Watson(unittest.TestCase):
         def mouth():
             return types.SimpleNamespace(token=0, say=lambda text, token: said.append(text), drain=lambda: None)
         eggs = EasterEggs(folder, folder)
-        cicero.say_watson(eggs, mouth)
-        cicero.say_watson(eggs, mouth)
+        pat.say_watson(eggs, mouth)
+        pat.say_watson(eggs, mouth)
         self.assertEqual(len(said), 1)
         self.assertIn("Mr. Watson", said[0])
 
         def broken():
             raise OSError("no speaker")
-        cicero.say_watson(EasterEggs(tempfile.mkdtemp(), folder), broken)
+        pat.say_watson(EasterEggs(tempfile.mkdtemp(), folder), broken)
 
 
 

@@ -4,6 +4,7 @@ __pycache__/
 # Private: what was said on calls, and notes about the people called. Copy these by hand if a new laptop needs them.
 calls/
 contacts/
+reports/
 
 # Machine-specific
 .mcp.json

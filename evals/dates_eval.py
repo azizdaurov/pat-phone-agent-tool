@@ -7,7 +7,7 @@ import sys
 import tempfile
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import cicero
+import pat
 from call_brief import CallBrief
 from observer import OBSERVER_MODEL, Observer
 from phone_memory import ContactNotes, SUMMARY_LIMIT, SUMMARY_PROMPT, merge_call
@@ -31,7 +31,7 @@ def report(name, text):
 
 
 for run in range(2):
-    brain = cicero.Brain("en", system_prompt=SUMMARY_PROMPT.format(owner="Aziz", limit=SUMMARY_LIMIT))
+    brain = pat.Brain("en", system_prompt=SUMMARY_PROMPT.format(owner="Aziz", limit=SUMMARY_LIMIT))
     raw = []
 
     def ask(text):
@@ -43,7 +43,7 @@ for run in range(2):
     print(f"=== run {run + 1}. Model alone left relative words: {STILL_RELATIVE.findall(raw[0])}", flush=True)
     report("notes, as kept", notes.summary)
 
-    sonnet = cicero.Brain("en", system_prompt=BRIEF.observer_prompt("Aziz"), model=OBSERVER_MODEL)
+    sonnet = pat.Brain("en", system_prompt=BRIEF.observer_prompt("Aziz"), model=OBSERVER_MODEL)
     observer = Observer(lambda text: "".join(sonnet.ask(text)), SPOKEN, "Aziz")
     final = observer.final_report("goodbye", seconds=90)
     sonnet.close()

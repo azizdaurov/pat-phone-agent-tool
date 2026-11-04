@@ -8,7 +8,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import numpy as np
 import sounddevice as sd
-import cicero
+import pat
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 logging.disable(logging.INFO)
@@ -23,13 +23,13 @@ def find_input(name):
             return index
 
 
-ear, mouth = cicero.load_speech("ru", None)
-mouth.out = cicero.open_cable(mouth.sample_rate)
+ear, mouth = pat.load_speech("ru", None)
+mouth.out = pat.open_cable(mouth.sample_rate)
 mouth.out.start()
 ahead = 0
 for seconds in CUT_AFTER:
     blocks = []
-    record = sd.InputStream(samplerate=48000, channels=2, dtype="float32", device=find_input(cicero.CABLE_HEAR),
+    record = sd.InputStream(samplerate=48000, channels=2, dtype="float32", device=find_input(pat.CABLE_HEAR),
                             callback=lambda data, frames, when, status: blocks.append(data.copy()))
     record.start()
     mouth.start_reply()
@@ -44,7 +44,7 @@ for seconds in CUT_AFTER:
     time.sleep(0.5)
     record.stop()
     record.close()
-    came_out = ear.model.recognize(cicero.to_16k(np.concatenate(blocks).reshape(-1), 2, 48000), sample_rate=cicero.MIC_RATE).strip()
+    came_out = ear.model.recognize(pat.to_16k(np.concatenate(blocks).reshape(-1), 2, 48000), sample_rate=pat.MIC_RATE).strip()
     ahead += len(heard.split()) > len(came_out.split())
     print(f"cut at {seconds:.1f} s, stopped in {stopped * 1000:.0f} ms, gaps {mouth.underruns}\n  came out ({len(came_out.split())}): {came_out}\n  estimate ({len(heard.split())}): {heard}", flush=True)
 print(f"estimate ahead of what came out: {ahead}/{len(CUT_AFTER)}")

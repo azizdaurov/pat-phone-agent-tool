@@ -9,7 +9,7 @@ import time
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import numpy as np
 import sounddevice as sd
-import cicero
+import pat
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 logging.disable(logging.INFO)
@@ -25,8 +25,8 @@ def find_input(name):
             return index
 
 
-_, mouth = cicero.load_speech("en", VOICE)
-mouth.out = cicero.open_cable(mouth.sample_rate)
+_, mouth = pat.load_speech("en", VOICE)
+mouth.out = pat.open_cable(mouth.sample_rate)
 mouth.out.start()
 sound_at = []
 
@@ -36,7 +36,7 @@ def on_audio(data, frames, when, status):
         sound_at.append(time.perf_counter())
 
 
-record = sd.InputStream(samplerate=48000, channels=2, dtype="float32", device=find_input(cicero.CABLE_HEAR), blocksize=480, callback=on_audio)
+record = sd.InputStream(samplerate=48000, channels=2, dtype="float32", device=find_input(pat.CABLE_HEAR), blocksize=480, callback=on_audio)
 record.start()
 
 

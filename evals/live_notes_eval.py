@@ -4,7 +4,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import cicero
+import pat
 import live_notes
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -29,7 +29,7 @@ CALLS = {
 
 for title, (wanted, labels, lines) in CALLS.items():
     print(f"=== {title}", flush=True)
-    brain = cicero.Brain("en", system_prompt=live_notes.NOTES_PROMPT)
+    brain = pat.Brain("en", system_prompt=live_notes.NOTES_PROMPT)
     notes = live_notes.LiveNotes(lambda text: "".join(brain.ask(text)), wanted, labels)
     for count in range(2, len(lines) + 1, 2):
         started = time.perf_counter()

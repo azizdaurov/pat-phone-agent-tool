@@ -4,7 +4,7 @@ The laptop plays the hands-free (car kit) role: it opens the iPhone's Handsfree
 Audio Gateway RFCOMM channel and sends the standard HFP AT commands.
 
     python hfp_call.py status              connect, show phone status, disconnect
-    python hfp_call.py dial +998901234567  dial, then stay in the shell
+    python hfp_call.py dial +COUNTRY_CODE_NUMBER  dial a full international number, then stay in the shell
     python hfp_call.py shell               wait for calls and type commands
 
 Shell commands:

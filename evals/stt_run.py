@@ -56,7 +56,7 @@ def whisper_engine(name):
 
 
 def moonshine_engine():
-    """The same streaming path Cicero uses, fed in 32 ms blocks as fast as it will take them."""
+    """The same streaming path Pat uses, fed in 32 ms blocks as fast as it will take them."""
     sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "voice-loop"))
     from voice_loop import Ear, STT_ARCH
     ear = Ear(STT_ARCH, mic=False)

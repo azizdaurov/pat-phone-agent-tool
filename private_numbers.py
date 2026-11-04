@@ -1,7 +1,7 @@
 """Keeps real phone numbers on this laptop. The AI sees a contact's name or a placeholder such as #1, and the phone tool turns
 those back into the number. A file you can edit, and a command for the same:
 
-  .venv\\Scripts\\python.exe private_numbers.py add "Рустам" "+998 90 000 00 01"
+  .venv\\Scripts\\python.exe private_numbers.py add "Alex" "+COUNTRY_CODE_NUMBER"
   .venv\\Scripts\\python.exe private_numbers.py list
   .venv\\Scripts\\python.exe private_numbers.py remove "Рустам"
 """

@@ -20,15 +20,15 @@ def run(label, args, cwd):
         print(f"--- {label} (exit {code})\n{log.read().strip()[-700:]}", flush=True)
 
 
-cicero_dir = os.path.join(HERE, "..")
-run("cicero.py check", [sys.executable, os.path.join(cicero_dir, "cicero.py"), "check"], cicero_dir)
-run("iphonecall status", ["iphonecall", "status"], cicero_dir)
+pat_dir = os.path.join(HERE, "..")
+run("pat.py check", [sys.executable, os.path.join(pat_dir, "pat.py"), "check"], pat_dir)
+run("iphonecall status", ["iphonecall", "status"], pat_dir)
 
 script = (
-    "import cicero, time\n"
-    "line = cicero.PhoneLine()\n"
+    "import pat, time\n"
+    "line = pat.PhoneLine()\n"
     "print('shell ready:', line.wait_ready(40))\n"
     "print('last lines:', line.started[-3:])\n"
     "line.close()\n"
 )
-run("PhoneLine shell over pipes", [sys.executable, "-c", script], cicero_dir)
+run("PhoneLine shell over pipes", [sys.executable, "-c", script], pat_dir)

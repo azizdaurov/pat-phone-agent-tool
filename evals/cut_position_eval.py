@@ -11,7 +11,7 @@ import time
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
 import numpy as np
-import cicero
+import pat
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 logging.disable(logging.INFO)
@@ -35,13 +35,13 @@ def words(text):
 
 
 def transcribe_ru(ear, audio):
-    return ear.model.recognize(audio, sample_rate=cicero.MIC_RATE).strip()
+    return ear.model.recognize(audio, sample_rate=pat.MIC_RATE).strip()
 
 
 def transcribe_en(ear, audio):
     ear.prepare()
     for start in range(0, len(audio), 1024):
-        ear.feed_block(audio[start:start + 1024], cicero.MIC_RATE)
+        ear.feed_block(audio[start:start + 1024], pat.MIC_RATE)
     return ear.end(tail=0)
 
 
@@ -51,21 +51,21 @@ def run(name, voice, ear, transcribe, texts, length_known):
     behind = []
     rates = []
     for text in texts:
-        audio = np.concatenate(list(voice.stream(text, cicero.threading.Event())))
+        audio = np.concatenate(list(voice.stream(text, pat.threading.Event())))
         seconds = len(audio) / voice.sample_rate
         rates.append(len(text) / seconds)
-        length = seconds if length_known else len(text) / cicero.SLOW_CHARS_PER_SECOND
+        length = seconds if length_known else len(text) / pat.SLOW_CHARS_PER_SECOND
         for cut in CUTS:
             played = seconds * cut
-            prefix = cicero.to_16k(audio[:int(played * voice.sample_rate)], 1, voice.sample_rate)
+            prefix = pat.to_16k(audio[:int(played * voice.sample_rate)], 1, voice.sample_rate)
             actual = transcribe(ear, prefix)
-            zero = cicero.heard_text([[text, played, length]], margin=0)
-            real = cicero.heard_text([[text, played, length]])
+            zero = pat.heard_text([[text, played, length]], margin=0)
+            real = pat.heard_text([[text, played, length]])
             total += 1
             ahead_zero += words(zero) > words(actual)
             ahead_real += words(real) > words(actual)
             behind.append(words(actual) - words(real))
-            print(f"  {played:4.1f}/{seconds:.1f}s audio says {words(actual):2d} words | estimate {words(zero):2d} at margin 0, {words(real):2d} at margin {cicero.CUT_MARGIN_SECONDS} | {real!r}")
+            print(f"  {played:4.1f}/{seconds:.1f}s audio says {words(actual):2d} words | estimate {words(zero):2d} at margin 0, {words(real):2d} at margin {pat.CUT_MARGIN_SECONDS} | {real!r}")
     print(f"  estimate ahead of the audio: margin 0: {ahead_zero}/{total}, real margin: {ahead_real}/{total}; words behind at real margin: median {int(np.median(behind))}, most {max(behind)}, least {min(behind)}")
     print(f"  speaking rate: {min(rates):.1f}-{max(rates):.1f} characters per second")
 
@@ -74,14 +74,14 @@ def speed(piper):
     pieces = [[RUSSIAN[0], 5.0, 5.0], [RUSSIAN[1], 5.0, 5.0], [RUSSIAN[2], 2.0, 5.0]]
     start = time.perf_counter()
     for _ in range(1000):
-        cicero.heard_text(pieces)
+        pat.heard_text(pieces)
     print(f"\nEstimating what was heard: {(time.perf_counter() - start) * 1000:.0f} microseconds each")
 
     first_chunk = []
     all_chunks = []
     for text in RUSSIAN:
         start = time.perf_counter()
-        stream = piper.stream(text, cicero.threading.Event())
+        stream = piper.stream(text, pat.threading.Event())
         next(stream)
         first_chunk.append(time.perf_counter() - start)
         list(stream)
@@ -92,8 +92,8 @@ def speed(piper):
     print(f"Note added to Haiku's next message: {len(note)} characters")
 
 
-piper = cicero.PiperVoice(cicero.RU_TTS_VOICE)
+piper = pat.PiperVoice(pat.RU_TTS_VOICE)
 speed(piper)
-run("Russian (Piper, length known)", piper, cicero.BatchEar(cicero.RU_STT_MODEL, mic=False), transcribe_ru, RUSSIAN, True)
-run("English (Pocket TTS, length guessed)", cicero.PocketVoice(cicero.TTS_LANGUAGE, cicero.TTS_VOICE),
-    cicero.BatchEar(cicero.EN_STT_MODEL, mic=False), transcribe_en, ENGLISH, False)
+run("Russian (Piper, length known)", piper, pat.BatchEar(pat.RU_STT_MODEL, mic=False), transcribe_ru, RUSSIAN, True)
+run("English (Pocket TTS, length guessed)", pat.PocketVoice(pat.TTS_LANGUAGE, pat.TTS_VOICE),
+    pat.BatchEar(pat.EN_STT_MODEL, mic=False), transcribe_en, ENGLISH, False)

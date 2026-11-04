@@ -90,18 +90,18 @@ def public_notice(status):
 class SpeechEngine:
     """The weights live here for the whole Pat session. There are no audio-device handles."""
     def __init__(self, progress):
-        import cicero
+        import pat
         from voice_loop import PocketVoice, PiperVoice, TTS_LANGUAGE
-        self.cicero = cicero
+        self.pat = pat
         self.ears = {}
         self.voices = {}
         self.asr_locks = {language: threading.Lock() for language in ("en", "ru")}
         self.tts_lock = threading.Lock()
-        for language, model in (("en", cicero.EN_STT_MODEL), ("ru", cicero.RU_STT_MODEL)):
+        for language, model in (("en", pat.EN_STT_MODEL), ("ru", pat.RU_STT_MODEL)):
             progress(f"Loading {language} recognition")
-            self.ears[language] = cicero.BatchEar(model, mic=False)
+            self.ears[language] = pat.BatchEar(model, mic=False)
         english_model = None
-        for voice in cicero.ENGLISH_VOICES:
+        for voice in pat.ENGLISH_VOICES:
             progress(f"Preparing English voice {voice}")
             speaker = PocketVoice(TTS_LANGUAGE, voice, model=english_model)
             english_model = speaker.model
@@ -115,7 +115,7 @@ class SpeechEngine:
             for _ in speaker.stream(speaker.warm_text, threading.Event()):
                 pass
         progress("Loading speech detection")
-        self.vad_session = cicero.SpeechDetector(use_service=False).session
+        self.vad_session = pat.SpeechDetector(use_service=False).session
 
     def recognize(self, language, audio, rate):
         with self.asr_locks[language]:
@@ -125,7 +125,7 @@ class SpeechEngine:
         return self.voices[(language, voice)]
 
     def detector(self):
-        return self.cicero.SpeechDetector(session=self.vad_session, use_service=False)
+        return self.pat.SpeechDetector(session=self.vad_session, use_service=False)
 
 
 class SpeechServer:

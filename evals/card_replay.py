@@ -7,7 +7,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
-import cicero
+import pat
 from call_brief import CallBrief
 from call_card import render_card
 from observer import OBSERVER_MODEL, Observer
@@ -23,7 +23,7 @@ with open(os.path.join(calls, f"{call_id}.result.json"), encoding="utf-8") as f:
 with open(saved["transcript_file"], encoding="utf-8") as f:
     spoken = [(m[1], m[2]) for m in (re.match(r"\S+ (Claude|Them): (.*)", line) for line in f) if m]
 for run in range(runs):
-    sonnet = cicero.Brain("en", system_prompt=brief.observer_prompt("Aziz"), model=OBSERVER_MODEL)
+    sonnet = pat.Brain("en", system_prompt=brief.observer_prompt("Aziz"), model=OBSERVER_MODEL)
     report = Observer(lambda text: "".join(sonnet.ask(text)), spoken, "Aziz").final_report(saved["reason"])
     sonnet.close()
     print(render_card({"status": saved["status"], "reason": saved["reason"], "report": report, "seconds": saved.get("seconds"),

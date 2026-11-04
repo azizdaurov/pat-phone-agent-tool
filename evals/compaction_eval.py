@@ -5,7 +5,7 @@ import tempfile
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import cicero
+import pat
 from phone_memory import ContactNotes, SUMMARY_LIMIT, SUMMARY_PROMPT, merge_call
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -26,7 +26,7 @@ for number, heard in enumerate(CALLS, 1):
     spoken = [("Claude", "Здравствуйте, это Клод, голосовой помощник. Звоню по поручению Азиза."), ("Them", heard),
               ("Claude", "Спасибо, я передам Азизу. Он вам перезвонит. До свидания.")]
     appended += sum(len(t) + 8 for _, t in spoken)
-    brain = cicero.Brain("en", system_prompt=SUMMARY_PROMPT.format(owner="Aziz", limit=SUMMARY_LIMIT))
+    brain = pat.Brain("en", system_prompt=SUMMARY_PROMPT.format(owner="Aziz", limit=SUMMARY_LIMIT))
     start = time.perf_counter()
     report = merge_call(notes, spoken, lambda text: "".join(brain.ask(text)), f"2026-11-{number:02d} 10:00")
     print(f"call {number}: {time.perf_counter() - start:.1f}s | {report} | all transcripts so far {appended}", flush=True)

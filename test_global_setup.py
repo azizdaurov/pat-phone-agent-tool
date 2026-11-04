@@ -89,7 +89,7 @@ class GlobalNumbers(ProfileCase):
 
     def legacy_book(self, values):
         (self.folder / "book.json").write_text(json.dumps(values), encoding="utf-8")
-        (self.folder / "025550100.md").write_text("calls: 1\nlast_call: old\n\n## Pinned (yours; Cicero never changes this)\nKeep this.\n\n## Summary (rewritten after each call)\nWHO: private\n", encoding="utf-8")
+        (self.folder / "025550100.md").write_text("calls: 1\nlast_call: old\n\n## Pinned (yours; Pat never changes this)\nKeep this.\n\n## Summary (rewritten after each call)\nWHO: private\n", encoding="utf-8")
 
     def test_unique_old_notes_are_copied_without_deleting_original(self):
         self.legacy_book({"First": "+12025550100"})
@@ -143,19 +143,19 @@ class SetupGate(ProfileCase):
         self.assertEqual(phone_mcp.list_contacts()["status"], "setup_required")
 
     def test_unaccepted_terms_block_cli_before_touching_audio_or_phone(self):
-        import cicero
-        with mock.patch.object(cicero.sys, "argv", ["cicero.py", "answer"]), mock.patch.object(cicero, "only_one_copy", side_effect=AssertionError("must not touch audio")):
+        import pat
+        with mock.patch.object(pat.sys, "argv", ["pat.py", "answer"]), mock.patch.object(pat, "only_one_copy", side_effect=AssertionError("must not touch audio")):
             with self.assertRaises(SystemExit) as error:
-                cicero.main()
+                pat.main()
         self.assertIn("Terms of Use", str(error.exception))
 
     def test_saved_phone_id_is_used_by_the_note_and_call_command(self):
-        import cicero
+        import pat
         self.ready(phone_device="paired-phone-id")
-        self.assertEqual(cicero.phone_command(True), ["iphonecall", "--device-id", "paired-phone-id", "--stay-on-phone"])
+        self.assertEqual(pat.phone_command(True), ["iphonecall", "--device-id", "paired-phone-id", "--stay-on-phone"])
 
     def test_the_cli_uses_the_saved_owner_and_explicit_call_timezone(self):
-        import cicero
+        import pat
         from call_brief import CallBrief
         self.ready()
         captured = []
@@ -165,9 +165,9 @@ class SetupGate(ProfileCase):
             return brief
         class BeforeHardware(Exception):
             pass
-        with mock.patch.object(cicero.sys, "argv", ["cicero.py", "answer", "--time-zone", "Asia/Tokyo", "--date-format", "mdy"]), mock.patch.object(cicero, "load_brief", side_effect=load), mock.patch.object(cicero, "only_one_copy", side_effect=BeforeHardware):
+        with mock.patch.object(pat.sys, "argv", ["pat.py", "answer", "--time-zone", "Asia/Tokyo", "--date-format", "mdy"]), mock.patch.object(pat, "load_brief", side_effect=load), mock.patch.object(pat, "only_one_copy", side_effect=BeforeHardware):
             with self.assertRaises(BeforeHardware):
-                cicero.main()
+                pat.main()
         self.assertEqual((captured[0].owner, captured[0].owner_ru), ("Maya", "Maya"))
         self.assertEqual((brief.time_zone, brief.date_format), ("Asia/Tokyo", "mdy"))
         self.assertIn("Time zone: Asia/Tokyo", brief.date_table())

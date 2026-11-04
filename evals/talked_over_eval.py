@@ -8,7 +8,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import cicero
+import pat
 from call_brief import CONFIRMED_MARK, END_MARK, CallBrief
 from live_notes import NOTES_PROMPT, LiveNotes, parse_notes
 from observer import OBSERVER_MODEL, Observer
@@ -34,15 +34,15 @@ def supervisor(note):
 
 def cut_note(heard):
     if not OLD:
-        return cicero.cut_message(heard)
+        return pat.cut_message(heard)
     said = f'They heard only: "{heard}".' if heard else "They heard none of it."
     return f"You were cut off during your last reply. {said} Say the rest again only if it still matters."
 
 
 def start(language):
     brief = CallBrief.from_dict(BRIEFS[language])
-    opening = cicero.OPENINGS["dial"][language].format(owner="Aziz", owner_ru="Азиза")
-    return brief, cicero.Brain(language, system_prompt=brief.haiku_prompt(cicero.SYSTEM_PROMPTS[language], opening, "Aziz", NONCE))
+    opening = pat.OPENINGS["dial"][language].format(owner="Aziz", owner_ru="Азиза")
+    return brief, pat.Brain(language, system_prompt=brief.haiku_prompt(pat.SYSTEM_PROMPTS[language], opening, "Aziz", NONCE))
 
 
 def say(brain, message):
@@ -113,7 +113,7 @@ report_score = [0, 0]
 for name, lines, should_be_yes in (("the real call: never heard the question", HEARD_NOTHING, False), ("control: asked again, then yes", ASKED_AGAIN, True)):
     print(f"=== report, {name}", flush=True)
     for run in range(RUNS):
-        sonnet = cicero.Brain("en", system_prompt=BRIEF.observer_prompt("Aziz"), model=OBSERVER_MODEL)
+        sonnet = pat.Brain("en", system_prompt=BRIEF.observer_prompt("Aziz"), model=OBSERVER_MODEL)
         report = Observer(lambda text: "".join(sonnet.ask(text)), lines, "Aziz").final_report("goodbye", seconds=90)
         sonnet.close()
         answer = ((report or {}).get("answers") or [{}])[0].get("answer")
@@ -128,7 +128,7 @@ notes_score = [0, 0]
 for name, lines, should_have in (("the real call", HEARD_NOTHING[:7], False), ("control: asked again, then yes", ASKED_AGAIN[:9], True)):
     print(f"=== live note, {name}", flush=True)
     for run in range(RUNS):
-        brain = cicero.Brain("en", system_prompt=NOTES_PROMPT)
+        brain = pat.Brain("en", system_prompt=NOTES_PROMPT)
         notes = LiveNotes(lambda text: "".join(brain.ask(text)), BRIEF.need_from_them)
         parsed = parse_notes(notes.ask(notes._prompt(lines)))
         notes.close()

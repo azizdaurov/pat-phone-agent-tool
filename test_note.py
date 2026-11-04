@@ -370,6 +370,56 @@ class AnsweringMyself(DeskCase):
         self.assertTrue(level.closed)
         self.assertGreaterEqual(self.devices.restored, 1)
 
+    def test_the_call_goes_to_the_laptop_first_then_back_if_a_headset_is_found(self):
+        checked = threading.Event()
+
+        def headsets():
+            checked.wait(5)
+            return ["Headset (Redmi Buds 6 Lite Hands-Free)"]
+        self.desk.headsets = headsets
+        self.ring()
+        self.desk.answer_me("laptop")
+        self.assertEqual(self.line.sent[-1], "laptop")
+        self.assertEqual(self.desk.state()["route"], "laptop")
+        checked.set()
+        self.desk.headset_check.join(5)
+        state = self.desk.state()
+        self.assertEqual((state["route"], self.line.sent[-1]), ("iphone", "phone"))
+        self.assertIn("Redmi Buds 6 Lite is connected", state["notice"])
+        self.assertGreaterEqual(self.devices.restored, 1)
+
+    def test_no_headset_leaves_the_call_on_the_laptop(self):
+        self.desk.headsets = lambda: []
+        self.ring()
+        self.desk.answer_me("laptop")
+        self.desk.headset_check.join(5)
+        self.assertEqual((self.desk.state()["route"], self.line.sent[-1]), ("laptop", "laptop"))
+
+    def test_a_late_headset_check_doesnt_undo_a_newer_choice(self):
+        checked = threading.Event()
+
+        def headsets():
+            checked.wait(5)
+            return ["Headset (Redmi Buds 6 Lite Hands-Free)"]
+        self.desk.headsets = headsets
+        self.ring()
+        self.desk.answer_me("laptop")
+        first = self.desk.headset_check
+        self.desk.set_route("iphone")
+        self.desk.headsets = lambda: []
+        self.desk.set_route("laptop")
+        checked.set()
+        first.join(5)
+        self.desk.headset_check.join(5)
+        self.assertEqual(self.desk.state()["route"], "laptop")
+        self.assertEqual(self.desk.state()["notice"], "")
+
+    def test_why_the_call_left_the_laptop_shows_on_the_note(self):
+        self.ring()
+        self.desk.answer_ai()
+        self.set_live(stage="handed", number="+998900000001", notice="AirPods Pro is connected to the laptop")
+        self.assertIn("AirPods Pro", self.desk.state()["notice"])
+
     def test_laptop_audio_that_cant_be_set_says_so(self):
         self.ring()
 
@@ -499,10 +549,10 @@ class Settings(unittest.TestCase):
 
 class Voices(unittest.TestCase):
     def test_defaults_match_the_calls_own(self):
-        import cicero
+        import pat
         settings = note.NoteSettings(tempfile.mkdtemp())
-        self.assertEqual(settings.voice_for("en"), cicero.DEFAULT_ENGLISH_VOICE)
-        self.assertEqual(settings.voice_for("ru"), cicero.RU_TTS_VOICE)
+        self.assertEqual(settings.voice_for("en"), pat.DEFAULT_ENGLISH_VOICE)
+        self.assertEqual(settings.voice_for("ru"), pat.RU_TTS_VOICE)
 
     def test_choice_lasts_through_a_restart_and_is_per_language(self):
         folder = tempfile.mkdtemp()

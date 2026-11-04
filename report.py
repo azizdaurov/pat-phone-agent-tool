@@ -1,0 +1,210 @@
+"""A bug report you can post in public: Pat's recent logs with phone numbers, names and what was said taken out.
+
+  .venv\\Scripts\\python.exe report.py            the last 3 calls
+  .venv\\Scripts\\python.exe report.py --calls 10
+
+It writes one text file in reports\\ and changes nothing else. What people said on a call is left out and only counted,
+so the report shows timings, devices and errors. Read it before you post it: it can't know every private word.
+"""
+import argparse
+import datetime
+import glob
+import json
+import os
+import platform
+import re
+import subprocess
+import sys
+
+from private_numbers import BOOK_NAME, DATE_FIRST, NUMBER_LIKE
+from phone_memory import FOLDER as CONTACTS
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+CALLS = os.path.join(HERE, "calls")
+REPORTS = os.path.join(HERE, "reports")
+PHONE_DIGITS = 7  # fewer digits than this is a count or a time, not a phone number
+CALL_ID = re.compile(r"\d{8}-\d{6}")  # the date and time at the start of a call's file name
+SPOKEN = re.compile(r"^(\s*(?:\d\d:\d\d:\d\d \S+ )?)(Claude|Them): (.*)$")
+# The call's brief, and what Haiku and Sonnet said to each other: what the call was about, so never in a report.
+PRIVATE_PAT_LINES = re.compile(r"^((?:\d\d:\d\d:\d\d )?(?:Pat|Cicero): )(task|Haiku asks Sonnet|Sonnet answers|Sonnet \w+ \(|not spoken)")
+SAFE_BRIEF_FIELDS = re.compile(r"^(language|confidence|time_zone|date_format): \S+$")
+NEXT_ENTRY = re.compile(r"^(?:\d\d:\d\d:\d\d )?(?:(?:Pat|Cicero|Claude|Them|Status): |\[|Connected\.|Call over|No conversation)")
+DIALING = re.compile(r"^(Dialing .*?\.) Claude's task: .*$")
+PACKAGES = ("numpy", "sounddevice", "PyAudioWPatch", "onnx-asr", "piper-tts", "pocket-tts", "PySide6", "mcp")
+
+
+class Redactor:
+    """Swaps numbers and names for stand-ins such as <number 1>. The same number always gets the same stand-in, so a
+    report can still show that two lines are about the same call."""
+
+    def __init__(self, names=(), home=None):
+        self.numbers = {}
+        self.names = sorted({name.strip() for name in names if name and len(name.strip()) >= 3}, key=len, reverse=True)
+        self.home = home
+
+    def number(self, digits):
+        return self.numbers.setdefault(digits, f"<number {len(self.numbers) + 1}>")
+
+    def _swap(self, match):
+        found = match.group(0)
+        text, start = match.string, match.start()
+        before = text[start - 1] if start else ""
+        call_id = CALL_ID.match(found)
+        if call_id:  # keep the call's date and time, hide what follows
+            rest = found[call_id.end():]
+            digits = re.sub(r"\D", "", rest)
+            return call_id.group(0) + (rest[:1] + self.number(digits) if len(digits) >= PHONE_DIGITS else rest)
+        digits = re.sub(r"\D", "", found)
+        if len(digits) < PHONE_DIGITS or DATE_FIRST.match(found):
+            return found
+        if before == ":" or re.fullmatch(r"\d+\.\d+", found):  # 21:59:38.783689, or a measurement
+            return found
+        if before == "=" and not found.startswith("+"):  # frames=829440: a count
+            return found
+        return self.number(digits)
+
+    def clean(self, text, numbers=True):
+        if self.home:
+            text = re.sub(re.escape(self.home), "%USERPROFILE%", text, flags=re.I)
+        if numbers:
+            text = NUMBER_LIKE.sub(self._swap, text)
+        for index, name in enumerate(self.names, 1):
+            text = re.sub(rf"(?<!\w){re.escape(name)}(?!\w)", f"<name {index}>", text, flags=re.I)
+        return text
+
+
+def words(text):
+    return len(re.findall(r"\w+", text))
+
+
+def without_conversation(lines):
+    """Each line, with what someone said, the brief and the AIs' notes to each other left out."""
+    out = []
+    in_brief = False  # the brief runs over several lines, until the next line someone or Pat wrote
+    for line in lines:
+        line = line.rstrip("\r\n")
+        if in_brief:
+            if NEXT_ENTRY.match(line):
+                in_brief = False
+            else:
+                if SAFE_BRIEF_FIELDS.match(line):
+                    out.append(line)  # language, time zone and date format help explain a call and say nothing private
+                continue
+        spoken = SPOKEN.match(line)
+        if spoken:
+            out.append(f"{spoken.group(1)}{spoken.group(2)}: <said {words(spoken.group(3))} words>")
+            continue
+        private = PRIVATE_PAT_LINES.match(line)
+        if private:
+            in_brief = private.group(2) == "task"
+            out.append(f"{private.group(1)}{private.group(2).rstrip(' (')}: <left out>")
+            continue
+        dialing = DIALING.match(line)
+        out.append(dialing.group(1) + " <task left out>" if dialing else line)
+    return out
+
+
+def private_names():
+    names = []
+    try:
+        with open(os.path.join(CONTACTS, BOOK_NAME), encoding="utf-8") as f:
+            names += list(json.load(f))
+    except (OSError, ValueError):
+        pass
+    try:
+        from user_profile import UserProfile
+        profile = UserProfile()
+        names += [profile.name, profile.phone_device, *profile.name.split()]
+    except Exception:
+        pass
+    names.append(os.environ.get("USERNAME", ""))
+    return names
+
+
+def newest(pattern, count):
+    return sorted(glob.glob(os.path.join(CALLS, pattern)), key=os.path.getmtime)[-count:]
+
+
+def read_lines(path, last=None):
+    try:
+        with open(path, encoding="utf-8", errors="replace") as f:
+            lines = f.readlines()
+    except OSError as error:
+        return [f"<couldn't read: {error}>"]
+    return lines[-last:] if last else lines
+
+
+def environment():
+    lines = [f"Windows: {platform.platform()}", f"Python: {sys.version.split()[0]}"]
+    try:
+        commit = subprocess.run(["git", "describe", "--always", "--dirty"], cwd=HERE, capture_output=True, text=True, timeout=10).stdout.strip()
+        lines.append(f"Pat: {commit or 'unknown'}")
+    except (OSError, subprocess.TimeoutExpired):
+        lines.append("Pat: unknown")
+    from importlib import metadata
+    for package in PACKAGES:
+        try:
+            lines.append(f"{package}: {metadata.version(package)}")
+        except metadata.PackageNotFoundError:
+            lines.append(f"{package}: not installed")
+    try:
+        import sounddevice as sd
+        lines.append("Audio devices (WASAPI: inputs, outputs, rate):")
+        for index, device in enumerate(sd.query_devices()):
+            if "WASAPI" in sd.query_hostapis(device["hostapi"])["name"]:
+                lines.append(f"  {index}: {device['name']} | in {device['max_input_channels']}, out {device['max_output_channels']}, "
+                             f"{int(device['default_samplerate'])} Hz")
+        from audio_defaults import chosen_devices
+        speakers, microphones = chosen_devices(CALLS)
+        lines.append(f"Picked in Windows: speakers {list(speakers)}, microphones {list(microphones)}")
+    except Exception as error:
+        lines.append(f"Audio devices: couldn't list them ({error})")
+    return lines
+
+
+def result_line(path):
+    try:
+        with open(path, encoding="utf-8") as f:
+            result = json.load(f)
+    except (OSError, ValueError):
+        return None
+    keep = {key: result.get(key) for key in ("status", "reason", "seconds", "outcome") if key in result}
+    return f"Result: {json.dumps(keep, ensure_ascii=False)}"
+
+
+def build(calls=3, redactor=None):
+    redactor = redactor or Redactor(private_names(), os.path.expanduser("~"))
+    sections = [("About this laptop", environment(), False)]  # version numbers, not phone numbers
+    call_logs = set(newest("[0-9]*-[0-9]*-*.log", calls) + newest("answer-*.log", calls))
+    for path in sorted(call_logs, key=os.path.getmtime)[-calls:]:
+        body = without_conversation(read_lines(path))
+        result = result_line(path[:-len(".log")] + ".result.json")
+        sections.append((f"Call {os.path.basename(path)}", body + ([result] if result else []), True))
+    for path in newest("phone-*.log", calls):
+        sections.append((f"Phone line {os.path.basename(path)}", read_lines(path), True))
+    for name, last in (("note-phone.log", 200), ("note.log", 100), ("speech-service.log", 100)):
+        path = os.path.join(CALLS, name)
+        if os.path.exists(path):
+            sections.append((f"{name} (last {last} lines)", without_conversation(read_lines(path, last)), True))
+    out = [f"Pat bug report, {datetime.datetime.now():%Y-%m-%d %H:%M}",
+           "Phone numbers, names and what was said on calls are left out. Read this before posting it.", ""]
+    for title, lines, numbers in sections:
+        out += [f"===== {redactor.clean(title)}", *(redactor.clean(line.rstrip("\r\n"), numbers) for line in lines), ""]
+    return "\n".join(out)
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--calls", type=int, default=3, help="how many recent calls to include (default 3)")
+    args = parser.parse_args()
+    text = build(max(1, args.calls))
+    os.makedirs(REPORTS, exist_ok=True)
+    path = os.path.join(REPORTS, f"pat-report-{datetime.datetime.now():%Y%m%d-%H%M%S}.txt")
+    with open(path, "w", encoding="utf-8") as f:
+        f.write(text)
+    print(f"Report written: {path}")
+    print("Read it before posting. Numbers, names and what was said are left out, but check for anything else private.")
+
+
+if __name__ == "__main__":
+    main()

@@ -6,7 +6,7 @@ import re
 import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import cicero
+import pat
 from call_brief import CallBrief
 from observer import OBSERVER_MODEL, Observer, parse_advice
 
@@ -43,11 +43,11 @@ OWNER_NAMES = {"ru": "Aziz"}
 
 def run_case(brief_fields, language, lines):
     brief = CallBrief.from_dict({**brief_fields[language], "language": language})
-    opening = cicero.OPENINGS["dial"][language].format(owner="Aziz", owner_ru="Азиза")
-    brain = cicero.Brain(language, system_prompt=brief.haiku_prompt(cicero.SYSTEM_PROMPTS[language], opening, "Aziz", "abc123"))
+    opening = pat.OPENINGS["dial"][language].format(owner="Aziz", owner_ru="Азиза")
+    brain = pat.Brain(language, system_prompt=brief.haiku_prompt(pat.SYSTEM_PROMPTS[language], opening, "Aziz", "abc123"))
     replies = []
     for line in lines:
-        replies.append("".join(brain.ask(line)).replace(cicero.END_MARK, "").strip())
+        replies.append("".join(brain.ask(line)).replace(pat.END_MARK, "").strip())
     brain.close()
     return replies
 
@@ -77,7 +77,7 @@ SONNET_CASES = [
 right = 0
 for name, should_act, lines in SONNET_CASES:
     for run in range(RUNS):
-        sonnet = cicero.Brain("en", system_prompt=BRIEF.observer_prompt("Aziz"), model=OBSERVER_MODEL)
+        sonnet = pat.Brain("en", system_prompt=BRIEF.observer_prompt("Aziz"), model=OBSERVER_MODEL)
         advice = parse_advice("".join(sonnet.ask("\n".join(f"{who}: {text}" for who, text in lines))))
         sonnet.close()
         acted = advice["action"] != "none"
@@ -88,7 +88,7 @@ print(f"Sonnet right: {right} of {RUNS * len(SONNET_CASES)}", flush=True)
 # The report: what stayed vague must stay vague, and not be marked confirmed.
 vague = [("Claude", "When is the meeting?"), ("Them", "Sometime next week."), ("Claude", "Which day?"), ("Them", "I don't know yet."), ("Claude", "All right, thank you. Goodbye.")]
 for run in range(RUNS):
-    sonnet = cicero.Brain("en", system_prompt=BRIEF.observer_prompt("Aziz"), model=OBSERVER_MODEL)
+    sonnet = pat.Brain("en", system_prompt=BRIEF.observer_prompt("Aziz"), model=OBSERVER_MODEL)
     report = Observer(lambda text: "".join(sonnet.ask(text)), vague, "Aziz").final_report("goodbye", seconds=90)
     sonnet.close()
     print("   report:", json.dumps(report, ensure_ascii=False)[:360], flush=True)

@@ -10,7 +10,7 @@ import types
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import numpy as np
-import cicero
+import pat
 from call_brief import CallBrief
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -64,13 +64,13 @@ def run_scene(name, brief_data, lines, expected, runs=3):
     right = leaked = 0
     for run in range(runs):
         brief = CallBrief.from_dict(brief_data)
-        opening = f"{cicero.OPENINGS['dial']['ru'].format(owner='Aziz', owner_ru='Азиза')} {brief.check_question()}"
-        brain = cicero.Brain("ru", system_prompt=brief.haiku_prompt(cicero.SYSTEM_PROMPTS["ru"], opening, "Aziz", "abc123"))
-        for _ in brain.ask(cicero.WARM_UP["ru"]):
+        opening = f"{pat.OPENINGS['dial']['ru'].format(owner='Aziz', owner_ru='Азиза')} {brief.check_question()}"
+        brain = pat.Brain("ru", system_prompt=brief.haiku_prompt(pat.SYSTEM_PROMPTS["ru"], opening, "Aziz", "abc123"))
+        for _ in brain.ask(pat.WARM_UP["ru"]):
             pass
         mouth = Mouth()
-        call = cicero.Conversation(types.SimpleNamespace(ended=threading.Event()), iter(()), None, mouth, brain,
-                                   cicero.Transcript(tempfile.mkdtemp()), opening, nonce="abc123", language="ru",
+        call = pat.Conversation(types.SimpleNamespace(ended=threading.Event()), iter(()), None, mouth, brain,
+                                   pat.Transcript(tempfile.mkdtemp()), opening, nonce="abc123", language="ru",
                                    task_message=brief.task_message("Aziz"))
         print(f"--- {name} #{run + 1}", flush=True)
         for line in lines:
@@ -91,12 +91,12 @@ def run_scene(name, brief_data, lines, expected, runs=3):
 
 
 def opening_sound():
-    voice = cicero.PiperVoice(cicero.RU_TTS_VOICE)
-    ear = cicero.BatchEar(cicero.RU_STT_MODEL, mic=False)
+    voice = pat.PiperVoice(pat.RU_TTS_VOICE)
+    ear = pat.BatchEar(pat.RU_STT_MODEL, mic=False)
     for text in ("Здравствуйте, это ИИ-ассистент Азиза. Скажите, пожалуйста, это Рустам?",
                  "Здравствуйте, это Клод, голосовой помощник на основе искусственного интеллекта. Звоню по поручению Азиза."):
         audio = np.concatenate(list(voice.stream(text, threading.Event())))
-        heard = ear.model.recognize(cicero.to_16k(audio, 1, voice.sample_rate), sample_rate=cicero.MIC_RATE)
+        heard = ear.model.recognize(pat.to_16k(audio, 1, voice.sample_rate), sample_rate=pat.MIC_RATE)
         print(f"{len(audio) / voice.sample_rate:.1f} s | {text}\n  recognizer hears: {heard}", flush=True)
 
 

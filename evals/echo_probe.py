@@ -8,8 +8,8 @@ import wave
 import numpy as np
 
 sys.path.insert(0, __file__.rsplit("evals", 1)[0])
-import cicero
-from cicero import FRAME, MIC_RATE
+import pat
+from pat import FRAME, MIC_RATE
 
 ENVELOPE_STEP = 160  # 10 ms
 
@@ -34,7 +34,7 @@ for path in sys.argv[1:]:
     with wave.open(path) as f:
         audio = np.frombuffer(f.readframes(f.getnframes()), dtype=np.int16).astype(np.float32) / 32768
     print(path[-34:])
-    turns = cicero.TurnDetector(cicero.SpeechDetector())
+    turns = pat.TurnDetector(pat.SpeechDetector())
     start = None
     for index in range(0, len(audio) - FRAME + 1, FRAME):
         event = turns.feed(audio[index:index + FRAME])

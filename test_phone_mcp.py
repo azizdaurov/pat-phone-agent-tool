@@ -1,4 +1,4 @@
-"""The phone tool, through a real MCP connection and with a fake cicero.py, so nothing dials.
+"""The phone tool, through a real MCP connection and with a fake pat.py, so nothing dials.
 Run: .venv\\Scripts\\python.exe -m unittest test_phone_mcp -v"""
 import json
 import os
@@ -13,7 +13,7 @@ from call_card import TEXT_WIDTH, display_width, render_card
 from private_numbers import PrivateNumbers
 
 HERE =os.path.dirname(os.path.abspath(__file__))
-FAKE_CICERO = r"""
+FAKE_PAT = r"""
 import json, sys
 args = sys.argv[1:]
 result = args[args.index("--result-file") + 1]
@@ -26,7 +26,7 @@ with open(result, "w", encoding="utf-8") as f:
                "report": {"outcome": "done"}}, f)
 """
 NUMBER = "+998 90 000 00 01"
-BRIEF = {"goal": "Find out the Sunday hours.", "name": "Рустам", "confidence": "guess"}
+BRIEF = {"goal": "Find out the Sunday hours.", "name": "Рустам", "confidence": "guess", "language": "ru"}
 
 
 FULL_REPORT = {
@@ -108,9 +108,9 @@ class CardReached(unittest.TestCase):
 class Calls(unittest.TestCase):
     def setUp(self):
         folder = tempfile.mkdtemp()
-        self.fake = os.path.join(folder, "fake_cicero.py")
+        self.fake = os.path.join(folder, "fake_pat.py")
         with open(self.fake, "w", encoding="utf-8") as f:
-            f.write(FAKE_CICERO)
+            f.write(FAKE_PAT)
         phone_mcp.CALLS = folder
         phone_mcp.private = PrivateNumbers(folder)
         phone_mcp.running.clear()
@@ -308,6 +308,7 @@ class Connection(unittest.TestCase):
         tools = {tool.name: tool for tool in listed.tools}
         self.assertEqual(set(tools), {"place_call", "get_call", "end_call", "take_over", "contact_notes", "list_contacts"})
         schema = tools["place_call"].input_schema
+        self.assertEqual(schema["properties"]["language"]["default"], "en")
         self.assertEqual(set(schema["required"]), {"number", "goal", "confidence"})
         for name in ("voice", "name", "company", "role", "confidence", "confirm_question", "who_can_answer", "need_from_them", "context", "may_share", "must_not", "done_when", "if_stuck", "language", "time_zone", "date_format"):
             self.assertTrue(schema["properties"][name].get("description"), name)

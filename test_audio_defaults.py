@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from unittest import mock
 
-from audio_defaults import CAPTURE, RENDER, CallDevices, WindowsAudio, repair_defaults
+from audio_defaults import CAPTURE, RENDER, CallDevices, WindowsAudio, chosen_devices, repair_defaults
 
 
 class PretendWindows:
@@ -26,6 +26,31 @@ class PretendWindows:
             raise OSError("device is gone")
         kind = RENDER if device_id in self.names[RENDER].values() else CAPTURE
         self.current[kind][role] = device_id
+
+
+class Chosen(unittest.TestCase):
+    def setUp(self):
+        self.folder = tempfile.mkdtemp()
+        self.system = PretendWindows()
+        self.system.names[RENDER]["Headphones (USB Audio)"] = "usb"
+
+    def test_windows_default_for_calls_comes_first(self):
+        self.system.current[RENDER] = ["real", "real", "usb"]
+        self.assertEqual(chosen_devices(self.folder, self.system),
+                         (("Headphones (USB Audio)", "Speakers (Realtek(R) Audio)"), ("Microphone Array (Realtek(R) Audio)",)))
+
+    def test_during_a_call_it_is_what_was_picked_before_the_call(self):
+        self.system.current[RENDER] = ["usb", "usb", "usb"]
+        CallDevices(self.folder, self.system).use(speaker="Boom Audio", mic="CABLE Output")
+        self.assertEqual(self.system.current[RENDER], ["silent"] * 3)
+        self.assertEqual(chosen_devices(self.folder, self.system), (("Headphones (USB Audio)",), ("Microphone Array (Realtek(R) Audio)",)))
+
+    def test_unknown_or_broken_gives_none(self):
+        self.system.current[CAPTURE] = [None, None, None]
+        self.assertEqual(chosen_devices(self.folder, self.system)[1], ())
+        with open(os.path.join(self.folder, "audio-defaults.json"), "w", encoding="utf-8") as f:
+            f.write("not json")
+        self.assertEqual(chosen_devices(self.folder, self.system)[0], ("CABLE Input (VB-Audio Virtual Cable)", "Speakers (Realtek(R) Audio)"))
 
 
 class Switching(unittest.TestCase):

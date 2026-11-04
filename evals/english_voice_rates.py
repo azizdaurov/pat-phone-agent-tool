@@ -7,7 +7,7 @@ import threading
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import numpy as np
-import cicero
+import pat
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 logging.disable(logging.INFO)
@@ -18,19 +18,19 @@ TEXTS = ["Hello, I am calling to find out whether your clinic is open this Sunda
          "I understand, you are open from nine in the morning until three in the afternoon, is that right?",
          "Great. And where is the meeting taking place?", "I'm sorry, I didn't catch that. Could you repeat it?"]
 CUTS = (0.25, 0.5, 0.75)
-ear = cicero.BatchEar(cicero.EN_STT_MODEL, mic=False)
+ear = pat.BatchEar(pat.EN_STT_MODEL, mic=False)
 
 
 def transcribe(audio):
     ear.prepare()
     for start in range(0, len(audio), 1024):
-        ear.feed_block(audio[start:start + 1024], cicero.MIC_RATE)
+        ear.feed_block(audio[start:start + 1024], pat.MIC_RATE)
     return ear.end(tail=0)
 
 
 for name in VOICES:
-    voice = cicero.PocketVoice(cicero.TTS_LANGUAGE, name)
-    rate_guess = cicero.ENGLISH_VOICES[name]["chars_per_second"] if hasattr(cicero, "ENGLISH_VOICES") and name in cicero.ENGLISH_VOICES else None
+    voice = pat.PocketVoice(pat.TTS_LANGUAGE, name)
+    rate_guess = pat.ENGLISH_VOICES[name]["chars_per_second"] if hasattr(pat, "ENGLISH_VOICES") and name in pat.ENGLISH_VOICES else None
     rates = []
     ahead = total = 0
     for text in TEXTS * 2:
@@ -41,8 +41,8 @@ for name in VOICES:
             continue
         for cut in CUTS:
             played = seconds * cut
-            heard = cicero.heard_text([[text, played, len(text) / rate_guess]])
-            actual = transcribe(cicero.to_16k(audio[:int(played * voice.sample_rate)], 1, voice.sample_rate))
+            heard = pat.heard_text([[text, played, len(text) / rate_guess]])
+            actual = transcribe(pat.to_16k(audio[:int(played * voice.sample_rate)], 1, voice.sample_rate))
             total += 1
             ahead += len(heard.split()) > len(actual.split())
     line = f"{name:16s} {min(rates):.1f}-{max(rates):.1f} characters per second, median {np.median(rates):.1f}"

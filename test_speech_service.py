@@ -156,13 +156,13 @@ class ResidentIPC(unittest.TestCase):
             voice.close()
 
     def test_call_load_speech_uses_the_service_without_loading_local_models(self):
-        import cicero
-        with mock.patch.object(cicero, "BatchEar", side_effect=AssertionError("must reuse resident weights")), mock.patch.object(cicero, "PocketVoice", side_effect=AssertionError("must reuse resident weights")):
-            ear, mouth = cicero.load_speech("en", "charles")
+        import pat
+        with mock.patch.object(pat, "BatchEar", side_effect=AssertionError("must reuse resident weights")), mock.patch.object(pat, "PocketVoice", side_effect=AssertionError("must reuse resident weights")):
+            ear, mouth = pat.load_speech("en", "charles")
         try:
             self.assertTrue(mouth.voice.already_warm)
             self.assertEqual(mouth.voice.sample_rate, 16000)
-            detector = cicero.SpeechDetector()
+            detector = pat.SpeechDetector()
             try:
                 self.assertAlmostEqual(detector(np.zeros(512, dtype=np.float32)), 0.1, places=5)
             finally:
@@ -227,28 +227,28 @@ class PreparingCallCancellation(DeskCase):
 
 class IncomingCancellation(unittest.TestCase):
     def test_cancel_wins_even_if_a_go_message_also_arrived(self):
-        import cicero
+        import pat
         go, cancel, ended, ringing = (threading.Event() for _ in range(4))
         go.set(); cancel.set(); ringing.set()
-        self.assertFalse(cicero.wait_for_go(go, cancel, types.SimpleNamespace(ended=ended, ringing=ringing)))
+        self.assertFalse(pat.wait_for_go(go, cancel, types.SimpleNamespace(ended=ended, ringing=ringing)))
 
     def test_an_incoming_request_does_not_wait_for_a_future_call_after_cancellation(self):
-        import cicero
+        import pat
         cancel = threading.Event(); cancel.set()
         line = types.SimpleNamespace(ended=threading.Event(), events=queue.Queue())
-        self.assertIsNone(cicero.wait_for_current_incoming(line, cancel))
+        self.assertIsNone(pat.wait_for_current_incoming(line, cancel))
 
     def test_a_call_already_picked_up_on_the_phone_is_not_answered_by_ai(self):
-        import cicero
+        import pat
         go = threading.Event(); go.set()
         line = types.SimpleNamespace(ended=threading.Event(), ringing=threading.Event())
-        self.assertFalse(cicero.wait_for_go(go, threading.Event(), line))
+        self.assertFalse(pat.wait_for_go(go, threading.Event(), line))
 
     def test_stale_incoming_event_is_not_used_after_ringing_stopped(self):
-        import cicero
+        import pat
         line = types.SimpleNamespace(ended=threading.Event(), ringing=threading.Event(), events=queue.Queue())
         line.events.put(("Incoming", "Caller", "Incoming"))
-        self.assertIsNone(cicero.wait_for_current_incoming(line, threading.Event(), seconds=0.1))
+        self.assertIsNone(pat.wait_for_current_incoming(line, threading.Event(), seconds=0.1))
 
 
 class StatusFiles(unittest.TestCase):
@@ -282,7 +282,7 @@ class StatusFiles(unittest.TestCase):
 
 class ModelConstruction(unittest.TestCase):
     def test_all_english_voices_share_one_loaded_model_and_no_microphone_is_opened(self):
-        import cicero
+        import pat
         from speech_service import SpeechEngine
         class Model:
             sample_rate = 16000
@@ -296,10 +296,10 @@ class ModelConstruction(unittest.TestCase):
             def generate_audio_stream(self, state, text, stop):
                 yield types.SimpleNamespace(numpy=lambda: np.zeros(80, dtype=np.float32))
         russian = types.SimpleNamespace(warm_text="Ready", stream=lambda *_: iter([np.zeros(80)]))
-        with mock.patch.dict("sys.modules", {"pocket_tts": types.SimpleNamespace(TTSModel=Model)}), mock.patch.object(cicero, "BatchEar") as ears, mock.patch("voice_loop.PiperVoice", return_value=russian), mock.patch.object(cicero, "SpeechDetector", return_value=types.SimpleNamespace(session=object())):
+        with mock.patch.dict("sys.modules", {"pocket_tts": types.SimpleNamespace(TTSModel=Model)}), mock.patch.object(pat, "BatchEar") as ears, mock.patch("voice_loop.PiperVoice", return_value=russian), mock.patch.object(pat, "SpeechDetector", return_value=types.SimpleNamespace(session=object())):
             engine = SpeechEngine(lambda _: None)
         self.assertEqual(Model.loads, 1)
-        self.assertEqual(len(engine.voices), len(cicero.ENGLISH_VOICES) + 2)
+        self.assertEqual(len(engine.voices), len(pat.ENGLISH_VOICES) + 2)
         self.assertEqual(ears.call_count, 2)
         self.assertTrue(all(call.kwargs["mic"] is False for call in ears.call_args_list))
         self.assertEqual(len({id(voice.model) for (lang, _), voice in engine.voices.items() if lang == "en"}), 1)

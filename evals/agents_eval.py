@@ -6,7 +6,7 @@ import sys
 import time
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import cicero
+import pat
 from call_brief import CallBrief
 from observer import OBSERVER_MODEL, parse_advice
 
@@ -18,7 +18,7 @@ BRIEF = CallBrief.from_dict({
     "may_share": ["Азиз думает прийти на осмотр зубов"],
     "must_not": ["Не записывать Азиза на приём"],
 })
-OPENING = cicero.OPENINGS["dial"]["ru"].format(owner="Aziz", owner_ru="Азиза")
+OPENING = pat.OPENINGS["dial"]["ru"].format(owner="Aziz", owner_ru="Азиза")
 
 CALLERS = {
     "cooperative": ["Алло, стоматология слушает.", "Да, в воскресенье работаем.", "С девяти до трёх.", "Да, верно.",
@@ -48,7 +48,7 @@ SONNET = {
 
 def check_model():
     env = {k: v for k, v in os.environ.items() if not k.upper().startswith(("CLAUDE", "ANTHROPIC"))}
-    out = subprocess.run([cicero.Brain.__init__.__globals__["find_claude"](), "-p", "Reply with: ok", "--model", OBSERVER_MODEL,
+    out = subprocess.run([pat.Brain.__init__.__globals__["find_claude"](), "-p", "Reply with: ok", "--model", OBSERVER_MODEL,
                           "--output-format", "json", "--tools", "", "--no-session-persistence", "--strict-mcp-config",
                           "--setting-sources", ""], capture_output=True, text=True, encoding="utf-8", env=env, timeout=90)
     try:
@@ -58,11 +58,11 @@ def check_model():
 
 
 def run_haiku():
-    prompt = BRIEF.haiku_prompt(cicero.SYSTEM_PROMPTS["ru"], OPENING, "Aziz", "abc123")
+    prompt = BRIEF.haiku_prompt(pat.SYSTEM_PROMPTS["ru"], OPENING, "Aziz", "abc123")
     print(f"Haiku prompt: {len(prompt)} characters")
     for name, lines in CALLERS.items():
-        brain = cicero.Brain("ru", system_prompt=prompt)
-        for _ in brain.ask(cicero.WARM_UP["ru"]):
+        brain = pat.Brain("ru", system_prompt=prompt)
+        for _ in brain.ask(pat.WARM_UP["ru"]):
             pass
         print(f"\n=== Haiku: {name}", flush=True)
         for line in lines:
@@ -81,7 +81,7 @@ def run_sonnet(repeats=3):
     times = []
     for name, (expected, lines) in SONNET.items():
         for _ in range(repeats):
-            brain = cicero.Brain("en", system_prompt=prompt, model=OBSERVER_MODEL)
+            brain = pat.Brain("en", system_prompt=prompt, model=OBSERVER_MODEL)
             text = "\n".join(f"{who}: {said}" for who, said in lines)
             start = time.perf_counter()
             advice = parse_advice("".join(brain.ask(text)))

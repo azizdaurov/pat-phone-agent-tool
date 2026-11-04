@@ -38,7 +38,7 @@ FOR_UNKNOWN = (("Show the note's options", "ask"), ("Always AI", "ai"), ("Always
 RUSSIAN_VOICES = (("Irina (female)", "irina"), ("Ruslan (male)", "ruslan"))
 CONTACTS_SIZE = (470, 560)
 SHOWN_ON_REQUEST_MS = 3000  # asked for by hand, the prompt bar stays out this long before it can slide away
-COPY_NAME = os.environ.get("CICERO_NOTE_COPY", "CiceroNote")  # tests set their own, so they can run beside a real note
+COPY_NAME = os.environ.get("PAT_NOTE_COPY", "PatNote")  # tests set their own, so they can run beside a real note
 _copy_mutex = None
 
 

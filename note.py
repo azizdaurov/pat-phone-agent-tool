@@ -4,7 +4,7 @@
 
 Its settings are on the right-click menu of its icon, in the hidden icons.
 
-It watches the line with an iphonecall of its own, which never moves a call's audio. Each AI call is still a cicero.py
+It watches the line with an iphonecall of its own, which never moves a call's audio. Each AI call is still a pat.py
 process with its own iphonecall, so the note also shows calls an agent places, and a crash here can't end a call.
 """
 import argparse
@@ -43,7 +43,7 @@ if sys.stdout is None:  # pythonw has no console
     os.makedirs(CALLS, exist_ok=True)
     sys.stdout = sys.stderr = open(os.path.join(CALLS, "note.log"), "a", encoding="utf-8", buffering=1)
 
-from audio_defaults import CallDevices  # noqa: E402
+from audio_defaults import CallDevices, headset_problem  # noqa: E402
 from easter_eggs import EasterEggs, choose_next_style, split_style  # noqa: E402
 from live_call import SoundMeter, read_last_call, read_live, send_command, take_commands  # noqa: E402
 from note_settings import SETTINGS_NAME, NoteSettings  # noqa: E402
@@ -103,7 +103,7 @@ class CallRules:
 
 
 class CallLevel:
-    """Whether anyone is talking while Aziz is on the laptop and no Cicero is running: what's playing, or his microphone."""
+    """Whether anyone is talking while the owner is on the laptop and no Pat call is running: what's playing, or their microphone."""
 
     def __init__(self):
         import numpy as np
@@ -157,11 +157,11 @@ def terminate_call_process(process):
 class Desk:
     """Everything the note knows and does, apart from drawing it. `line` is the note's own PhoneLine."""
 
-    def __init__(self, line, start_call, devices=None, always=None, settings=None, folder=CALLS, real_devices=None, make_level=CallLevel, cancel_seconds=CANCEL_SECONDS, private=None, eggs=None, speech_ready=lambda: True):
+    def __init__(self, line, start_call, devices=None, always=None, settings=None, folder=CALLS, real_devices=None, headsets=None, make_level=CallLevel, cancel_seconds=CANCEL_SECONDS, private=None, eggs=None, speech_ready=lambda: True):
         self.line = line
         self.private = private or PrivateNumbers()
         self.eggs = eggs or EasterEggs(os.path.dirname(self.private.book_path), folder)
-        self.panel = self.eggs.first_open_panel()
+        self._set_panel(self.eggs.first_open_panel())
         self.panel_style = ""
         self.start_call = start_call  # takes a result file; returns a process getting ready to pick up
         self.speech_ready = speech_ready
@@ -172,6 +172,9 @@ class Desk:
         self.settings = settings or NoteSettings(folder)
         self.folder = folder
         self.real_devices = real_devices
+        self.headsets = headsets  # Bluetooth headsets on the laptop, which keep a call's audio on the iPhone
+        self.headset_check = None
+        self.route_moves = 0  # counts each move, so a late headset check only acts on the move it was made for
         self.make_level = make_level
         self.cancel_seconds = cancel_seconds
         self.lock = threading.RLock()
@@ -182,7 +185,7 @@ class Desk:
         self.route = "iphone"
         self.me_route = self._load_me_route()
         self.showing_last = None
-        self.forwarding = False  # the call's own process has Aziz on the laptop, after Take over or F9
+        self.forwarding = False  # the call's own process has the owner on the laptop, after Take over or F9
         self.notice = ""
         self.ready_call = None
         self.result_file = None
@@ -223,7 +226,7 @@ class Desk:
         self.name, self.number = split_caller(who)
         self.name = self.name or self.private.name_for(self.number)
         self.notice = ""
-        self.panel = None
+        self._set_panel(None)
         take_commands(self.folder)  # from a call that was killed
         self.screen = "ringing"
         rule = self.always.decide(self.number, bool(self.private.name_for(self.number)), self.settings.unknown)
@@ -329,6 +332,7 @@ class Desk:
 
     def set_route(self, route):
         with self.lock:
+            self.route_moves += 1
             self.route = route
             if self.screen != "me":
                 return
@@ -342,10 +346,29 @@ class Desk:
             elif route == "laptop":
                 self.line.to_laptop()
                 self._use_real_devices()
+                if self.headsets:  # asking Windows takes a couple of seconds, so the call moves first
+                    self.headset_check = threading.Thread(target=self._back_if_headset, args=(self.route_moves,), daemon=True)
+                    self.headset_check.start()
             else:
                 self.line.to_phone()
                 self._stop_level()
                 self.devices.restore()
+
+    def _back_if_headset(self, move):
+        """With a Bluetooth headset on the laptop, Windows says the call moved here while its sound stays on the iPhone.
+        Then the iPhone is where it really is, so the note says so and puts it back there properly."""
+        try:
+            blocked = headset_problem(self.headsets())
+        except OSError:
+            return
+        with self.lock:
+            if not blocked or move != self.route_moves or self.screen != "me" or self.route != "laptop" or self.forwarding:
+                return
+            self.route = "iphone"
+            self.line.to_phone()
+            self._stop_level()
+            self.devices.restore()
+            self.notice = blocked
 
     def _use_real_devices(self):
         speaker, microphone = self.real_devices() if self.real_devices else (None, None)
@@ -393,16 +416,27 @@ class Desk:
             send_command(self.folder, "cancel")
         self.line.hang_up()
 
+    def _set_panel(self, panel):
+        self.panel = panel
+        delay = panel.get("dismiss_after", 0) if panel else 0
+        self.panel_deadline = time.monotonic() + delay if delay else None
+        if panel is None:
+            self.eggs.pending = None
+
+    def _expire_panel(self):
+        if self.panel_deadline is not None and time.monotonic() >= self.panel_deadline:
+            self._set_panel(None)
+
     def submit(self, text):
         """Hands what was typed to an agent, which places the call through the phone tool like any other agent. Easter eggs are
         answered here first, so a joke needs no Claude, and a joke number can't reach the phone tool from here."""
         text, style = split_style(text)
         with self.lock:
-            self.panel = None
+            self._set_panel(None)
             self.notice = ""
             panel = self.eggs.respond(text, self.private) if text else None
             if panel:
-                self.panel = panel
+                self._set_panel(panel)
                 self.panel_style = style
                 return
             if not text:
@@ -419,18 +453,22 @@ class Desk:
     def press(self, button):
         """A button on the open panel."""
         with self.lock:
-            self.panel, target = self.eggs.press(button)
+            self._expire_panel()
+            if self.panel is None:
+                return
+            panel, target = self.eggs.press(button)
+            self._set_panel(panel)
             style = self.panel_style
         if target:
             self._send_to_agent(f"Call {target}. Say hello from the owner and ask how they are, then say goodbye.", style)
 
     def show_stats(self):
         with self.lock:
-            self.panel = self.eggs.stats_panel()
+            self._set_panel(self.eggs.stats_panel())
 
     def show_facts(self):
         with self.lock:
-            self.panel = self.eggs.found_panel()
+            self._set_panel(self.eggs.found_panel())
 
     def quit(self):
         """The note is closing for good. A call Claude is on carries on by itself."""
@@ -483,6 +521,7 @@ class Desk:
 
     def state(self):
         with self.lock:
+            self._expire_panel()
             if self.screen == "ringing" and self.prepare_requested and self.ready_call is None and self.speech_ready():
                 self._get_claude_ready()
                 if self.ai_requested:
@@ -504,6 +543,8 @@ class Desk:
                 self._read_failure()
             if live and live.get("stage") == "handed" and self.screen in ("ai", "idle") and not self.forwarding:  # F9
                 self._now_forwarded()
+            if live and live.get("notice"):  # such as why the call went to the iPhone instead
+                self.notice = live["notice"]
             # A call an agent placed shows up with no button pressed here.
             screen = self.screen
             if screen == "idle" and live and live.get("stage") != "ringing":
@@ -631,7 +672,7 @@ def main():
 
     def start_call(result_file):
         log = open(result_file.replace(".result.json", ".log"), "w", encoding="utf-8")
-        return subprocess.Popen([python, os.path.join(HERE, "cicero.py"), "answer", "--wait-for-go", "--lang", settings.language, "--result-file", result_file],
+        return subprocess.Popen([python, os.path.join(HERE, "pat.py"), "answer", "--wait-for-go", "--lang", settings.language, "--result-file", result_file],
                                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=HERE, creationflags=subprocess.CREATE_NO_WINDOW)
 
     from speech_service import ResidentSpeech
@@ -640,18 +681,18 @@ def main():
     late = LateDesk(speech)
 
     def make_line():
-        import cicero  # slow: loads the audio libraries, so the window opens first
-        return cicero.PhoneLine(command=cicero.phone_command(stay_on_phone=True), log_path=os.path.join(CALLS, "note-phone.log"))
+        import pat  # slow: loads the audio libraries, so the window opens first
+        return pat.PhoneLine(command=pat.phone_command(stay_on_phone=True), log_path=os.path.join(CALLS, "note-phone.log"))
 
     def desk_for(line):
-        import cicero
+        import pat
 
         def real_names():
-            speaker, microphone = cicero.real_devices()
-            return (cicero.sd.query_devices(speaker)["name"] if speaker is not None else None,
-                    cicero.sd.query_devices(microphone)["name"] if microphone is not None else None)
+            speaker, microphone = pat.real_devices()
+            return (pat.sd.query_devices(speaker)["name"] if speaker is not None else None,
+                    pat.sd.query_devices(microphone)["name"] if microphone is not None else None)
 
-        late.desk = Desk(line, start_call, always=rules, settings=settings, private=private, real_devices=real_names, speech_ready=speech.is_ready)
+        late.desk = Desk(line, start_call, always=rules, settings=settings, private=private, real_devices=real_names, headsets=pat.connected_headsets, speech_ready=speech.is_ready)
         return late.desk
 
     def on_problem(text):

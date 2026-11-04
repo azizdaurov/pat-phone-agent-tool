@@ -2,8 +2,9 @@
 
 Joins voice-loop (speech recognition, Claude, speech) to iphonecall (the call itself).
 Agents place calls through phone_mcp.py. By hand, run from this folder, in voice-loop's environment:
-  .venv\\Scripts\\python.exe cicero.py dial +998XXXXXXXXX --lang ru --brief "Ask if they open on Sunday"
-  .venv\\Scripts\\python.exe cicero.py answer --lang ru
+  .venv\\Scripts\\python.exe pat.py dial "+COUNTRY_CODE_NUMBER" --brief "Ask if they open on Sunday"
+  .venv\\Scripts\\python.exe pat.py answer
+Replace +COUNTRY_CODE_NUMBER with a full international number. English is the default; use --lang ru for Russian.
 While a call runs, type h to hang up or p to move the call to the iPhone and take over. Setup: README.md
 """
 import argparse
@@ -26,7 +27,7 @@ import wave
 import numpy as np
 import sounddevice as sd
 
-from audio_defaults import CallDevices, repair_defaults
+from audio_defaults import CallDevices, chosen_devices, headset_problem, repair_defaults
 from call_brief import ASK_MARK, DEFAULT_ENGLISH_VOICE, END_MARK, ENGLISH_VOICES, HEARD_NOTHING, REACHED_MARKS, CallBrief, is_bare_answer
 from easter_eggs import EasterEggs, POEM_PROMPTS, WATSON, write_poem
 from live_call import LiveCall, SoundMeter, final_note, write_last_call
@@ -49,12 +50,14 @@ from voice_loop import (BatchEar, Brain, MIC_RATE, Mouth, PiperVoice, PocketVoic
 RU_STT_MODEL = "gigaam-v3-rnnt"
 EN_STT_MODEL = "nemo-parakeet-tdt-0.6b-v2"
 
-CABLE_PLAY = "CABLE Input"  # Cicero speaks into this end of the virtual cable...
+CABLE_PLAY = "CABLE Input"  # Pat speaks into this end of the virtual cable...
 CABLE_HEAR = "CABLE Output"  # ...and Windows reads this end as the call's microphone
 # As the default speaker, one of these plays the call with no sound in the room, and it can still be recorded. The first one
-# installed is used. Another can be named in CICERO_SILENT_SPEAKER; check it first with evals\silent_output_probe.py.
+# installed is used. Another can be named in PAT_SILENT_SPEAKER; check it first with evals\silent_output_probe.py.
 SILENT_SPEAKERS = ("Voicemeeter Input", "CABLE-A Input", "CABLE-B Input", "Steam Streaming Speakers", "Boom Audio")
 TAKE_OVER_KEY = 0x78  # F9, anywhere in Windows
+MIC_GONE_SECONDS = 2
+QUIET_MIC = 0.01  # loudest sound while someone talks, below which the other person would barely hear them
 FRAME = 512  # Silero's frame at 16 kHz: 32 ms
 SILENT_GAP = 0.1  # Windows sends no loopback audio during silence, so a gap this long counts as silence
 START_FRAMES = 5  # 0.16 s of speech starts a turn
@@ -83,8 +86,10 @@ CONFIRMATION_WORDS = CONFIRMATION_CUES | set(
 
 # Says it isn't a person, and whose it is, in every call. No option removes it. The Russian wording uses words the voice reads clearly.
 OPENINGS = {
-    "dial": {"en": "Hello, this is {owner}'s AI assistant.", "ru": "Здравствуйте, я виртуальный ассистент. Мой пользователь — {owner_ru}."},
-    "answer": {"en": "Hello, this is {owner}'s AI assistant. {owner} might hear this conversation. How can I help you?", "ru": "Здравствуйте, я виртуальный ассистент. Мой пользователь — {owner_ru}."},
+    "dial": {"en": "Hello, this is {owner}'s AI assistant. {owner} might hear this conversation.",
+             "ru": "Здравствуйте, я виртуальный ассистент. Мой пользователь — {owner_ru}. {owner_ru} может слышать этот разговор."},
+    "answer": {"en": "Hello, this is {owner}'s AI assistant. {owner} might hear this conversation. How can I help you?",
+               "ru": "Здравствуйте, я виртуальный ассистент. Мой пользователь — {owner_ru}. {owner_ru} может слышать этот разговор."},
 }
 # Said before the owner comes on the line, so the other person knows a person has joined.
 TAKING_OVER = {"en": "One moment, I'm passing you to {owner}.", "ru": "Одну секунду, передаю трубку. С вами будет говорить {owner_ru}."}
@@ -208,7 +213,7 @@ class PhoneLine:
                 return status, who
 
     def wait_for_laptop_audio(self, seconds):
-        """False if the call is still on the iPhone after this long. Then Cicero can neither hear nor be heard."""
+        """False if the call is still on the iPhone after this long. Then Pat can neither hear nor be heard."""
         deadline = time.monotonic() + seconds
         while self.audio != "LocalDevice":
             if time.monotonic() >= deadline or self.ended.is_set():
@@ -310,7 +315,7 @@ class CallerAudio:
 
 
 class LaptopTakeover:
-    """Puts the owner on the call: the other person's voice on the real speaker, his real microphone into the cable."""
+    """Puts the owner on the call: the other person's voice on the real speaker, their real microphone into the cable."""
 
     def __init__(self, caller, speaker, microphone, cable):
         self.caller = caller
@@ -341,6 +346,8 @@ class LaptopTakeover:
                 stream.close()
             raise
         self.forwarding = threading.Thread(target=self._play_caller, daemon=True)
+        self.error = None
+        self.started = None
         print(f"Takeover microphone: {mic_info['name']} ({input_rate} Hz, {input_channels} channels); "
               f"call output: {cable_info['name']} ({output_rate} Hz, {output_channels} channels)", flush=True)
 
@@ -350,7 +357,24 @@ class LaptopTakeover:
                 block = self.caller.blocks.get(timeout=0.1)
             except queue.Empty:
                 continue
-            self.speaker.write(block.reshape(-1, self.caller.channels))
+            try:
+                self.speaker.write(block.reshape(-1, self.caller.channels))
+            except Exception as error:  # such as headphones unplugged
+                self.error = f"the speaker stopped: {error}"
+                return
+
+    def problem(self, now=None):
+        """Why the laptop's audio stopped working, or None. A microphone keeps sending audio even in silence, so a stall
+        means it's gone."""
+        if self.error:
+            return self.error
+        if not all(stream.active for stream in self.streams):
+            return "an audio device stopped"
+        now = time.monotonic() if now is None else now
+        last = self.relay.last_capture or self.started
+        if last is not None and now - last > MIC_GONE_SECONDS:
+            return "the microphone stopped sending audio"
+        return None
 
     def start(self):
         self.caller.drop_waiting()
@@ -362,6 +386,7 @@ class LaptopTakeover:
         except Exception:
             self.stop()
             raise
+        self.started = time.monotonic()
 
     def stop(self):
         if self.closed.is_set():
@@ -582,7 +607,7 @@ class Transcript:
 
     def add(self, who, text):
         print(f"{who}: {text}", flush=True)
-        if who != "Cicero":
+        if who != "Pat":
             self.spoken.append((who, text))
         if who == "Them" and self.on_them:
             self.on_them(self.spoken)
@@ -591,7 +616,7 @@ class Transcript:
 
 
 def saved_frames(frames, path):
-    """Passes the frames on, and keeps what Cicero hears as a WAV. Only with --save-audio."""
+    """Passes the frames on, and keeps what Pat hears as a WAV. Only with --save-audio."""
     with wave.open(path, "wb") as f:
         f.setnchannels(1)
         f.setsampwidth(2)
@@ -682,7 +707,7 @@ class Conversation:
                 self.transcript.add("Claude", piece)
                 self.mouth.say(piece, token, self._note_first_audio)
             elif piece:
-                self.transcript.add("Cicero", f"not spoken: {piece}")
+                self.transcript.add("Pat", f"not spoken: {piece}")
 
         self.generating = True
         try:
@@ -696,12 +721,12 @@ class Conversation:
         return " ".join(question)
 
     def _note_first_audio(self):
-        """How long the person waited, to measure on real calls. Counted from when Cicero decided they had stopped."""
+        """How long the person waited, to measure on real calls. Counted from when Pat decided they had stopped."""
         ended, self.speech_ended_at = self.speech_ended_at, None
         if ended is not None:
             delay = time.monotonic() - ended
             self.reply_delays.append(round(delay, 2))
-            self.transcript.add("Cicero", f"first audio {delay:.2f} s after their speech ended, plus {END_FRAMES * FRAME / MIC_RATE:.1f} s of waiting to be sure they had")
+            self.transcript.add("Pat", f"first audio {delay:.2f} s after their speech ended, plus {END_FRAMES * FRAME / MIC_RATE:.1f} s of waiting to be sure they had")
 
     def _start_task(self, token):
         """Hands Haiku the task once it has marked the person confirmed. Until then it has nothing to reveal."""
@@ -745,7 +770,7 @@ class Conversation:
         note = (f'They said "{text}" over your last reply before hearing the full question or detail, so do not count that as its answer. '
                 f'You then repeated the missing part: "{repeated}". Their new words below respond to that repetition.')
         self.pending_note = f"{self.pending_note} {note}" if self.pending_note else note
-        self.transcript.add("Cicero", "a bare answer before they could have heard the question, so it's said again")
+        self.transcript.add("Pat", "a bare answer before they could have heard the question, so it's said again")
         for piece in self.last_reply:
             self.transcript.add("Claude", piece)
             self.mouth.say(piece, token, self._note_first_audio)
@@ -760,12 +785,12 @@ class Conversation:
 
     def _consult(self, question, token):
         """Haiku asked for help: the person hears "one moment" while Sonnet decides."""
-        self.transcript.add("Cicero", f"Haiku asks Sonnet: {question}")
+        self.transcript.add("Pat", f"Haiku asks Sonnet: {question}")
         phrase = self._say_stall(token)
         note = self.observer.consult(question) if self.observer and self.confirmed else None
         fallback = f"Tell them you can't decide this and will pass it on to {self.owner}."
         note = note or (fallback if self.confirmed else "Ask them again whether you've reached the right person.")
-        self.transcript.add("Cicero", f"Sonnet answers: {note}")
+        self.transcript.add("Pat", f"Sonnet answers: {note}")
         message = self._supervisor(f'You just said "{phrase}" to them. {note} Say your next line now, with no {ASK_MARK}.')
         if self._speak_reply(message, token):
             self._speak_reply(self._supervisor(f"No more questions. Tell them you will pass it on to {self.owner}."), token)
@@ -781,7 +806,7 @@ class Conversation:
             self.last_reply = []
             if text:
                 self.caller_turns += 1
-                message = re.sub(r"[\[\]]", " ", text)  # only Cicero can write a supervisor mark
+                message = re.sub(r"[\[\]]", " ", text)  # only Pat can write a supervisor mark
             else:
                 message = self._supervisor(prompt or "They made a short sound, but speech recognition got no words. "
                                            "They may have answered you. Ask them briefly to repeat it, or say your next line if you weren't waiting for an answer.")
@@ -826,7 +851,7 @@ class Conversation:
         advice = self.observer.review(turn)
         if advice["action"] == "none":
             return
-        self.transcript.add("Cicero", f"Sonnet {advice['action']} ({advice['reason']}): {advice['note']}")
+        self.transcript.add("Pat", f"Sonnet {advice['action']} ({advice['reason']}): {advice['note']}")
         if advice["action"] == "steer":
             self.pending_note = advice["note"]
         else:
@@ -895,7 +920,7 @@ class Conversation:
                     self.transcript.add("Claude", NOBODY_CAME[self.language])
                     self.mouth.say(NOBODY_CAME[self.language], self.mouth.token)
                     self.mouth.drain()
-                self.transcript.add("Cicero", f"call over: {reason}, loudest sound heard {loudest:.3f} of 1")
+                self.transcript.add("Pat", f"call over: {reason}, loudest sound heard {loudest:.3f} of 1")
                 return reason
 
             loudest = max(loudest, float(np.abs(frame).max()))
@@ -906,7 +931,7 @@ class Conversation:
             if self.confirmed and not turns.speaking and self.nudges < MAX_NUDGES and now - max(last_heard, last_busy) > NUDGE_SECONDS:
                 self.nudges += 1
                 last_busy = now
-                self.transcript.add("Cicero", f"no speech for {NUDGE_SECONDS} s, checking they're still there")
+                self.transcript.add("Pat", f"no speech for {NUDGE_SECONDS} s, checking they're still there")
                 prompt = "They have said nothing for a while, so they may not have heard you. Check briefly that they're still there, and repeat your last question."
                 threading.Thread(target=self._turn, args=("", self.epoch, prompt), daemon=True).start()
 
@@ -915,7 +940,7 @@ class Conversation:
             if event == "start":
                 self.nudges = 0
                 turn_started = now
-                self.transcript.add("Cicero", f"speech started, {now - started:.1f} s into the call")
+                self.transcript.add("Pat", f"speech started, {now - started:.1f} s into the call")
                 # The opening says this is an AI, so talking over it must not cut it off.
                 if self.opening_done.is_set():
                     self._cut_speech()
@@ -926,14 +951,14 @@ class Conversation:
             elif event == "end":
                 last_heard = now
                 self.speech_ended_at = now
-                self.transcript.add("Cicero", f"speech ended after {now - turn_started:.1f} s")
+                self.transcript.add("Pat", f"speech ended after {now - turn_started:.1f} s")
                 text = self.ear.end(tail=0)
                 if text:
                     self.wordless_replies = 0
                     self.transcript.add("Them", text)
                 else:
                     self.wordless_replies += 1
-                    self.transcript.add("Cicero", "speech detected, but recognition got no words")
+                    self.transcript.add("Pat", "speech detected, but recognition got no words")
                 # Speech with no words may still have been their answer, so it gets a reply too, or the line goes quiet.
                 if text or self.wordless_replies <= MAX_WORDLESS_REPLIES:
                     threading.Thread(target=self._turn, args=(text, self.epoch), daemon=True).start()
@@ -987,7 +1012,7 @@ def find_output(name):
 
 
 def silent_speakers():
-    chosen = os.environ.get("CICERO_SILENT_SPEAKER")
+    chosen = os.environ.get("PAT_SILENT_SPEAKER") or os.environ.get("CICERO_SILENT_SPEAKER")  # its old name too
     return (chosen, *SILENT_SPEAKERS) if chosen else SILENT_SPEAKERS
 
 
@@ -1017,12 +1042,51 @@ def fix_audio_defaults():
     print(*changed, sep="\n") if changed else print("Default speaker and microphone are already the real ones.")
 
 
-def real_devices():
-    """Returns (speaker, microphone) to use when the owner takes over. Either can be None if there's none."""
+def preferred_device(devices, chosen):
+    """The first real device among those the owner picked in Windows, or else the first real one."""
+    for wanted in chosen:
+        for index, name in devices:
+            if name == wanted and not is_virtual_device(name):
+                return index
+    return pick_real_device(devices)
+
+
+def real_devices(chosen=None):
+    """Returns (speaker, microphone) to use when the owner takes over: the ones picked in Windows, as they were before the
+    call switched them. Either can be None if there's none."""
     wasapi = [(index, device) for index, device in enumerate(sd.query_devices())
               if "WASAPI" in sd.query_hostapis(device["hostapi"])["name"]]
-    return (pick_real_device([(i, d["name"]) for i, d in wasapi if d["max_output_channels"] > 0]),
-            pick_real_device([(i, d["name"]) for i, d in wasapi if d["max_input_channels"] > 0]))
+    if chosen is None:
+        try:
+            chosen = chosen_devices(os.path.join(HERE, "calls"))
+        except OSError:
+            chosen = ((), ())
+    return (preferred_device([(i, d["name"]) for i, d in wasapi if d["max_output_channels"] > 0], chosen[0]),
+            preferred_device([(i, d["name"]) for i, d in wasapi if d["max_input_channels"] > 0], chosen[1]))
+
+
+def check_microphone(seconds=3, record=None):
+    """For setup: records a few seconds from the microphone Pat uses when you take over. Returns (fine, what to say)."""
+    microphone = real_devices()[1]
+    if microphone is None:
+        return False, "No microphone found, so you can't take over calls on the laptop."
+    info = sd.query_devices(microphone)
+    rate, channels = int(info["default_samplerate"]), int(info["max_input_channels"])
+    if record is None:
+        def record():
+            audio = sd.rec(int(seconds * rate), samplerate=rate, channels=channels, dtype="float32", device=microphone)
+            sd.wait()
+            return audio
+    try:
+        peak = float(np.max(np.abs(record())))
+    except Exception as error:
+        return False, f"Couldn't open '{info['name']}': {error}"
+    if peak == 0:
+        return False, (f"'{info['name']}' sent only silence. It's muted, or Windows doesn't let apps use it: Settings > "
+                       "Privacy & security > Microphone, turn on 'Let desktop apps access your microphone'.")
+    if peak < QUIET_MIC:
+        return False, f"'{info['name']}' works but is very quiet ({peak:.3f}). Raise its level in Windows' sound settings."
+    return True, f"'{info['name']}' works (loudest {peak:.2f})."
 
 
 def connected_headsets(endpoints=None):
@@ -1058,7 +1122,7 @@ def find_input(name):
 
 
 def check_audio_setup(audible=False):
-    """The things Cicero can't fix itself. Stops before any call rather than on a silent line."""
+    """The things Pat can't fix itself. Stops before any call rather than on a silent line."""
     problems = []
     for headset in connected_headsets():
         problems.append(f"'{headset}' is connected. Disconnect it from the laptop, or the call's audio stays on the "
@@ -1085,7 +1149,7 @@ def open_cable(rate):
 def only_one_copy():
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateMutexW.restype = ctypes.c_void_p
-    kernel32.CreateMutexW(None, False, "Local\\CiceroSingleCopy")
+    kernel32.CreateMutexW(None, False, "Local\\PatSingleCopy")
     if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS
         sys.exit("Pat is already on a call in another window.")
 
@@ -1141,16 +1205,19 @@ def say_watson(eggs=None, make_mouth=None):
 
 
 def use_call_devices(devices, audible):
-    """Just before the call, so the laptop keeps its sound while Cicero loads."""
+    """Just before the call, so the laptop keeps its sound while Pat loads."""
     devices.use(speaker=None if audible else find_silent_speaker(), mic=CABLE_HEAR)
 
 
 def load_brief(args):
     if args.brief_file:
         with open(args.brief_file, encoding="utf-8") as f:
-            return CallBrief.from_dict(json.load(f))
-    return CallBrief.from_dict({"goal": args.brief or DEFAULT_ANSWER_GOAL, "language": args.lang, "name": args.name,
-                                "company": args.company, "confidence": args.confidence if (args.name or args.company) else ""})
+            brief = CallBrief.from_dict({"language": args.lang, **json.load(f)})
+    else:
+        brief = CallBrief.from_dict({"goal": args.brief or DEFAULT_ANSWER_GOAL, "language": args.lang, "name": args.name,
+                                     "company": args.company, "confidence": args.confidence if (args.name or args.company) else ""})
+    brief.incoming = args.action == "answer"
+    return brief
 
 
 def start_brain(args, brief, opening, nonce, notes):
@@ -1282,23 +1349,37 @@ def start_live_notes(brief, spoken_so_far):
     return notes, brain
 
 
-def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable):
-    """The owner talks from here on, until the call ends or he hangs up or moves it to the iPhone. Claude says nothing more."""
+def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable, tell=None, headsets=None):
+    """The owner talks from here on, until the call ends or they hang up or moves it to the iPhone. Claude says nothing more."""
+    tell = tell or (lambda text: print(text, flush=True))
+    found = []  # asking Windows takes a couple of seconds, so it happens while Claude says it's passing them over
+    checking = threading.Thread(target=lambda: found.extend((headsets or connected_headsets)()), daemon=True)
+    checking.start()
+    phrase = TAKING_OVER[brief.language].format(owner=args.owner, owner_ru=args.owner_ru)
+    mouth.say(phrase, mouth.token)
+    mouth.drain()
+    checking.join(25)
+    blocked = headset_problem(found)
+    if blocked:  # a headset that connected during the call: Windows would say the audio moved, but it stays on the iPhone
+        tell(blocked)
+        line.to_phone()
+        conversation.hand_over.set()
+        return
     speaker, microphone = real_devices()
     if speaker is None or microphone is None:
         print("Can't take over: no real speaker or microphone found. Moving the call to the iPhone instead.", flush=True)
         line.to_phone()
         conversation.hand_over.set()
         return
-    phrase = TAKING_OVER[brief.language].format(owner=args.owner, owner_ru=args.owner_ru)
-    mouth.say(phrase, mouth.token)
-    mouth.drain()
     takeover = None
     try:
         takeover = LaptopTakeover(caller, speaker, microphone, cable)
         takeover.start()
         print("You're on the call. Use wired headphones, or they'll hear an echo. Type h to hang up, p to move it to the iPhone.", flush=True)
         while not (line.ended.is_set() or conversation.stopped.is_set() or conversation.hand_over.is_set()):
+            problem = takeover.problem()
+            if problem:
+                raise RuntimeError(problem)
             time.sleep(0.1)
     except Exception as error:
         print(f"Laptop audio failed: {error}. Moving the call to the iPhone.", flush=True)
@@ -1311,9 +1392,10 @@ def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("action", choices=["dial", "answer", "check", "prepare", "restore-audio", "fix-audio"],
+    parser.add_argument("action", choices=["dial", "answer", "check", "prepare", "restore-audio", "fix-audio", "check-mic"],
                         help="check tests the setup. prepare downloads the speech models. restore-audio puts back the default "
                              "speaker and microphone after a call that was killed. fix-audio moves them off any virtual device. "
+                             "check-mic records 3 seconds to see that your microphone sends sound. "
                              "None of these makes a call")
     parser.add_argument("number", nargs="?", help="number to dial, in international format")
     parser.add_argument("--brief", help="what Claude should do on this call, in one sentence")
@@ -1326,7 +1408,7 @@ def main():
     parser.add_argument("--company", default="", help="their company; with no --name, anyone there can help")
     parser.add_argument("--confidence", choices=["confirmed", "guess", "unknown"], default="guess",
                         help="how sure you are the number is theirs")
-    parser.add_argument("--lang", choices=sorted(SYSTEM_PROMPTS), default="ru")
+    parser.add_argument("--lang", choices=sorted(SYSTEM_PROMPTS), default="en", help="call language (default: English)")
     parser.add_argument("--voice", default=None, help=f"Russian: irina or ruslan. English: {', '.join(ENGLISH_VOICES)}")
     parser.add_argument("--owner", default=None, help="override the name saved in Pat's settings for this call")
     parser.add_argument("--owner-ru", default=None, help="optional spoken Russian version of the owner's name")
@@ -1376,6 +1458,10 @@ def main():
     if args.action == "fix-audio":
         fix_audio_defaults()
         return
+    if args.action == "check-mic":
+        fine, message = check_microphone()
+        print(message)
+        sys.exit(0 if fine else 1)
     problems = check_audio_setup(args.audible)
     for problem in problems:
         print(f"Setup: {problem}")
@@ -1486,8 +1572,8 @@ def main():
         caller = CallerAudio()
         print(f"Connected. Hearing through: {caller.name}. Press F9 or type l to take the call on the laptop, p to move it to the iPhone, h to hang up.", flush=True)
         transcript = Transcript(key=key)
-        transcript.add("Cicero", f"task: {brief.text()}")
-        transcript.add("Cicero", f"hearing through: {caller.name}; call audio: {line.audio}")
+        transcript.add("Pat", f"task: {brief.text()}")
+        transcript.add("Pat", f"hearing through: {caller.name}; call audio: {line.audio}")
         observer, sonnet = start_observer(args, brief, transcript)
         live.update(stage="talking")
         frames = caller.frames()
@@ -1532,7 +1618,8 @@ def main():
         set_listening(False)
         if conversation.take_over.is_set() and not line.ended.is_set():
             live.update(stage="handed")
-            stay_on_laptop(conversation, line, caller, mouth, args, brief, find_output(CABLE_PLAY))
+            stay_on_laptop(conversation, line, caller, mouth, args, brief, find_output(CABLE_PLAY),
+                           tell=lambda text: (print(text, flush=True), live.update(notice=text)))
         print(f"Call over: {reason}. Transcript: {transcript.path}")
     except KeyboardInterrupt:
         print("Stopping.")

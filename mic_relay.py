@@ -1,5 +1,6 @@
 """Bounded, nonblocking microphone-to-call relay between independent audio devices."""
 import queue
+import time
 
 import numpy as np
 
@@ -19,10 +20,12 @@ class MicRelay:
         self.dropped_blocks = 0
         self.input_statuses = 0
         self.output_statuses = 0
+        self.last_capture = None  # when the microphone last sent anything, to notice a device that's gone
 
     def capture(self, data, frames, when, status):
         if status:
             self.input_statuses += 1
+        self.last_capture = time.monotonic()
         # Capture all native mic channels, then mix to mono for the phone.
         mono = np.asarray(data, dtype=np.float32).mean(axis=1)
         self.input_frames += len(mono)

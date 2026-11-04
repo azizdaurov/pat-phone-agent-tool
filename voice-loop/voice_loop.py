@@ -1,4 +1,4 @@
-"""Push-to-talk voice chat with Claude Haiku 5.5 on your Claude plan, in English or Russian.
+"""Push-to-talk voice chat with Claude Haiku 4.5 on your Claude plan, in English or Russian.
 
 English uses Moonshine and Pocket TTS. Russian uses onnx-asr (GigaAM) and Piper, voice irina or ruslan.
 Hold the talk key, speak, release. Hold it again to stop a reply. Ctrl+C quits.
@@ -25,7 +25,9 @@ import time
 import numpy as np
 import sounddevice as sd
 
-MODEL = "claude-haiku-5-5"
+# Haiku 5.5 started its replies about 0.7 s later and said dates the way they're written, so calls use 4.5.
+# To go back to 5.5, swap these two lines.
+MODEL = "claude-haiku-4-5"
 FALLBACK_MODEL = "claude-haiku-5-5"
 SYSTEM_PROMPTS = {
     "en": "You are a voice assistant. Reply in one or two short spoken sentences. No lists, no markdown.",

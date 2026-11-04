@@ -32,12 +32,12 @@ for command in sys.stdin:
 RUNNER = r"""
 import os, sys
 sys.path.insert(0, sys.argv[1])
-import cicero
-cicero.PhoneLine.__init__.__defaults__ = ((sys.executable, sys.argv[2], sys.argv[3]),) + cicero.PhoneLine.__init__.__defaults__[1:]
-cicero.check_audio_setup = lambda audible=False: []
-cicero.use_call_devices = lambda devices, audible: None
-sys.argv = ["cicero.py", "answer", "--wait-for-go", "--no-memory", "--no-observer", "--lang", "ru", "--result-file", sys.argv[4]]
-cicero.main()
+import pat
+pat.PhoneLine.__init__.__defaults__ = ((sys.executable, sys.argv[2], sys.argv[3]),) + pat.PhoneLine.__init__.__defaults__[1:]
+pat.check_audio_setup = lambda audible=False: []
+pat.use_call_devices = lambda devices, audible: None
+sys.argv = ["pat.py", "answer", "--wait-for-go", "--no-memory", "--no-observer", "--lang", "ru", "--result-file", sys.argv[4]]
+pat.main()
 """
 
 

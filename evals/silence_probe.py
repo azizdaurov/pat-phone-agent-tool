@@ -6,7 +6,7 @@ import threading
 import types
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
-import cicero
+import pat
 from call_brief import CallBrief
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -43,11 +43,11 @@ class Mouth:
 
 
 for run in range(3):
-    brain = cicero.Brain("en", system_prompt=BRIEF.haiku_prompt(cicero.SYSTEM_PROMPTS["en"], OPENING, "Aziz", "abc123"))
-    for _ in brain.ask(cicero.WARM_UP["en"]):
+    brain = pat.Brain("en", system_prompt=BRIEF.haiku_prompt(pat.SYSTEM_PROMPTS["en"], OPENING, "Aziz", "abc123"))
+    for _ in brain.ask(pat.WARM_UP["en"]):
         pass
     mouth = Mouth()
-    call = cicero.Conversation(types.SimpleNamespace(ended=threading.Event()), iter(()), None, mouth, brain, cicero.Transcript(tempfile.mkdtemp()),
+    call = pat.Conversation(types.SimpleNamespace(ended=threading.Event()), iter(()), None, mouth, brain, pat.Transcript(tempfile.mkdtemp()),
                                OPENING, nonce="abc123", language="en", task_message=BRIEF.task_message("Aziz"))
     call._turn("Yes, it is.", call.epoch)
     print(f"#{run + 1} after confirming: {' '.join(mouth.spoken)}", flush=True)

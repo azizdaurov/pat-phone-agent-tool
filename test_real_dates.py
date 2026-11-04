@@ -6,7 +6,8 @@ import unittest
 from live_notes import LiveNotes
 from observer import Observer
 from phone_memory import ContactNotes, merge_call
-from real_dates import date_lines, day_of, real_dates
+from call_brief import CallBrief
+from real_dates import SAY_DATES, date_lines, day_of, real_dates
 
 TODAY = datetime.date(2026, 11, 3)
 
@@ -92,6 +93,13 @@ class WhereTheyAreKept(unittest.TestCase):
         notes = LiveNotes(lambda text: "", ["When?"], today=TODAY)
         self.assertIn("Tomorrow is 4-11-2026", notes._prompt([]))
         notes.close()
+
+    def test_only_haiku_is_told_how_to_say_dates(self):
+        brief = CallBrief.from_dict({"goal": "Book a table.", "need_from_them": ["Is it free?"]})
+        target = CallBrief.from_dict({"goal": "Book a table.", "name": "Alex", "confidence": "confirmed"})
+        for prompt in (brief.haiku_prompt("Speak.", "Hello.", "Aziz", "n"), target.haiku_prompt("Speak.", "Hello.", "Aziz", "n"), target.task_message("Aziz")):
+            self.assertIn(SAY_DATES, prompt)
+        self.assertNotIn(SAY_DATES, brief.observer_prompt("Aziz"))
 
 
 from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule

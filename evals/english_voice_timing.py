@@ -10,7 +10,7 @@ import types
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 import numpy as np
-import cicero
+import pat
 from call_brief import CallBrief
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
@@ -42,16 +42,16 @@ class TimedOut:
 
 def run(label, voice_name):
     started = time.perf_counter()
-    _, mouth = cicero.load_speech("en", voice_name)
+    _, mouth = pat.load_speech("en", voice_name)
     print(f"\n=== {label}: loaded in {time.perf_counter() - started:.1f} s", flush=True)
-    real = cicero.open_cable(mouth.sample_rate)
+    real = pat.open_cable(mouth.sample_rate)
     real.start()
     mouth.out = TimedOut(real)
-    brain = cicero.Brain("en", system_prompt=BRIEF.haiku_prompt(cicero.SYSTEM_PROMPTS["en"], OPENING, "Aziz", "abc123"))
-    for _ in brain.ask(cicero.WARM_UP["en"]):
+    brain = pat.Brain("en", system_prompt=BRIEF.haiku_prompt(pat.SYSTEM_PROMPTS["en"], OPENING, "Aziz", "abc123"))
+    for _ in brain.ask(pat.WARM_UP["en"]):
         pass
-    call = cicero.Conversation(types.SimpleNamespace(ended=threading.Event()), iter(()), None, mouth, brain,
-                               cicero.Transcript(tempfile.mkdtemp()), OPENING, language="en", nonce="abc123")
+    call = pat.Conversation(types.SimpleNamespace(ended=threading.Event()), iter(()), None, mouth, brain,
+                               pat.Transcript(tempfile.mkdtemp()), OPENING, language="en", nonce="abc123")
     first, gaps, longest = [], [], []
     for line in LINES:
         mouth.out.times = []
@@ -76,5 +76,5 @@ def run(label, voice_name):
           f"silence inside a reply median {np.median(gaps):.2f} s, longest pause {max(longest):.2f} s | audio gaps reported {mouth.underruns}", flush=True)
 
 
-for name in sys.argv[1:] or cicero.ENGLISH_VOICES:
+for name in sys.argv[1:] or pat.ENGLISH_VOICES:
     run(f"Pocket TTS {name}", name)

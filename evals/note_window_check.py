@@ -12,7 +12,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
 sys.argv, FOLDER = [sys.argv[0]], sys.argv[1]
-os.environ["CICERO_NOTE_COPY"] = "CiceroNoteCheck"  # so this can run beside a real note
+os.environ["PAT_NOTE_COPY"] = "PatNoteCheck"  # so this can run beside a real note
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 sys.path.insert(0, os.path.join(FOLDER, "shotlibs"))
 from PIL import ImageGrab

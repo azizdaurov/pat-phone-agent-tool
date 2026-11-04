@@ -8,7 +8,7 @@ import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, ".."))
-import cicero
+import pat
 from call_card import render_card
 from easter_eggs import POEM_PROMPTS, write_poem
 
@@ -23,7 +23,7 @@ for path in paths:
 print("Report:", json.dumps(saved["report"], ensure_ascii=False), "\n", flush=True)
 for style in POEM_PROMPTS:
     started = time.perf_counter()
-    poem = write_poem(style, saved["report"], lambda model: cicero.Brain("en", system_prompt="You write short, funny pieces about phone calls, for the person who asked for the call.", model=model))
+    poem = write_poem(style, saved["report"], lambda model: pat.Brain("en", system_prompt="You write short, funny pieces about phone calls, for the person who asked for the call.", model=model))
     print(f"--- {style}, {time.perf_counter() - started:.1f} s", flush=True)
     print(poem or "(nothing written)", "\n", flush=True)
     if style == "haiku":

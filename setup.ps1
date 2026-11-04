@@ -91,7 +91,7 @@ function As-Admin($file, $arguments) {
 
 function Install-VbCable {
     if ($Rehearse) { Would "download $vbcableZip"; Would 'run its setup silently, then with its window if that did not work'; return }
-    $folder = Join-Path $env:TEMP 'cicero-vbcable'
+    $folder = Join-Path $env:TEMP 'pat-vbcable'
     Remove-Item $folder -Recurse -Force -ErrorAction SilentlyContinue
     New-Item -ItemType Directory $folder | Out-Null
     try {
@@ -168,7 +168,7 @@ if ($SkipModels) {
 } else {
     Step 'Speech models (about 2 GB the first time)'
     Push-Location $root
-    try { & $python cicero.py prepare; Check 'Downloading speech models' } finally { Pop-Location }
+    try { & $python pat.py prepare; Check 'Downloading speech models' } finally { Pop-Location }
 }
 
 Step 'Developer Mode'
@@ -241,7 +241,18 @@ if ($needsRestart) {
 } else {
     Step 'Default speaker and microphone'
     Push-Location $root
-    try { & $python cicero.py fix-audio } finally { Pop-Location }
+    try { & $python pat.py fix-audio } finally { Pop-Location }
+    $global:LASTEXITCODE = 0
+}
+
+if ($Rehearse) {
+    Would 'record 3 seconds from the microphone, to check it sends sound when you take over a call'
+} elseif (-not $needsRestart) {
+    Step 'Microphone'
+    Write-Host '   Say something for 3 seconds...'
+    Push-Location $root
+    try { & $python pat.py check-mic } finally { Pop-Location }
+    if ($LASTEXITCODE -ne 0) { Todo 'Fix the microphone as above, then check it again: .venv\Scripts\python.exe pat.py check-mic' }
     $global:LASTEXITCODE = 0
 }
 

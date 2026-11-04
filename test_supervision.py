@@ -7,7 +7,7 @@ import time
 import types
 import unittest
 
-import cicero
+import pat
 import observer as obs
 from call_brief import ASK_MARK, END_MARK, CallBrief
 from observer import Observer, parse_advice
@@ -62,9 +62,9 @@ class FakeMouth:
 
 
 def conversation(brain, observer=None, language="ru"):
-    transcript = cicero.Transcript(tempfile.mkdtemp())
+    transcript = pat.Transcript(tempfile.mkdtemp())
     line = types.SimpleNamespace(ended=threading.Event())
-    call = cicero.Conversation(line, iter(()), None, FakeMouth(), brain, transcript, "Здравствуйте.",
+    call = pat.Conversation(line, iter(()), None, FakeMouth(), brain, transcript, "Здравствуйте.",
                                observer=observer, nonce="abc123", language=language)
     return call, transcript
 
@@ -89,6 +89,17 @@ class Brief(unittest.TestCase):
                      "SUPERVISOR-n0nce", ASK_MARK, END_MARK, "NOTES", "Claim to be human"):
             self.assertIn(part, prompt)
         self.assertNotIn("{", prompt)
+
+    def test_answered_calls_are_not_told_they_placed_the_call(self):
+        brief = CallBrief.from_dict({"goal": pat.DEFAULT_ANSWER_GOAL, "language": "en"})
+        brief.incoming = True
+        answered = brief.haiku_prompt("VOICE", "OPENING", "Aziz", "n0nce")
+        self.assertIn("so they are calling you", answered)
+        self.assertNotIn("say why you are calling", answered)
+        self.assertNotIn("{", answered)
+        self.assertIn("incoming: True", brief.observer_prompt("Aziz"))
+        brief.incoming = False
+        self.assertIn("say why you are calling", brief.haiku_prompt("VOICE", "OPENING", "Aziz", "n0nce"))
 
     def test_observer_sees_the_brief_and_limits(self):
         prompt = CallBrief.from_dict({"goal": "GOAL", "must_not": ["FORBID"]}).observer_prompt("Aziz")
@@ -171,7 +182,7 @@ class Turns(unittest.TestCase):
         call, _ = conversation(brain, Observer(lambda text: CORRECT, []))
         call._review(3)
         self.assertEqual(call.mouth.cancels, 1)
-        self.assertIn(call.mouth.spoken[0], cicero.STALLS["ru"])
+        self.assertIn(call.mouth.spoken[0], pat.STALLS["ru"])
         self.assertEqual(call.mouth.spoken[1:], ["Извините, я ошибся."])
         self.assertIn("Take back the promise", brain.messages[0])
         self.assertIn(call.mouth.spoken[0], brain.messages[0])
@@ -188,7 +199,7 @@ class Turns(unittest.TestCase):
         watcher = Observer(lambda text: '{"action": "steer", "note": "Say no.", "reason": "r"}', [])
         call, transcript = conversation(brain, watcher)
         call._turn("Давайте на вторник", call.epoch)
-        self.assertIn(call.mouth.spoken[0], cicero.STALLS["ru"])
+        self.assertIn(call.mouth.spoken[0], pat.STALLS["ru"])
         self.assertEqual(call.mouth.spoken[1:], ["На вторник нельзя."])
         self.assertFalse(any(ASK_MARK in said or "скажем" in said for said in call.mouth.spoken))
         self.assertIn("Say no.", brain.messages[1])
@@ -246,30 +257,30 @@ class HeardText(unittest.TestCase):
     TEXT = "один два три четыре пять шесть"
 
     def test_never_ends_mid_word_and_rounds_down(self):
-        self.assertEqual(cicero.whole_words(self.TEXT, 0.2), "один")
-        self.assertEqual(cicero.whole_words(self.TEXT, 0.1), "")
-        self.assertEqual(cicero.whole_words(self.TEXT, 0), "")
-        self.assertEqual(cicero.whole_words(self.TEXT, 1), self.TEXT)
+        self.assertEqual(pat.whole_words(self.TEXT, 0.2), "один")
+        self.assertEqual(pat.whole_words(self.TEXT, 0.1), "")
+        self.assertEqual(pat.whole_words(self.TEXT, 0), "")
+        self.assertEqual(pat.whole_words(self.TEXT, 1), self.TEXT)
 
     def test_no_trailing_comma(self):
-        self.assertEqual(cicero.whole_words("один, два три", 0.5), "один")
+        self.assertEqual(pat.whole_words("один, два три", 0.5), "один")
 
     def test_margin_moves_the_cut_earlier(self):
-        full = cicero.heard_text([[self.TEXT, 3.0, 4.0]], margin=0)
-        cut = cicero.heard_text([[self.TEXT, 3.0, 4.0]], margin=0.5)
+        full = pat.heard_text([[self.TEXT, 3.0, 4.0]], margin=0)
+        cut = pat.heard_text([[self.TEXT, 3.0, 4.0]], margin=0.5)
         self.assertLess(len(cut), len(full))
         self.assertTrue(full.startswith(cut))
 
     def test_margin_reaches_back_into_the_piece_before(self):
         pieces = [["один два три четыре", 2.0, 2.0], ["пять шесть", 0.2, 2.0]]
-        self.assertEqual(cicero.heard_text(pieces, margin=0.5), "один два три")
+        self.assertEqual(pat.heard_text(pieces, margin=0.5), "один два три")
 
     def test_nothing_played_means_nothing_heard(self):
-        self.assertEqual(cicero.heard_text([], margin=0.5), "")
-        self.assertEqual(cicero.heard_text([[self.TEXT, 0.3, 4.0]], margin=0.5), "")
+        self.assertEqual(pat.heard_text([], margin=0.5), "")
+        self.assertEqual(pat.heard_text([[self.TEXT, 0.3, 4.0]], margin=0.5), "")
 
     def test_length_guess_too_short_cannot_exceed_what_played(self):
-        self.assertTrue(cicero.heard_text([[self.TEXT, 9.0, 3.0]], margin=0).startswith("один"))
+        self.assertTrue(pat.heard_text([[self.TEXT, 9.0, 3.0]], margin=0).startswith("один"))
 
 
 class FakeVoice:
@@ -287,7 +298,7 @@ class FakeVoice:
 
 class Tracking(unittest.TestCase):
     def test_counts_played_audio_and_stops_when_cancelled(self):
-        mouth = cicero.TrackingMouth(FakeVoice(), play=False)
+        mouth = pat.TrackingMouth(FakeVoice(), play=False)
         mouth.say("один два три четыре", mouth.token)
         mouth.drain()
         self.assertTrue(mouth.idle())
@@ -299,7 +310,7 @@ class Tracking(unittest.TestCase):
         self.assertEqual(mouth.reply_pieces, [])
 
     def test_piece_with_a_stale_token_is_never_counted(self):
-        mouth = cicero.TrackingMouth(FakeVoice(), play=False)
+        mouth = pat.TrackingMouth(FakeVoice(), play=False)
         mouth.say("старое", mouth.token - 1)
         mouth.drain()
         self.assertEqual(mouth.reply_pieces, [])
@@ -347,7 +358,7 @@ class Cuts(unittest.TestCase):
         self.assertEqual(call.brain.messages, [])
         self.assertIn("Вы заберёте?", " ".join(call.mouth.spoken))
         self.assertIn("Азиз просит забрать еду", " ".join(call.mouth.spoken))
-        self.assertIn(("Claude", cicero.HEARD_NOTHING), transcript.spoken)
+        self.assertIn(("Claude", pat.HEARD_NOTHING), transcript.spoken)
         self.assertFalse(call.finished.is_set())
 
     def test_their_real_answer_after_that_reaches_haiku_which_is_told_what_happened(self):
@@ -390,9 +401,9 @@ class Cuts(unittest.TestCase):
 
     def test_bare_answers(self):
         for text in ("да", "Да, да!", "угу", "ну да", "yes", "Yeah.", "uh-huh", "no"):
-            self.assertTrue(cicero.is_bare_answer(text), text)
+            self.assertTrue(pat.is_bare_answer(text), text)
         for text in ("", "да заберу", "алло", "yes I will", "кто это"):
-            self.assertFalse(cicero.is_bare_answer(text), text)
+            self.assertFalse(pat.is_bare_answer(text), text)
 
     def test_reply_already_finished_is_not_called_cut_off(self):
         call, transcript = conversation(FakeBrain())
@@ -489,7 +500,7 @@ class Goodbyes(unittest.TestCase):
         self.assertTrue(call.finished.is_set())
 
 
-TARGET_BRIEF = {"goal": "SECRETGOAL", "name": "Рустам", "confidence": "guess", "need_from_them": ["SECRETNEED"],
+TARGET_BRIEF = {"goal": "SECRETGOAL", "name": "Рустам", "confidence": "guess", "language": "ru", "need_from_them": ["SECRETNEED"],
                 "context": "SECRETCONTEXT", "may_share": ["SECRETSHARE"], "must_not": ["SECRETLIMIT"]}
 
 
@@ -508,8 +519,8 @@ class IdentityBrief(unittest.TestCase):
         self.assertNotIn("{", message)
 
     def test_marks_survive_the_splitter(self):
-        pieces = cicero.Splitter(30).feed("До свидания. [WRONGNUMBER] [NOTHERE] [CONFIRMED] [END] ") + cicero.Splitter(30).flush()
-        splitter = cicero.Splitter(30)
+        pieces = pat.Splitter(30).feed("До свидания. [WRONGNUMBER] [NOTHERE] [CONFIRMED] [END] ") + pat.Splitter(30).flush()
+        splitter = pat.Splitter(30)
         pieces = splitter.feed("До свидания. [WRONGNUMBER] [NOTHERE] [CONFIRMED] [END]") + splitter.flush()
         joined = " ".join(pieces)
         for mark in ("[WRONGNUMBER]", "[NOTHERE]", "[CONFIRMED]", "[END]"):
@@ -522,19 +533,29 @@ class IdentityBrief(unittest.TestCase):
 
     def test_check_question(self):
         self.assertEqual(CallBrief.from_dict(TARGET_BRIEF).check_question(), "Скажите, пожалуйста, это Рустам?")
-        self.assertEqual(CallBrief.from_dict({"goal": "x", "company": "клиника Дента", "confidence": "guess"}).check_question(), "Скажите, пожалуйста, это клиника Дента?")
+        self.assertEqual(CallBrief.from_dict({"goal": "x", "company": "клиника Дента", "confidence": "guess", "language": "ru"}).check_question(), "Скажите, пожалуйста, это клиника Дента?")
         self.assertEqual(CallBrief.from_dict({**TARGET_BRIEF, "confirm_question": "Это Рустам Каримов?"}).check_question(), "Это Рустам Каримов?")
 
     def test_opening_says_ai_and_whose(self):
-        for language, words in (("ru", "виртуальный ассистент. Мой пользователь — Азиз"), ("en", "Aziz's AI assistant")):
-            self.assertIn(words, cicero.OPENINGS["dial"][language].format(owner="Aziz", owner_ru="Азиз"))
+        for language, words, hears in (("ru", "виртуальный ассистент. Мой пользователь — Азиз", "Азиз может слышать этот разговор"),
+                                       ("en", "Aziz's AI assistant", "Aziz might hear this conversation")):
+            for action in ("dial", "answer"):
+                opening = pat.OPENINGS[action][language].format(owner="Aziz", owner_ru="Азиз")
+                self.assertIn(words, opening)
+                self.assertIn(hears, opening)
+
+    def test_identity_check_is_pat_with_a_supervisor(self):
+        prompt = CallBrief.from_dict(TARGET_BRIEF).haiku_prompt("VOICE", "OPENING", "Aziz", "n0nce")
+        self.assertIn("Your name is Pat", prompt)
+        self.assertIn("A supervisor reads this call", prompt)
+        self.assertNotIn("Cicero", prompt)  # the old name never reaches the call
 
 
 def checked_call(brain, observer=None):
     brief = CallBrief.from_dict(TARGET_BRIEF)
-    transcript = cicero.Transcript(tempfile.mkdtemp())
+    transcript = pat.Transcript(tempfile.mkdtemp())
     line = types.SimpleNamespace(ended=threading.Event())
-    call = cicero.Conversation(line, iter(()), None, FakeMouth(), brain, transcript, "Здравствуйте.", observer=observer,
+    call = pat.Conversation(line, iter(()), None, FakeMouth(), brain, transcript, "Здравствуйте.", observer=observer,
                                nonce="abc123", language="ru", task_message=brief.task_message("Aziz", "SECRETNOTES"))
     return call, transcript
 
@@ -611,18 +632,18 @@ class IdentityFlow(unittest.TestCase):
     def test_nobody_coming_to_the_phone_gets_a_goodbye(self):
         call, transcript = checked_call(FakeBrain())
         call.opening_done.set()
-        call.frames = iter([cicero.np.zeros(cicero.FRAME, dtype=cicero.np.float32)] * 3)
+        call.frames = iter([pat.np.zeros(pat.FRAME, dtype=pat.np.float32)] * 3)
         call.nobody_seconds = 0
         call.turn_lock.acquire()  # the opening has nothing to do in this test
-        original = cicero.SpeechDetector
-        cicero.SpeechDetector = lambda: (lambda frame: 0.0)
+        original = pat.SpeechDetector
+        pat.SpeechDetector = lambda: (lambda frame: 0.0)
         try:
             time.sleep(0.01)
             self.assertEqual(call.run(), "nobody there")
         finally:
-            cicero.SpeechDetector = original
+            pat.SpeechDetector = original
             call.turn_lock.release()
-        self.assertEqual(call.mouth.spoken, [cicero.NOBODY_CAME["ru"]])
+        self.assertEqual(call.mouth.spoken, [pat.NOBODY_CAME["ru"]])
 
 
 class QuietFrames:
@@ -635,25 +656,25 @@ class QuietFrames:
         ends = time.monotonic() + self.seconds
         while time.monotonic() < ends:
             time.sleep(0.01)
-            yield cicero.np.zeros(cicero.FRAME, dtype=cicero.np.float32)
+            yield pat.np.zeros(pat.FRAME, dtype=pat.np.float32)
 
 
 class Silence(unittest.TestCase):
     def setUp(self):
-        self.detector = cicero.SpeechDetector
-        self.nudge = cicero.NUDGE_SECONDS
-        cicero.SpeechDetector = lambda: (lambda frame: 0.0)
-        cicero.NUDGE_SECONDS = 0.1
+        self.detector = pat.SpeechDetector
+        self.nudge = pat.NUDGE_SECONDS
+        pat.SpeechDetector = lambda: (lambda frame: 0.0)
+        pat.NUDGE_SECONDS = 0.1
 
     def tearDown(self):
-        cicero.SpeechDetector = self.detector
-        cicero.NUDGE_SECONDS = self.nudge
+        pat.SpeechDetector = self.detector
+        pat.NUDGE_SECONDS = self.nudge
 
     def test_dead_air_gets_a_check_but_not_endlessly(self):
         call, transcript = conversation(FakeBrain("Вы здесь?", "Вы меня слышите?", "Ещё раз?"))
         call.frames = QuietFrames(1.0)
         call.run()
-        self.assertEqual(len(call.brain.messages), cicero.MAX_NUDGES)
+        self.assertEqual(len(call.brain.messages), pat.MAX_NUDGES)
         self.assertIn("still there", call.brain.messages[0])
         self.assertIn("Вы здесь?", call.mouth.spoken)
 
@@ -677,7 +698,7 @@ class Wordless(unittest.TestCase):
         """Each entry is one stretch of speech; the ear returns these texts in order."""
         call, transcript = conversation(FakeBrain("Повторите, пожалуйста.", "Не расслышал.", "Третий.", "Четвёртый."))
         call.ear = types.SimpleNamespace(prepare=lambda: None, feed_block=lambda block, rate: None, end=lambda tail=0: heard.pop(0))
-        real_turns = cicero.TurnDetector
+        real_turns = pat.TurnDetector
 
         class Scripted:
             def __init__(self, detector):
@@ -690,16 +711,16 @@ class Wordless(unittest.TestCase):
                 self.speaking = event == "start"
                 return event
 
-        cicero.TurnDetector = Scripted
-        real_detector = cicero.SpeechDetector
-        cicero.SpeechDetector = lambda: None
+        pat.TurnDetector = Scripted
+        real_detector = pat.SpeechDetector
+        pat.SpeechDetector = lambda: None
         try:
-            call.frames = iter([cicero.np.zeros(cicero.FRAME, dtype=cicero.np.float32)] * 12)
+            call.frames = iter([pat.np.zeros(pat.FRAME, dtype=pat.np.float32)] * 12)
             call.run()
             time.sleep(0.2)
         finally:
-            cicero.TurnDetector = real_turns
-            cicero.SpeechDetector = real_detector
+            pat.TurnDetector = real_turns
+            pat.SpeechDetector = real_detector
         return call, transcript
 
     def test_speech_with_no_words_gets_a_reply(self):
@@ -710,7 +731,7 @@ class Wordless(unittest.TestCase):
 
     def test_noise_cannot_keep_claude_talking(self):
         call, _ = self.run_scripted(["", "", "", ""])
-        self.assertEqual(len(call.brain.messages), cicero.MAX_WORDLESS_REPLIES)
+        self.assertEqual(len(call.brain.messages), pat.MAX_WORDLESS_REPLIES)
 
     def test_real_words_reset_the_limit(self):
         call, _ = self.run_scripted(["", "", "да", "", ""])

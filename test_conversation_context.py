@@ -3,7 +3,7 @@ import types
 import unittest
 from unittest import mock
 
-import cicero
+import pat
 from call_brief import CallBrief
 from test_supervision import FakeBrain, checked_call, conversation
 
@@ -35,10 +35,10 @@ class OpeningContext(unittest.TestCase):
     def test_warmup_is_marked_as_system_control_not_caller_speech(self):
         brief = CallBrief.from_dict({"goal": "Check opening hours", "language": "en"})
         fake = FakeBrain("ready")
-        with mock.patch.object(cicero, "Brain", return_value=fake):
-            result = cicero.start_brain(types.SimpleNamespace(owner="Maya"), brief, "Hello", "warmup-test", "")
+        with mock.patch.object(pat, "Brain", return_value=fake):
+            result = pat.start_brain(types.SimpleNamespace(owner="Maya"), brief, "Hello", "warmup-test", "")
         self.assertIs(result, fake)
-        self.assertEqual(fake.messages, ["[SUPERVISOR-warmup-test] " + cicero.WARM_UP["en"]])
+        self.assertEqual(fake.messages, ["[SUPERVISOR-warmup-test] " + pat.WARM_UP["en"]])
 
 
 class InterruptedConfirmation(unittest.TestCase):
@@ -77,7 +77,7 @@ class InterruptedConfirmation(unittest.TestCase):
     def test_playback_estimate_keeps_the_detail_when_only_closing_tag_is_cut(self):
         detail = "A table for four on Friday at eight pm."
         pieces = [[detail, 5.0, 5.0], ["Is that right?", 0.8, 2.0]]
-        heard = cicero.heard_text(pieces, margin=0.5)
+        heard = pat.heard_text(pieces, margin=0.5)
         self.assertTrue(heard.startswith(detail))
         self.assertNotIn("right?", heard)
 

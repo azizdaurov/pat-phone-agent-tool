@@ -2,11 +2,12 @@
 
 Setting a default uses IPolicyConfig, the interface behind Windows' own Sound settings. Microsoft doesn't document it, but
 it has kept the same shape since Windows 7. What was there before is saved to a file first, so if a call is killed the next
-start of Cicero can still put it back. Run this file to list the devices; it changes nothing.
+start of Pat can still put it back. Run this file to list the devices; it changes nothing.
 """
 import ctypes
 import json
 import os
+import re
 import uuid
 import winreg
 from ctypes import POINTER, WINFUNCTYPE, byref, c_int, c_void_p, c_wchar_p
@@ -141,6 +142,39 @@ class CallDevices:
         except FileNotFoundError:
             pass
         return problems
+
+
+def headset_problem(headsets):
+    """What to tell the owner when a Bluetooth headset on the laptop keeps a call's audio on the iPhone, or None."""
+    if not headsets:
+        return None
+    names = [re.sub(r"^[^(]*\((.*?)(?: Hands-Free[^)]*)?\)$", r"\1", name) for name in headsets]
+    them = "it" if len(names) == 1 else "them"
+    return (f"{' and '.join(names)} {'is' if len(names) == 1 else 'are'} connected to the laptop, so the call can't come here "
+            f"and is on your iPhone. Disconnect {them} to take calls on the laptop.")
+
+
+def chosen_devices(folder, system=None):
+    """(speakers, microphones): for each, the names the owner picked in Windows, the default for calls first, then the
+    everyday one. Empty where none is known. While a call has switched the defaults, it's what was saved before the call."""
+    system = system or WindowsAudio()
+    saved = {}
+    try:
+        with open(os.path.join(folder, STATE_NAME), encoding="utf-8") as f:
+            saved = json.load(f)
+    except (FileNotFoundError, ValueError):
+        pass
+    names = []
+    for kind in (RENDER, CAPTURE):
+        try:
+            ids = saved.get(str(kind)) or system.defaults(kind)
+            by_id = {device_id: name for name, device_id in system.endpoints(kind).items()}
+        except OSError:
+            names.append(())
+            continue
+        picked = [by_id[device_id] for device_id in (ids[2], ids[0]) if device_id in by_id]
+        names.append(tuple(dict.fromkeys(picked)))
+    return tuple(names)
 
 
 def repair_defaults(real_speaker, real_mic, is_virtual, system=None):

@@ -1,0 +1,52 @@
+=== old prompt: Hi, this is Justin.
+   CALLED Hi Justin, I'm calling on behalf of Aziz to see if you have a moment to chat. What's this in relation to?
+   CALLED I'm calling for Aziz to find out who's reaching out and what this is about.
+   CALLED I'm calling for Aziz to find out who's reaching out and what you need. Who am I speaking with, and what's this about?
+   CALLED Hello Justin, I'm calling to find out who's calling Aziz and what this is about, so I can pass on a message.
+=== new prompt: Hi, this is Justin.
+   ok     Hi Justin, how can I help you?
+   ok     Hi Justin, how can I help you?
+   ok     Hi Justin, how can I help you?
+   ok     Hi Justin, how can I help you?
+=== old prompt: Hello, I wanted to ask Aziz about Friday.
+   CALLED I'm calling to find out who's reaching out and what you need to discuss with Aziz. What's your name?
+   CALLED I'm calling to find out who's trying to reach Aziz and what you need to discuss with him. What's your name?
+   CALLED I'm calling to find out who's reaching out and what you need to discuss with Aziz. What's your name?
+   CALLED I'm calling to find out who's trying to reach Aziz and what you need to discuss with him. What's your name?
+=== new prompt: Hello, I wanted to ask Aziz about Friday.
+   ok     I'm ready to help. What do you need to ask Aziz about Friday?
+   ok     What would you like to ask Aziz about Friday?
+   ok     What would you like to ask Aziz about Friday?
+   ok     What would you like to ask Aziz about Friday?
+=== old prompt: Hello?
+   CALLED Hi, I'm calling on behalf of Aziz to see if there's anything he can help you with or pass on a message about—who am I speaking with? | This is Pat, Aziz's AI assistant—I'm calling to find out who you are and why you might need to reach Aziz.
+   CALLED Hi, I'm calling because Aziz would like to know who this is and what you need to reach him about. | I'm Pat, Aziz's AI assistant. Who am I speaking with?
+   CALLED I'm calling for Aziz to find out who I'm speaking with and why you might need to reach him. | I'm Pat, Aziz's AI assistant. I'm calling on his behalf—can you tell me who you are and what this is about?
+   CALLED Hi, I'm calling for Aziz to find out who's on the line and what this is about. | I'm Pat, Aziz's AI assistant. Can I ask who I'm speaking with?
+=== new prompt: Hello?
+   ok     How can I help you? | This is Pat, Aziz's AI assistant. Who am I speaking with?
+   ok     How can I help you? | I'm Aziz's AI assistant, Pat. Who's calling?
+   ok     How can I help you? | I'm Aziz's AI assistant, Pat. Who am I speaking with?
+   ok     How can I help you? | I'm Aziz's AI assistant, Pat. Who am I speaking with?
+=== old prompt: Алло, это Рустам.
+   ok     Здравствуйте, Рустам! Азиз попросил мне позвонить вам. Кто вы и почему Азиз хотел со мной связаться?
+   ok     Здравствуйте, Рустам! Азиз просил мне позвонить и узнать, по какому вопросу вы хотели с ним связаться.
+   ok     Здравствуйте, Рустам! Азиз просил мне позвонить вам с важным вопросом. Могу ли я помочь?
+   ok     Здравствуйте, Рустам! Азиз попросил мне позвонить вам с важным сообщением. Могу я узнать, о чём вы говорили с Азизом?
+=== new prompt: Алло, это Рустам.
+   ok     Здравствуйте, Рустам! Чем я могу вам помочь?
+   ok     Привет, Рустам! Чем я могу вам помочь?
+   ok     Здравствуйте, Рустам! Чем я могу вам помочь?
+   ok     Здравствуйте, Рустам! Чем я могу вам помочь?
+=== old prompt: Здравствуйте, мне нужен Азиз, по поводу пятницы.
+   ok     Здравствуйте! Азиз слышит этот разговор. Скажите, пожалуйста, что именно по поводу пятницы?
+   ok     Здравствуйте! Азиз слышит этот разговор. Можете сказать, что именно по поводу пятницы?
+   CALLED Здравствуйте! Я звоню от Азиза. Можете рассказать подробнее, что вам нужно?
+   ok     Здравствуйте! Азиз слышит этот разговор. Расскажите подробнее, что произошло в пятницу или что нужно сделать?
+=== new prompt: Здравствуйте, мне нужен Азиз, по поводу пятницы.
+   ok     REPEATED Азиз может слышать этот разговор. По какому вопросу вы звоните? Что произойдёт в пятницу?
+   ok     Здравствуйте! Азиз слышит наш разговор. По какому делу вам нужен Азиз в пятницу?
+   ok     REPEATED Здравствуйте! Азиз может слышать этот разговор. Что именно по поводу пятницы?
+   ok     Здравствуйте! Азиз может слышать разговор. По какому именно вопросу про пятницу?
+old prompt: said it was calling in 13 of 20 calls, repeated the whole opening in 0
+new prompt: said it was calling in 0 of 20 calls, repeated the whole opening in 2

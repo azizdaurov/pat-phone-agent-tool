@@ -1,6 +1,6 @@
 # Pat, the Phone Agent Tool
 
-Claude speaks on your iPhone calls. It hears the other person, thinks with Haiku 5.5 on your Claude plan,
+Claude speaks on your iPhone calls. It hears the other person, thinks with Haiku 4.5 on your Claude plan,
 and answers aloud. This repository has everything it needs:
 
 - [`voice-loop`](voice-loop): speech recognition, Claude and speech. Pat imports `voice_loop.py`.
@@ -105,17 +105,17 @@ be installed and logged in; setup checks.
 Then check the setup without making a call:
 
 ```powershell
-.venv\Scripts\python.exe cicero.py check
+.venv\Scripts\python.exe pat.py check
 ```
 
 Pat looks for a silent speaker in this order: Voicemeeter, VB-CABLE A or B, Steam Streaming Speakers, then Boom Audio. To use
 another, first run `.venv\Scripts\python.exe evals\silent_output_probe.py "Part of its name"`. The tone should appear only on
-that device. Then set `CICERO_SILENT_SPEAKER` to that name.
+that device. Then set `PAT_SILENT_SPEAKER` to that name.
 
 If a call is killed, the laptop stays on the silent speaker until the next Pat start, or until you run:
 
 ```powershell
-.venv\Scripts\python.exe cicero.py restore-audio
+.venv\Scripts\python.exe pat.py restore-audio
 ```
 
 `calls/` and `contacts/` are private and aren't in the repository. To keep your notes, contacts and who-picks-up choices, copy
@@ -126,10 +126,12 @@ An iPhone talks hands-free to one laptop at a time. Before using a laptop, tap i
 ## Using it
 
 ```powershell
-.venv\Scripts\python.exe cicero.py dial +998XXXXXXXXX --lang ru --brief "Ask if they open on Sunday"
-.venv\Scripts\python.exe cicero.py answer --lang ru
+.venv\Scripts\python.exe pat.py dial "+COUNTRY_CODE_NUMBER" --brief "Ask if they open on Sunday"
+.venv\Scripts\python.exe pat.py answer
 ```
 
+Replace `+COUNTRY_CODE_NUMBER` with a full international number. New desktop settings, command-line calls and MCP calls
+default to English. Use `--lang ru` or `language="ru"` for Russian; saved desktop language choices stay in effect.
 `answer` picks up the next incoming call, whoever it is, then exits when that call ends.
 
 | During a call, type | Effect |
@@ -200,9 +202,11 @@ when dialing. Results, summary cards and call ids show the name or placeholder t
 - **Contacts** live in `contacts/book.json`, which isn't in the repository. Then you can say "call Рустам", in the note or in a chat:
 
   ```powershell
-  .venv\Scripts\python.exe private_numbers.py add "Рустам" "+998 90 000 00 01"
+  .venv\Scripts\python.exe private_numbers.py add "Alex" "+COUNTRY_CODE_NUMBER"
   .venv\Scripts\python.exe private_numbers.py list
   ```
+
+Use your contact's name and full international number in that example.
 
 - **A number typed into the note** is swapped for its contact's name or a placeholder before anything leaves the laptop. The note shows you the real number.
 - **A number typed into a Claude Code chat** reaches Claude before any of this can act, so use a contact's name in chats. It still dials if you do type one.
@@ -249,7 +253,7 @@ every reply slow. It reads alongside instead, and only speech that hasn't played
 
 - **none:** the usual answer.
 - **steer:** a note reaches Haiku before its next reply. The other person notices nothing.
-- **correct:** Haiku's speech is cut off, it says a random "one moment" phrase (`STALLS` in `cicero.py`), then speaks again from Sonnet's note.
+- **correct:** Haiku's speech is cut off, it says a random "one moment" phrase (`STALLS` in `pat.py`), then speaks again from Sonnet's note.
 
 Haiku can also ask for help by replying `[ASK] question`. The person hears "one moment" while Sonnet has up to 10 s to
 answer; otherwise Haiku says it will pass the question on.
@@ -409,7 +413,7 @@ The scripts are `evals/stt_*.py`. They need `soundfile`, `scipy` and a `stt-test
 
 ## Not proven yet
 
-Tested without a call: `python -m unittest test_cicero` (phone control against a fake `iphonecall`, turn detection, and a
+Tested without a call: `python -m unittest test_pat` (phone control against a fake `iphonecall`, turn detection, and a
 full turn with real speech models and real Haiku), plus recording the real speaker through loopback, including across
 silence. Also confirmed: the real `iphonecall` runs under Pat's pipes with its package identity, up to `connect`.
 
@@ -437,10 +441,25 @@ Make the first test call to a second phone of your own, or to someone who knows 
   recognition can't turn into words also gets a reply, at most twice in a row. Each transcript logs how long each reply took
   to start, and the result has them as `reply_delays`.
 - Talking over Claude's goodbye keeps the call going. This is the development setting. For production, consider hanging up
-  anyway (`_finish_if_goodbye` in `cicero.py`), so someone can't hold Claude on the line by interrupting every goodbye.
+  anyway (`_finish_if_goodbye` in `pat.py`), so someone can't hold Claude on the line by interrupting every goodbye.
   Until then, `--max-minutes` is what limits that.
 - `iphonecall`'s every line goes to `calls/phone-<time>.log`, which is the first place to look when a call misbehaves.
 - The risks in `voice-loop` still apply: it depends on `claude -p` working on your plan login, and on Haiku 4.5 staying available.
+
+## Reporting a problem
+
+Don't post files from `calls\` as they are: they hold real phone numbers, names, the call's brief and everything said.
+Make a report instead:
+
+```
+.venv\Scripts\python.exe report.py
+```
+
+It writes one text file in `reports\` (ignored by git) from the last 3 calls; `--calls 10` takes more. Numbers become
+`<number 1>`, `<number 2>` and so on, the same number always the same one, and saved contacts, your name and your Windows user
+name become `<name 1>` and so on. What anyone said is replaced by a word count, and the brief and the AIs' notes to each other
+are left out. Timings, devices, versions and errors stay. Read it before you post it: a private word in an error message can
+still get through.
 
 ## Files
 
@@ -455,11 +474,12 @@ note_window.py   its window: see-through, slides to an edge, lives in the tray
 note/            what the note looks like
 live_call.py     the state and commands passed between a running call and the note
 live_notes.py    the note's bullet points and summary
-cicero.py        PhoneLine (iphonecall), CallerAudio (loopback), SpeechDetector + TurnDetector (replace the talk key), Conversation
+pat.py           PhoneLine (iphonecall), CallerAudio (loopback), SpeechDetector + TurnDetector (replace the talk key), Conversation
 call_brief.py    the brief's fields, Haiku's prompt, Sonnet's prompt
 observer.py      Sonnet's reviews, questions and final report; the rarity limits
 phone_mcp.py     the MCP server agents use to place calls
 phone_memory.py  the notes for each number
+report.py        a bug report you can post, with numbers, names and what was said left out
 test_*.py        tests that need no call and no cable
 requirements.txt everything to install, including voice-loop's
 voice-loop/      speech recognition, Claude and speech

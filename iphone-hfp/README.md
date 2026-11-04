@@ -35,7 +35,7 @@ iphonecall
 
 | Command | Action |
 |---|---|
-| `d +998XXXXXXXXX` | dial (international format) |
+| `d +COUNTRY_CODE_NUMBER` | dial (replace the placeholder with a full international number) |
 | `a` | answer an incoming call (incoming calls are announced in the terminal) |
 | `h` | hang up, or reject an incoming call |
 | `m` | mute / unmute |
@@ -43,7 +43,7 @@ iphonecall
 | `s` | status |
 | `q` | quit (a call in progress continues on the phone) |
 
-Other forms: `iphonecall dial +998XXXXXXXXX`, `iphonecall status`, `iphonecall list`,
+Other forms: `iphonecall dial +COUNTRY_CODE_NUMBER`, `iphonecall status`, `iphonecall list`,
 `iphonecall unregister`, and `--device <name>` or `--device-id <id>` to pick a paired phone.
 Without a selection, exactly one paired hands-free phone must exist. Its name does not need to contain "iPhone".
 Several matches produce an error rather than picking the first phone. `iphonecall list-json` returns names and stable

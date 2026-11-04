@@ -1,5 +1,5 @@
 """Pat's easter eggs: jokes instead of dialing, predictions, stats, poems about finished calls, and the Pat facts.
-Everything here shows only on Aziz's screen. The person on a call never hears any of it, and nothing here changes the opening line.
+Everything here shows only on the owner's screen. The person on a call never hears any of it, and nothing here changes the opening line.
 What has already played is kept in contacts/easter_eggs.json, so most jokes appear once.
 
 Try one without the note: .venv\\Scripts\\python.exe easter_eggs.py "Mom"
@@ -15,6 +15,7 @@ import threading
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 FILE_NAME = "easter_eggs.json"
+JOKE_NOTICE_SECONDS = 10
 NEXT_STYLE_NAME = "next-summary-style.txt"  # how the note tells the phone tool which poem the next call gets
 POEM_WAIT_SECONDS = 40
 HATCH_KEY = b"Mom?"
@@ -336,7 +337,7 @@ class EasterEggs:
     def _number(self, target, private):
         digits = digits_of(target)
         if digits in SERIOUS:
-            return {"lines": [SERIOUS_REPLY], "buttons": [_ok()]}
+            return {"lines": [SERIOUS_REPLY], "buttons": [_ok()], "dismiss_after": JOKE_NOTICE_SECONDS}
         if is_octo(digits) and self.facts_on():
             return self._call_octo()
         joke = number_joke(digits)
@@ -345,7 +346,7 @@ class EasterEggs:
         name = f"number:{joke_key(digits)}"
         contact = private.name_for(target)
         if self.seen(name):
-            return None if contact else {"lines": [NO_DIAL_REPLY], "buttons": [_ok()]}
+            return None if contact else {"lines": [NO_DIAL_REPLY], "buttons": [_ok()], "dismiss_after": JOKE_NOTICE_SECONDS}
         self.mark(name)
         panel = self._joke(joke, target if contact else None)
         if all(self.seen(f"number:{key}") for key in (*NUMBER_JOKES, *NORTH_AMERICAN_JOKES, "movie")):
@@ -370,7 +371,10 @@ class EasterEggs:
         self.pending = contact
         buttons = [{"id": "proceed", "label": "Proceed"}] if contact else []
         buttons.append({"id": "fine", "label": "Fine..."} if fine else _ok())
-        return {"art": OCTOPUS if fine else "", "lines": [joke], "buttons": buttons}
+        panel = {"art": OCTOPUS if fine else "", "lines": [joke], "buttons": buttons}
+        if not contact:
+            panel["dismiss_after"] = JOKE_NOTICE_SECONDS
+        return panel
 
     def press(self, button):
         """(panel to show now, who to call now). Either can be None."""
