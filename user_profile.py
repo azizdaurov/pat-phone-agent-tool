@@ -80,6 +80,15 @@ class UserProfile:
         os.replace(self.path + ".tmp", self.path)
         self.values = updated
 
+    def remember_phone(self, device_id, name):
+        """Saves which phone Pat uses. Setup does this before the name and the rest are filled in, so nothing else is checked."""
+        updated = {**self.values, "phone_device": device_id, "phone_name": name}
+        os.makedirs(os.path.dirname(os.path.abspath(self.path)), exist_ok=True)
+        with open(self.path + ".tmp", "w", encoding="utf-8") as stream:
+            json.dump(updated, stream, ensure_ascii=False, indent=2)
+        os.replace(self.path + ".tmp", self.path)
+        self.values = updated
+
     def accept_terms(self):
         self.save(accepted_terms=TERMS_VERSION, accepted_at=datetime.datetime.now(datetime.timezone.utc).isoformat())
 

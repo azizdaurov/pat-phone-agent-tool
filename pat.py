@@ -1,11 +1,11 @@
-"""Claude speaks on your iPhone calls: Haiku hears the other person and answers aloud, Sonnet reads along and rarely steps in.
+"""Claude speaks on your phone calls: Haiku hears the other person and answers aloud, Sonnet reads along and rarely steps in.
 
 Joins voice-loop (speech recognition, Claude, speech) to iphonecall (the call itself).
 Agents place calls through phone_mcp.py. By hand, run from this folder, in voice-loop's environment:
   .venv\\Scripts\\python.exe pat.py dial "+COUNTRY_CODE_NUMBER" --brief "Ask if they open on Sunday"
   .venv\\Scripts\\python.exe pat.py answer
 Replace +COUNTRY_CODE_NUMBER with a full international number. English is the default; use --lang ru for Russian.
-While a call runs, type h to hang up or p to move the call to the iPhone and take over. Setup: README.md
+While a call runs, type h to hang up or p to move the call to the phone and take over. Setup: README.md
 """
 import argparse
 import collections
@@ -101,6 +101,29 @@ WARM_UP = {"en": "The call is about to connect. Reply with just the word ready."
 # Said when Sonnet changes what Haiku will say. Varied, so it doesn't sound like a machine stalling.
 STALLS = {"en": ["One moment.", "Just a moment, please.", "One second.", "Sorry, one moment.", "Hold on a second, please."],
           "ru": ["Одну секунду.", "Секундочку.", "Минутку, пожалуйста.", "Одну минуту.", "Извините, одну секунду."]}
+
+
+def pick_phone(run=subprocess.run, profile=None):
+    """For setup: the paired phone with a working call line, saved as the owner's phone when none is chosen yet. Tries the
+    chosen phone first. Returns its name, or None while no phone is ready."""
+    profile = profile or UserProfile()
+    listed = run(["iphonecall", "list-json"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
+    try:
+        phones = [phone for phone in json.loads(listed.stdout) if isinstance(phone, dict) and phone.get("id")]
+    except ValueError:
+        return None
+    phones.sort(key=lambda phone: phone["id"] != profile.phone_device)
+    for phone in phones:
+        try:
+            status = run(["iphonecall", "status", "--device-id", phone["id"]], capture_output=True, text=True,
+                         encoding="utf-8", errors="replace", timeout=90)
+        except subprocess.TimeoutExpired:
+            continue
+        if "canDial=True" in status.stdout:
+            if phone["id"] != profile.phone_device:
+                profile.remember_phone(phone["id"], phone.get("name", ""))
+            return phone.get("name") or "your phone"
+    return None
 
 
 def phone_command(stay_on_phone=False):
@@ -213,7 +236,7 @@ class PhoneLine:
                 return status, who
 
     def wait_for_laptop_audio(self, seconds):
-        """False if the call is still on the iPhone after this long. Then Pat can neither hear nor be heard."""
+        """False if the call is still on the phone after this long. Then Pat can neither hear nor be heard."""
         deadline = time.monotonic() + seconds
         while self.audio != "LocalDevice":
             if time.monotonic() >= deadline or self.ended.is_set():
@@ -1090,19 +1113,25 @@ def check_microphone(seconds=3, record=None):
 
 
 def connected_headsets(endpoints=None):
-    """Bluetooth headsets connected to the laptop, other than the phone itself.
-
-    With one connected, Windows reports moving the call's audio to the laptop as done, but it stays on the iPhone.
-    """
+    """Other hands-free devices, excluding the selected phone by Windows identity rather than its name."""
+    from bluetooth_audio import blocking_devices
     if endpoints is None:
         try:
-            endpoints = subprocess.run(
-                ["powershell", "-NoProfile", "-Command",
-                 "Get-PnpDevice -Class AudioEndpoint -Status OK | Select-Object -ExpandProperty FriendlyName"],
-                capture_output=True, text=True, errors="replace", timeout=20).stdout.splitlines()
-        except (OSError, subprocess.TimeoutExpired):
-            return []
-    return [name.strip() for name in endpoints if "Hands-Free" in name and "iPhone" not in name]
+            command = phone_command()
+            result = subprocess.run(command + ["audio-devices-json"], capture_output=True,
+                                    text=True, encoding="utf-8", errors="replace", timeout=20)
+            if result.returncode or len(result.stdout) > 1024 * 1024:
+                raise ValueError("phone helper inventory failed")
+            endpoints = json.loads(result.stdout)
+            if "--device-id" in command:
+                selected = command[command.index("--device-id") + 1]
+                actual = (endpoints.get("phone") or {}).get("id") if isinstance(endpoints, dict) else None
+                if not isinstance(actual, str) or actual.casefold() != selected.casefold():
+                    raise ValueError("selected phone was not found")
+        except (OSError, ValueError, subprocess.TimeoutExpired) as error:
+            raise OSError("Could not check Bluetooth audio devices. Choose your phone in Pat's settings; "
+                          "if the helper is outdated, quit Pat and run setup.ps1.") from error
+    return blocking_devices(endpoints)
 
 
 def speaker_problem(speaker):
@@ -1124,9 +1153,14 @@ def find_input(name):
 def check_audio_setup(audible=False):
     """The things Pat can't fix itself. Stops before any call rather than on a silent line."""
     problems = []
-    for headset in connected_headsets():
+    try:
+        headsets = connected_headsets()
+    except OSError as error:
+        problems.append(str(error))
+        headsets = []
+    for headset in headsets:
         problems.append(f"'{headset}' is connected. Disconnect it from the laptop, or the call's audio stays on the "
-                        "iPhone and the other person hears nothing (see README.md).")
+                        "phone and the other person hears nothing (see README.md).")
     if find_output(CABLE_PLAY) is None or find_input(CABLE_HEAR) is None:
         problems.append(f"'{CABLE_PLAY}' or '{CABLE_HEAR}' not found. Install VB-CABLE (see README.md) and restart.")
     if audible:
@@ -1350,24 +1384,30 @@ def start_live_notes(brief, spoken_so_far):
 
 
 def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable, tell=None, headsets=None):
-    """The owner talks from here on, until the call ends or they hang up or moves it to the iPhone. Claude says nothing more."""
+    """The owner talks from here on, until the call ends or they hang up or move it to the phone. Claude says nothing more."""
     tell = tell or (lambda text: print(text, flush=True))
-    found = []  # asking Windows takes a couple of seconds, so it happens while Claude says it's passing them over
-    checking = threading.Thread(target=lambda: found.extend((headsets or connected_headsets)()), daemon=True)
+    found, check_errors = [], []
+    def check_headsets():
+        try:
+            found.extend((headsets or connected_headsets)())
+        except OSError as error:
+            check_errors.append(str(error))
+    checking = threading.Thread(target=check_headsets, daemon=True)
     checking.start()
     phrase = TAKING_OVER[brief.language].format(owner=args.owner, owner_ru=args.owner_ru)
     mouth.say(phrase, mouth.token)
     mouth.drain()
     checking.join(25)
-    blocked = headset_problem(found)
-    if blocked:  # a headset that connected during the call: Windows would say the audio moved, but it stays on the iPhone
+    blocked = ("Bluetooth audio check timed out. Use your phone." if checking.is_alive() else
+               check_errors[0] if check_errors else headset_problem(found))
+    if blocked:  # a headset that connected during the call: Windows would say the audio moved, but it stays on the phone
         tell(blocked)
         line.to_phone()
         conversation.hand_over.set()
         return
     speaker, microphone = real_devices()
     if speaker is None or microphone is None:
-        print("Can't take over: no real speaker or microphone found. Moving the call to the iPhone instead.", flush=True)
+        print("Can't take over: no real speaker or microphone found. Moving the call to your phone instead.", flush=True)
         line.to_phone()
         conversation.hand_over.set()
         return
@@ -1375,14 +1415,14 @@ def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable, tell=N
     try:
         takeover = LaptopTakeover(caller, speaker, microphone, cable)
         takeover.start()
-        print("You're on the call. Use wired headphones, or they'll hear an echo. Type h to hang up, p to move it to the iPhone.", flush=True)
+        print("You're on the call. Use wired headphones, or they'll hear an echo. Type h to hang up, p to move it to your phone.", flush=True)
         while not (line.ended.is_set() or conversation.stopped.is_set() or conversation.hand_over.is_set()):
             problem = takeover.problem()
             if problem:
                 raise RuntimeError(problem)
             time.sleep(0.1)
     except Exception as error:
-        print(f"Laptop audio failed: {error}. Moving the call to the iPhone.", flush=True)
+        print(f"Laptop audio failed: {error}. Moving the call to your phone.", flush=True)
         line.to_phone()
         conversation.hand_over.set()
     finally:
@@ -1392,10 +1432,11 @@ def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable, tell=N
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("action", choices=["dial", "answer", "check", "prepare", "restore-audio", "fix-audio", "check-mic"],
+    parser.add_argument("action", choices=["dial", "answer", "check", "prepare", "restore-audio", "fix-audio", "check-mic", "pick-phone"],
                         help="check tests the setup. prepare downloads the speech models. restore-audio puts back the default "
                              "speaker and microphone after a call that was killed. fix-audio moves them off any virtual device. "
-                             "check-mic records 3 seconds to see that your microphone sends sound. "
+                             "check-mic records 3 seconds to see that your microphone sends sound. pick-phone finds a connected phone and "
+                             "saves it as yours if none is chosen. "
                              "None of these makes a call")
     parser.add_argument("number", nargs="?", help="number to dial, in international format")
     parser.add_argument("--brief", help="what Claude should do on this call, in one sentence")
@@ -1458,6 +1499,10 @@ def main():
     if args.action == "fix-audio":
         fix_audio_defaults()
         return
+    if args.action == "pick-phone":
+        name = pick_phone()
+        print(f"Phone ready: {name}" if name else "No phone has a working call line yet.")
+        sys.exit(0 if name else 1)
     if args.action == "check-mic":
         fine, message = check_microphone()
         print(message)
@@ -1499,7 +1544,7 @@ def main():
         notes, known = load_notes(key, args)
         brain = start_brain(args, brief, opening, nonce, known)
 
-    print("Connecting to the iPhone...", flush=True)
+    print("Connecting to your phone...", flush=True)
     os.makedirs(os.path.join(HERE, "calls"), exist_ok=True)
     phone_log = os.path.join(HERE, "calls", f"phone-{datetime.datetime.now():%Y%m%d-%H%M%S}.log")
     line = PhoneLine(log_path=phone_log)
@@ -1556,7 +1601,7 @@ def main():
             if not answered:
                 reason = "nobody picked up in time"
             elif answered[0] == "Closed":
-                reason = "iphonecall stopped during dialing; the call may still be live on the iPhone"
+                reason = "iphonecall stopped during dialing; the call may still be live on the phone"
             else:
                 reason = "the call ended before anyone picked up"
             print(f"No conversation: {reason}. Details: {phone_log}")
@@ -1564,13 +1609,13 @@ def main():
 
         if not line.wait_for_laptop_audio(AUDIO_MOVE_SECONDS):
             status = "failed"
-            reason = "the call audio stayed on the iPhone, so Claude could not hear or speak; hung up"
+            reason = "the call audio stayed on the phone, so Claude could not hear or speak; hung up"
             print(f"No conversation: {reason}. Details: {phone_log}")
             return
         picked_up = time.monotonic()
         time.sleep(AFTER_PICKUP_SECONDS)
         caller = CallerAudio()
-        print(f"Connected. Hearing through: {caller.name}. Press F9 or type l to take the call on the laptop, p to move it to the iPhone, h to hang up.", flush=True)
+        print(f"Connected. Hearing through: {caller.name}. Press F9 or type l to take the call on the laptop, p to move it to your phone, h to hang up.", flush=True)
         transcript = Transcript(key=key)
         transcript.add("Pat", f"task: {brief.text()}")
         transcript.add("Pat", f"hearing through: {caller.name}; call audio: {line.audio}")

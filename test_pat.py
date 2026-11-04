@@ -1,5 +1,6 @@
 """Tests with no call and no virtual cable. Run: .venv\\Scripts\\python.exe -m unittest test_pat -v
 Rehearsal uses the real speech models and a real Haiku turn, on your plan login. No sound is played."""
+import json
 import os
 import sys
 import tempfile
@@ -147,13 +148,18 @@ class Phone(unittest.TestCase):
 
 class Headsets(unittest.TestCase):
     def test_finds_buds_but_not_the_phone_or_plain_devices(self):
-        endpoints = ["CABLE Output (VB-Audio Virtual Cable)", "Speakers (iPhone Aziz Hands-Free HF Audio)",
-                     "Headset (Redmi Buds 6 Lite)", "Headphones (Redmi Buds 6 Lite)",
-                     "Headset (Redmi Buds 6 Lite Hands-Free)", "Microphone (iPhone Aziz Hands-Free HF Audio)"]
+        phone_id = "00000000-0000-0000-0000-000000000001"
+        endpoints = {"schema_version": 1, "phone": {"container_id": phone_id}, "endpoints": [
+            {"name": "CABLE Output (VB-Audio Virtual Cable)"},
+            {"name": "Speakers (My renamed phone)", "container_id": phone_id, "services": ["BthHfAud"]},
+            {"name": "Headphones (Redmi Buds 6 Lite)", "services": ["BthA2dp"]},
+            {"name": "Headset (Redmi Buds 6 Lite Hands-Free)", "services": ["BthHfAud"]},
+            {"name": "Microphone (My renamed phone)", "container_id": phone_id, "services": ["BthHfAud"]}]}
         self.assertEqual(pat.connected_headsets(endpoints), ["Headset (Redmi Buds 6 Lite Hands-Free)"])
 
     def test_no_headset(self):
-        self.assertEqual(pat.connected_headsets(["Speakers (Realtek(R) Audio)"]), [])
+        self.assertEqual(pat.connected_headsets({"schema_version": 1, "phone": None,
+                                               "endpoints": [{"name": "Speakers (Realtek(R) Audio)"}]}), [])
 
 
 class EnglishVoices(unittest.TestCase):
@@ -345,3 +351,39 @@ from test_support import setup_profile as setUpModule, teardown_profile as tearD
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PickPhone(unittest.TestCase):
+    """Setup's phone step, with a pretend phone helper: nothing is connected and no real settings are written."""
+
+    def run_helper(self, ready):
+        def run(command, **kwargs):
+            if command[1] == "list-json":
+                return types.SimpleNamespace(stdout=json.dumps([{"id": "iphone-id", "name": "iPhone"}, {"id": "galaxy-id", "name": "Galaxy A13"}]))
+            line = "line     : ready | canDial=True" if command[3] in ready else "connect  : False"
+            return types.SimpleNamespace(stdout=line)
+        return run
+
+    def profile(self, phone=""):
+        from user_profile import UserProfile
+        path = os.path.join(tempfile.mkdtemp(), "user-profile.json")
+        with open(path, "w", encoding="utf-8") as f:
+            json.dump({"phone_device": phone}, f)
+        return UserProfile(path)
+
+    def test_the_connected_phone_is_saved_when_none_is_chosen_even_before_a_name(self):
+        profile = self.profile()
+        self.assertEqual(pat.pick_phone(self.run_helper({"galaxy-id"}), profile), "Galaxy A13")
+        from user_profile import UserProfile
+        saved = UserProfile(profile.path)
+        self.assertEqual((saved.phone_device, saved.values["phone_name"]), ("galaxy-id", "Galaxy A13"))
+
+    def test_the_chosen_phone_is_tried_first_and_kept(self):
+        profile = self.profile("iphone-id")
+        self.assertEqual(pat.pick_phone(self.run_helper({"iphone-id", "galaxy-id"}), profile), "iPhone")
+        self.assertEqual(profile.phone_device, "iphone-id")
+
+    def test_nothing_ready_saves_nothing(self):
+        profile = self.profile()
+        self.assertIsNone(pat.pick_phone(self.run_helper(set()), profile))
+        self.assertEqual(profile.phone_device, "")

@@ -145,13 +145,13 @@ class CallDevices:
 
 
 def headset_problem(headsets):
-    """What to tell the owner when a Bluetooth headset on the laptop keeps a call's audio on the iPhone, or None."""
+    """What to tell the owner when a Bluetooth headset on the laptop keeps a call's audio on the phone, or None."""
     if not headsets:
         return None
     names = [re.sub(r"^[^(]*\((.*?)(?: Hands-Free[^)]*)?\)$", r"\1", name) for name in headsets]
     them = "it" if len(names) == 1 else "them"
     return (f"{' and '.join(names)} {'is' if len(names) == 1 else 'are'} connected to the laptop, so the call can't come here "
-            f"and is on your iPhone. Disconnect {them} to take calls on the laptop.")
+            f"and is on your phone. Disconnect {them} to take calls on the laptop.")
 
 
 def chosen_devices(folder, system=None):

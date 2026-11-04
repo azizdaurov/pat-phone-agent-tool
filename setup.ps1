@@ -13,7 +13,7 @@ $pythonVersion = '3.13'
 $dotnetMajor = '10'
 $vbcableZip = 'https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip'
 $vbcablePage = 'https://vb-audio.com/Cable/'
-$iphoneWaitSeconds = 300
+$phoneWaitSeconds = 300
 $todo = New-Object System.Collections.ArrayList
 $needsRestart = $false
 
@@ -111,17 +111,40 @@ function Install-VbCable {
     }
 }
 
-function Wait-For-iPhone {
-    if ($Rehearse) { Would 'open Bluetooth settings, and wait for the iPhone to connect'; return $true }
-    $ready = { (Asks-Quietly 'iphonecall' @('status')) -match 'canDial=True' }
-    if (& $ready) { return $true }
+function Mobile-Access-Is-On {
+    # Settings > Bluetooth & devices > Mobile devices > 'Allow this PC to access your mobile devices'.
+    # With it off, Windows connects the phone over Bluetooth but never makes the phone line Pat dials on.
+    $mobility = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Mobility' -ErrorAction SilentlyContinue
+    return ($mobility -and $mobility.CrossDeviceEnabled -eq 1)
+}
+
+function Pick-Phone {
+    Push-Location $root
+    try { $said = & $python pat.py pick-phone 2>$null; $ok = $LASTEXITCODE -eq 0 } finally { Pop-Location }
+    $global:LASTEXITCODE = 0
+    if ($ok) { Write-Host "   $said" }
+    return $ok
+}
+
+function Wait-For-Phone {
+    if ($Rehearse) {
+        Would "check 'Allow this PC to access your mobile devices', and open its page if it is off"
+        Would 'open Bluetooth settings, wait for an iPhone or Android phone to connect, and save it as your phone'
+        return $true
+    }
+    if (-not (Mobile-Access-Is-On)) {
+        Start-Process 'ms-settings:mobile-devices'
+        Write-Host "   Mobile devices settings are open. Turn on 'Allow this PC to access your mobile devices'."
+    }
+    if (Pick-Phone) { return $true }
     Start-Process 'ms-settings:bluetooth'
-    Write-Host '   Bluetooth settings are open. Add your iPhone there if it is not paired, and accept on both.'
-    Write-Host "   Then on the iPhone: Settings > Bluetooth, tap $env:COMPUTERNAME, and allow calls. Waiting for it..."
-    $deadline = (Get-Date).AddSeconds($iphoneWaitSeconds)
+    Write-Host '   Bluetooth settings are open. Add your phone there if it is not paired, and accept on both.'
+    Write-Host "   Then on the phone, open Bluetooth settings and connect to $env:COMPUTERNAME, allowing calls when asked."
+    Write-Host "   On Android, also tap the gear next to $env:COMPUTERNAME and turn on Calls. Waiting for it..."
+    $deadline = (Get-Date).AddSeconds($phoneWaitSeconds)
     while ((Get-Date) -lt $deadline) {
         Start-Sleep -Seconds 5
-        if (& $ready) { return $true }
+        if (Pick-Phone) { return $true }
     }
     return $false
 }
@@ -257,11 +280,13 @@ if ($Rehearse) {
 }
 
 if (-not $needsRestart -or $Rehearse) {
-    Step 'iPhone'
-    if (Wait-For-iPhone) {
+    Step 'Phone'
+    if (Wait-For-Phone) {
         'Connected.'
     } else {
-        Todo "The iPhone didn't connect. On it: Settings > Bluetooth, tap $env:COMPUTERNAME. If it still doesn't, close Phone Link, which can hold the phone line."
+        Todo ("No phone connected for calls. On the phone, connect to $env:COMPUTERNAME in its Bluetooth settings and allow calls " +
+              "(on Android, tap the gear next to it and turn on Calls). Check 'Allow this PC to access your mobile devices' in " +
+              "Settings > Bluetooth & devices > Mobile devices. Then run: .venv\Scripts\python.exe pat.py pick-phone")
     }
 }
 

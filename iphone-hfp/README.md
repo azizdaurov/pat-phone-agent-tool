@@ -14,6 +14,10 @@ Both talk to the iPhone over Bluetooth hands-free. Use one at a time: only one p
 
 ## Using `iphonecall`
 
+`iphonecall audio-devices-json --device-id <id>` reads the selected phone's identity and audio-endpoint metadata without
+connecting or placing a call. Pat uses it to distinguish the selected phone from other hands-free devices. Names are
+display labels, so renaming a phone does not make it a headset. Android call support still requires a real-device test.
+
 ### Before the first run (once)
 
 1. **Pair the iPhone** with this laptop (Settings > Bluetooth & devices). The laptop shows up on the iPhone as **XITS**.

@@ -164,11 +164,11 @@ pre{margin:0 0 7px;font:12px/1.15 Consolas,'Courier New',monospace;color:var(--m
         <button id="always" class="tag" type="button">Always AI</button>
         <div id="me-wrap">
           <div class="split">
-            <button id="me" class="tag" type="button">Me (iPhone)</button>
+            <button id="me" class="tag" type="button">Me (phone)</button>
             <button id="arrow" class="tag" type="button" aria-label="Choose where to answer" aria-expanded="false"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"></path></svg></button>
           </div>
           <div id="menu" role="group" aria-label="Where to answer" hidden>
-            <button type="button" data-route="iphone"><span>iPhone</span><svg class="check" aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m2 6.5 2.7 2.7L10 3.5"></path></svg></button>
+            <button type="button" data-route="iphone"><span>Phone</span><svg class="check" aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m2 6.5 2.7 2.7L10 3.5"></path></svg></button>
             <button type="button" data-route="laptop"><span>Laptop</span><svg class="check" aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m2 6.5 2.7 2.7L10 3.5"></path></svg></button>
           </div>
         </div>
@@ -176,7 +176,7 @@ pre{margin:0 0 7px;font:12px/1.15 Consolas,'Courier New',monospace;color:var(--m
     </section>
 
     <section id="s-me" hidden>
-      <p id="on-phone">Talking on your iPhone. It stays there until you switch.</p>
+      <p id="on-phone">Talking on your phone. It stays there until you switch.</p>
       <div id="route-row">
         <span>Audio on</span>
         <div id="route" role="group" aria-label="Where the call's audio goes">
@@ -192,7 +192,7 @@ pre{margin:0 0 7px;font:12px/1.15 Consolas,'Courier New',monospace;color:var(--m
 const $ = (id) => document.getElementById(id);
 const MENU_ROOM = 66;     // how far the options list can hang below a short note
 let menuOpen = false;
-let route = 'iphone';     // where Me answers: iPhone the first time, then the last choice
+let route = 'iphone';     // where Me answers: the phone the first time, then the last choice
 let lastHeight = 0;
 let last = {};
 
@@ -236,7 +236,7 @@ function renderFacts(facts) {
 }
 
 function renderRoute(chosen) {
-  const name = chosen === 'laptop' ? 'Laptop' : 'iPhone';
+  const name = chosen === 'laptop' ? 'Laptop' : 'Phone';
   $('me').textContent = `Me (${name})`;
   for (const button of document.querySelectorAll('#route button')) {
     const on = button.dataset.route === chosen;

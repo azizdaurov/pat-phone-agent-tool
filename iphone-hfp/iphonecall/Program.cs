@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Calls;
 
-const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | unregister] [--device <name> | --device-id <id>] [--stay-on-phone]";
+const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | lines | audio-devices-json | unregister] [--device <name> | --device-id <id>] [--stay-on-phone]";
 const string Help = "commands: d <number> dial | a answer | h hang up/reject | m mute on/off |\n" +
                     "          l audio on laptop | p audio on phone | s status | q quit";
 
@@ -30,7 +30,7 @@ for (int i = 0; i < args.Length; i++)
     else rest.Add(args[i]);
 }
 string action = rest.Count > 0 ? rest[0].ToLowerInvariant() : "shell";
-if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "unregister"))
+if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "lines" or "audio-devices-json" or "unregister"))
 {
     Console.WriteLine(Usage);
     return action is "help" or "-h" or "--help" ? 0 : 1;
@@ -60,8 +60,18 @@ try
         await HandsFree.ListJsonAsync();
         return 0;
     }
+    if (action == "lines")
+    {
+        await HandsFree.LinesAsync();
+        return 0;
+    }
 
     var info = await HandsFree.FindAsync(deviceHint, deviceId);
+    if (action == "audio-devices-json")
+    {
+        Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(await BluetoothAudio.InventoryAsync(info)));
+        return 0;
+    }
     if (info == null)
     {
         Console.WriteLine("No paired hands-free phone matches the selection. Pair your phone or choose it in Pat's settings. Try: iphonecall list");

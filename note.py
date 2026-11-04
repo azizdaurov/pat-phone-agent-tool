@@ -172,7 +172,7 @@ class Desk:
         self.settings = settings or NoteSettings(folder)
         self.folder = folder
         self.real_devices = real_devices
-        self.headsets = headsets  # Bluetooth headsets on the laptop, which keep a call's audio on the iPhone
+        self.headsets = headsets  # Bluetooth headsets on the laptop, which keep a call's audio on the phone
         self.headset_check = None
         self.route_moves = 0  # counts each move, so a late headset check only acts on the move it was made for
         self.make_level = make_level
@@ -210,7 +210,7 @@ class Desk:
             if status == "Incoming" and self.screen in ("idle", "ending"):
                 self._ring(who)
             elif status == "Talking" and direction == "Incoming" and self.screen == "ringing":
-                # Picked up on the iPhone itself. Nothing here moves it.
+                # Picked up on the phone itself. Nothing here moves it.
                 self._cancel_ready_call()
                 self.screen = "me"
                 self.route = "laptop" if self.line.audio == "LocalDevice" else "iphone"
@@ -231,14 +231,14 @@ class Desk:
         self.screen = "ringing"
         rule = self.always.decide(self.number, bool(self.private.name_for(self.number)), self.settings.unknown)
         self.prepare_requested = rule != ME
-        if rule != ME:  # Me never answers by itself: nobody may be at the laptop. The iPhone just rings as usual.
+        if rule != ME:  # Me never answers by itself: nobody may be at the laptop. The phone just rings as usual.
             self._get_claude_ready()
         if rule == AI:
             self._pick_up_with_ai()
 
     def _get_claude_ready(self):
         if not self.speech_ready():
-            self.notice = "Speech is getting ready. You can answer on your iPhone meanwhile."
+            self.notice = "Speech is getting ready. You can answer on your phone meanwhile."
             return
         self.notice = ""
         self.result_file = os.path.join(self.folder, f"answer-{int(time.time())}.result.json")
@@ -355,12 +355,12 @@ class Desk:
                 self.devices.restore()
 
     def _back_if_headset(self, move):
-        """With a Bluetooth headset on the laptop, Windows says the call moved here while its sound stays on the iPhone.
-        Then the iPhone is where it really is, so the note says so and puts it back there properly."""
+        """With a Bluetooth headset on the laptop, Windows says the call moved here while its sound stays on the phone.
+        Then the phone is where it really is, so the note says so and puts it back there properly."""
         try:
             blocked = headset_problem(self.headsets())
-        except OSError:
-            return
+        except OSError as error:
+            blocked = str(error)
         with self.lock:
             if not blocked or move != self.route_moves or self.screen != "me" or self.route != "laptop" or self.forwarding:
                 return
@@ -543,7 +543,7 @@ class Desk:
                 self._read_failure()
             if live and live.get("stage") == "handed" and self.screen in ("ai", "idle") and not self.forwarding:  # F9
                 self._now_forwarded()
-            if live and live.get("notice"):  # such as why the call went to the iPhone instead
+            if live and live.get("notice"):  # such as why the call went to the phone instead
                 self.notice = live["notice"]
             # A call an agent placed shows up with no button pressed here.
             screen = self.screen
@@ -595,7 +595,7 @@ def watch_line(make_line, desk_box, on_problem):
         desk = desk_box(line)
         if not line.wait_ready():
             line.close()
-            on_problem("The iPhone isn't connected.")
+            on_problem("Your phone isn't connected.")
             time.sleep(RETRY_SECONDS)
             continue
         on_problem("")

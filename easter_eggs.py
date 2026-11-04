@@ -304,7 +304,7 @@ class EasterEggs:
         return {"name": "Octo", "number": OCTO_NUMBER if data.get("calls", 0) >= OCTO_NUMBER_AT_CALL else "", "story": True, "rule": ""}
 
     def _call_octo(self):
-        """Only an animation: nothing reaches the iPhone. Starts because someone typed it, and never looks like an incoming call."""
+        """Only an animation: nothing reaches the phone. Starts because someone typed it, and never looks like an incoming call."""
         contact = self.octo_contact()
         if not (contact and contact["number"]):
             self._unlock(22)  # found it before Pat gave it out

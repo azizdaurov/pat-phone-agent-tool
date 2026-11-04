@@ -1,6 +1,6 @@
 # Pat, the Phone Agent Tool
 
-Claude speaks on your iPhone calls. It hears the other person, thinks with Haiku 4.5 on your Claude plan,
+Claude speaks on your phone calls, from an iPhone or an Android phone. It hears the other person, thinks with Haiku 4.5 on your Claude plan,
 and answers aloud. This repository has everything it needs:
 
 - [`voice-loop`](voice-loop): speech recognition, Claude and speech. Pat imports `voice_loop.py`.
@@ -53,7 +53,7 @@ The resident process opens no microphone or speaker and makes no phone calls.
 
 The prompt bar shows **Speech is getting ready…** during the one-time startup. The message disappears when speech is ready.
 Start Pat before you need it and wait for the message to disappear. Warmup depends on the computer and can take a couple of minutes.
-While it loads, you can answer on the iPhone. An AI request is kept only while that same call is still ringing;
+While it loads, you can answer on your phone. An AI request is kept only while that same call is still ringing;
 expired or cancelled requests cannot wait for and pick up a later call.
 
 Hiding the note or closing it to the tray keeps the models loaded. **Quit** releases them once an active AI call has
@@ -80,7 +80,11 @@ When the call ends, every default goes back to what it was.
 
 ## Setup
 
-On any Windows 11 laptop, including a second one for the same iPhone, after cloning:
+The phone helper identifies the selected phone by Windows device identity, including renamed phones and Android
+devices exposed by Windows. Android calling is experimental: pairing alone does not confirm a working call line
+or call audio. Choose the phone in Pat's settings and verify an agreed test call before relying on it.
+
+On any Windows 11 laptop, including a second one for the same phone, after cloning:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File setup.ps1
@@ -92,9 +96,14 @@ registers the phone tool, and puts your default speaker and microphone back on t
 
 1. **Approve** what Windows asks: Developer Mode, and each driver. A driver may also ask whether you trust it.
 2. **Restart** when it offers. Setup carries on by itself afterwards.
-3. **Connect the iPhone:** setup opens Bluetooth settings and waits. Pair it if needed, then on the iPhone go to Settings > Bluetooth and tap the laptop's name.
+3. **Connect your phone:** setup first checks Windows' Settings > Bluetooth & devices > Mobile devices > "Allow this PC to access
+   your mobile devices", and opens that page if it's off: without it, Windows connects the phone but never makes the phone line
+   Pat dials on. Then it opens Bluetooth settings and waits. Pair the phone if needed, then on it open Bluetooth settings and
+   connect to the laptop, allowing calls when asked. On Android, also tap the gear next to the laptop and turn on Calls. The
+   first phone that connects for calls is saved as yours; choose another in the note's settings. Tested on an iPhone and a
+   Galaxy A13; other Android phones should work the same way, but makers handle Bluetooth calls differently.
 4. **Keep the Voicemeeter app closed.** Only its virtual speaker is used; if the app runs, it can pass the call to your speakers.
-5. **Disconnect Bluetooth headphones from the laptop** before calls. With the Redmi Buds connected, the call's audio stayed on the iPhone
+5. **Disconnect Bluetooth headphones from the laptop** before calls. With the Redmi Buds connected, the call's audio stayed on the phone
    on every test, even with the Realtek speakers as the default. Windows reported each move as done, and 14 tries over two
    calls changed nothing. Pat now refuses to dial while a Bluetooth headset is connected. Wired headphones and the
    laptop speakers don't trigger this check.
@@ -121,7 +130,8 @@ If a call is killed, the laptop stays on the silent speaker until the next Pat s
 `calls/` and `contacts/` are private and aren't in the repository. To keep your notes, contacts and who-picks-up choices, copy
 `contacts/` to the new laptop yourself, and `calls/note-settings.json` for the menu's settings.
 
-An iPhone talks hands-free to one laptop at a time. Before using a laptop, tap its name in the iPhone's Bluetooth settings.
+A phone talks hands-free to one laptop at a time. Before using a laptop, connect to it in the phone's Bluetooth settings.
+Windows keeps one phone line at a time, for the phone that connected last: to switch phones, connect the other one.
 
 ## Using it
 
@@ -138,7 +148,7 @@ default to English. Use `--lang ru` or `language="ru"` for Russian; saved deskto
 |---|---|
 | `h` then Enter | hang up |
 | **F9**, in any window, or `l` then Enter | take the call on the laptop: Claude says it's passing them to you and stops, you hear them on your real speaker, and your real microphone goes in. Use wired headphones, or they'll hear an echo |
-| `p` then Enter | move the call to the iPhone and take over; Claude stops |
+| `p` then Enter | move the call to your phone and take over; Claude stops |
 | Ctrl+C | hang up and quit |
 
 English calls use Pocket TTS. Choose a voice with `--voice`, or an agent can with `voice`: `peter_yearsley` (British),
@@ -163,10 +173,10 @@ rings or dials: `.venv\Scripts\python.exe evals\note_demo.py`.
 | Screen | What's on it |
 |---|---|
 | No call | Just a prompt bar. Type what you want and an agent places the call through the phone tool |
-| Incoming | The caller, then `AI once`, `Always AI` and `Me (iPhone)`. The arrow chooses iPhone or Laptop for `Me`. Claude gets ready as soon as it rings, about 10 s, so the choice is quick |
+| Incoming | The caller, then `AI once`, `Always AI` and `Me (phone)`. The arrow chooses Phone or Laptop for `Me`. Claude gets ready as soon as it rings, about 10 s, so the choice is quick |
 | After the call | The bullet points, the full summary and what to do next, for as long as you want. `Done` goes back to the bar |
 | Claude on the call | A mixer that follows the sound of both voices, bullet points that fill in during the call (dots until then), a few words on what it's about, `Listen` and `Take over`. Calls placed by agents show here too |
-| You on the call | iPhone/Laptop switch and `End call`. The mixer only appears on the laptop: on the iPhone, the laptop can't hear the call |
+| You on the call | Phone/Laptop switch and `End call`. The mixer only appears on the laptop: on the phone, the laptop can't hear the call |
 
 - **`Always AI`** is for that number only. To undo it, set it back in Contacts.
 - **Settings** are on the right-click menu of the note's icon, in the hidden icons:
@@ -175,10 +185,10 @@ rings or dials: `.venv\Scripts\python.exe evals\note_demo.py`.
   - **Unknown numbers:** show the note's options (the default), Always AI, or Always me.
   - **English voice, Russian voice:** who Claude sounds like. Agents' calls use this too, unless the agent names another voice.
   - **Contacts...:** see, add and remove contacts, and choose for each one: Ask, AI or Me.
-- **AI** answers by itself. **Me** never answers by itself, since you may be away: Claude stays out and the iPhone rings as usual, and the note still offers its buttons.
+- **AI** answers by itself. **Me** never answers by itself, since you may be away: Claude stays out and the phone rings as usual, and the note still offers its buttons.
 - **`Listen`** plays both sides on your real speaker, and your microphone stays out of the call.
-- **`Take over`** puts you on the call on the laptop, after Claude says it's passing them to you, the same as F9. The switch moves it to the iPhone.
-- **`Me`** answers on the iPhone the first time, then wherever the arrow last pointed, even after a restart. The switch during a call doesn't change that choice.
+- **`Take over`** puts you on the call on the laptop, after Claude says it's passing them to you, the same as F9. The switch moves it to the phone.
+- **`Me`** answers on the phone the first time, then wherever the arrow last pointed, even after a restart. The switch during a call doesn't change that choice.
 - **Only one copy** can run. Opening it again brings the open one to the front.
 - **Bullet points** come from a small Claude beside the call, which only reads the transcript and can't affect the call. Values come through speech recognition, so they can be wrong.
 - **Hiding:** with no call, the note slides to the nearest screen edge and leaves a sliver; move the pointer onto it to bring it back. During a call the arrow does the same. A ringing call always brings it back.
