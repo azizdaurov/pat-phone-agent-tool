@@ -11,18 +11,25 @@ import re
 import sys
 
 from phone_memory import FOLDER, number_key
+from phone_numbers import international_number, unambiguous_legacy_keys
 
 BOOK_NAME = "book.json"  # {name: number}
 PLACEHOLDERS_NAME = "private_numbers.json"  # {"#1": number}
-MIN_DIGITS = 9
-# 9 to 15 digits, with the usual separators. Not part of a longer word or a placeholder.
-NUMBER_LIKE = re.compile(r"(?<![\w#:/.-])\+?\d(?:[\s().-]*\d){8,14}(?![\w])")
+# Country metadata decides the length, including short international numbers. Colons are valid delimiters.
+NUMBER_LIKE = re.compile(r"(?<![\w#])\+?\d(?:[ \t().-]*\d){2,14}(?![\w])")
 DATE_FIRST = re.compile(r"\d{4}[-./]\d{1,2}[-./]\d{1,2}")
 PLACEHOLDER = re.compile(r"#\d+")
 
 
 def digit_count(text):
     return len(re.sub(r"\D", "", text))
+
+
+def split_caller(who):
+    """Separate a caller label while keeping parentheses inside the phone number."""
+    who = (who or "").strip()
+    match = re.fullmatch(r"(.*?)\s+\((\+?[\d\s().-]+)\)", who)
+    return (match.group(1).strip(), match.group(2).strip()) if match else ("", who)
 
 
 class PrivateNumbers:
@@ -48,10 +55,9 @@ class PrivateNumbers:
         return self._load(self.book_path)
 
     def add_contact(self, name, number):
-        if digit_count(number) < MIN_DIGITS:
-            raise ValueError("Give the full number, with its country code.")
+        number = international_number(number)
         book = self.contacts()
-        book[name.strip()] = number.strip()
+        book[name.strip()] = number
         self._save(self.book_path, book)
 
     def remove_contact(self, name):
@@ -65,18 +71,33 @@ class PrivateNumbers:
         key = number_key(number)
         return next((name for name, theirs in self.contacts().items() if key and number_key(theirs) == key), "")
 
-    def label_for(self, number):
+    def display_name(self, caller):
+        """Display metadata only. A saved name or caller ID does not verify who is speaking."""
+        supplied_name, number = split_caller(caller)
+        return self.name_for(number) or supplied_name
+
+    def label_for(self, number, allow_unresolved=False):
         """What the AI calls this number: the contact's name, or a placeholder that stays the same for this number."""
-        name = self.name_for(number)
+        written = number.strip()
+        try:
+            number = international_number(number)
+            key = number_key(number)
+            name = self.name_for(number)
+        except ValueError:
+            # Hide an ambiguous typed number without guessing its country. resolve() still refuses to dial it.
+            if not allow_unresolved or not 7 <= digit_count(written) <= 15:
+                raise
+            key = "raw:" + re.sub(r"\D", "", written)
+            name = ""
         if name:
             return name
-        key = number_key(number)
         placeholders = self._load(self.placeholders_path)
         for label, theirs in placeholders.items():
-            if number_key(theirs) == key:
+            theirs_key = number_key(theirs) or "raw:" + re.sub(r"\D", "", theirs)
+            if theirs_key == key:
                 return label
         label = f"#{len(placeholders) + 1}"
-        placeholders[label] = number.strip()
+        placeholders[label] = written  # The owner sees the spelling they entered; resolve() still returns E.164.
         self._save(self.placeholders_path, placeholders)
         return label
 
@@ -87,15 +108,25 @@ class PrivateNumbers:
             number = self._load(self.placeholders_path).get(target)
             if not number:
                 raise LookupError(f"There's no {target} on this laptop. Ask for the number or a contact's name again.")
-            return number, self.name_for(number)
+            try:
+                return international_number(number), self.name_for(number)
+            except ValueError as error:
+                raise LookupError(str(error)) from error
         if digit_count(target) and re.fullmatch(r"\+?[\d\s().-]+", target):
-            return target, self.name_for(target)
+            try:
+                number = international_number(target)
+            except ValueError as error:
+                raise LookupError(str(error)) from error
+            return number, self.name_for(number)
         wanted = target.casefold()
         book = self.contacts()
         exact = [name for name in book if name.casefold() == wanted]
         matches = exact or ([name for name in book if wanted and wanted in name.casefold()])
         if len(matches) == 1:
-            return book[matches[0]], matches[0]
+            try:
+                return international_number(book[matches[0]]), matches[0]
+            except ValueError as error:
+                raise LookupError(str(error)) from error
         if matches:
             raise LookupError(f"More than one contact fits '{target}': {', '.join(matches)}. Say which one.")
         raise LookupError(f"No contact called '{target}'. Give a contact's name, a placeholder such as #1, or a full phone number.")
@@ -104,7 +135,12 @@ class PrivateNumbers:
         """Swaps every number in what someone typed for its label, before it leaves the laptop."""
         def swap(match):
             found = match.group(0)
-            return found if DATE_FIRST.match(found) else self.label_for(found)
+            if DATE_FIRST.match(found):
+                return found
+            try:
+                return self.label_for(found, allow_unresolved=True)
+            except ValueError:
+                return found
         return NUMBER_LIKE.sub(swap, text)
 
     def reveal(self, text):
@@ -118,7 +154,11 @@ class PrivateNumbers:
             known[number_key(number)] = None
         for number in self.contacts().values():
             known[number_key(number)] = None
-        return {key: self.label_for(key) for key in known if key}
+        labels = {key: self.label_for("+" + key) for key in known if key}
+        for key, label in list(labels.items()):
+            for old in unambiguous_legacy_keys(key, os.path.dirname(self.book_path)):
+                labels[old] = label  # Redact old transcript paths too; never use these keys to match a person.
+        return labels
 
     def hide(self, value):
         """Copies a result with each number this laptop knows swapped for its label: as written, and as the digits in a file name.
@@ -129,8 +169,8 @@ class PrivateNumbers:
             def swap(match):
                 return known.get(number_key(match.group(0)), match.group(0))
             text = NUMBER_LIKE.sub(swap, text)
-            for key, label in known.items():
-                text = text.replace(key, label)
+            for key in sorted(known, key=len, reverse=True):
+                text = re.sub(rf"(?<!\d){re.escape(key)}(?!\d)", lambda _: known[key], text)
             return text
 
         def walk(item):

@@ -34,8 +34,12 @@ from live_notes import INCOMING_LABELS, LiveNotes, NOTES_PROMPT
 from note_settings import NoteSettings
 from observer import OBSERVER_MODEL, Observer
 from phone_memory import ContactNotes, SUMMARY_LIMIT, SUMMARY_PROMPT, attempt_text, merge_call, number_key, summary_may_change
+from phone_numbers import international_number
+from private_numbers import PrivateNumbers
+from user_profile import UserProfile, setup_refusal
+from real_dates import configure as configure_dates, current_time
 
-sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # calls are in Russian, whatever the terminal is set to
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")  # Names and calls may contain any Unicode characters.
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, os.path.join(HERE, "voice-loop"))
 from voice_loop import (BatchEar, Brain, MIC_RATE, Mouth, PiperVoice, PocketVoice, RU_TTS_VOICE,  # noqa: E402
@@ -71,14 +75,19 @@ NOBODY_THERE_SECONDS = 60
 NUDGE_SECONDS = 8  # dead air this long during the task, and Claude checks the person is still there
 MAX_NUDGES = 2  # in a row, after which NOBODY_THERE_SECONDS decides
 MAX_WORDLESS_REPLIES = 2  # in a row, so line noise can't keep Claude talking
+CONFIRMATION_END = re.compile(r"\b(?:is that (?:right|correct|okay)|right|correct|(?:это |вс[её] )?(?:верно|правильно)|так)\s*\?\s*$", re.I)
+CONFIRMATION_CUES = set("right correct correctly okay ok confirm верно правильно так подтвердите подтверждаете".split())
+CONFIRMATION_WORDS = CONFIRMATION_CUES | set(
+    "can could would you please did i hear get got have is this that it does sound understand understood heard do so am understanding everything "
+    "я вас вы меня ли услышал услышала понял поняла понимаю это всё все да мне пожалуйста".split())
 
-# Says it isn't a person, and whose it is, in every call. No option removes it. Chosen by Aziz over "ИИ", which Piper says unclearly.
+# Says it isn't a person, and whose it is, in every call. No option removes it. The Russian wording uses words the voice reads clearly.
 OPENINGS = {
-    "dial": {"en": "Hello, this is {owner}'s AI assistant.", "ru": "Здравствуйте, это виртуальный ассистент {owner_ru}."},
-    "answer": {"en": "Hello, this is {owner}'s AI assistant.", "ru": "Здравствуйте, это виртуальный ассистент {owner_ru}."},
+    "dial": {"en": "Hello, this is {owner}'s AI assistant.", "ru": "Здравствуйте, я виртуальный ассистент. Мой пользователь — {owner_ru}."},
+    "answer": {"en": "Hello, this is {owner}'s AI assistant. {owner} might hear this conversation. How can I help you?", "ru": "Здравствуйте, я виртуальный ассистент. Мой пользователь — {owner_ru}."},
 }
-# Said before Aziz comes on the line, so the other person knows a person has joined.
-TAKING_OVER = {"en": "One moment, I'm passing you to {owner}.", "ru": "Одну секунду, передаю трубку {owner_ru}."}
+# Said before the owner comes on the line, so the other person knows a person has joined.
+TAKING_OVER = {"en": "One moment, I'm passing you to {owner}.", "ru": "Одну секунду, передаю трубку. С вами будет говорить {owner_ru}."}
 # When nobody comes to the phone during the identity check.
 NOBODY_CAME = {"en": "I couldn't reach them. We will call again. Goodbye.", "ru": "Не дождался ответа. Мы перезвоним. До свидания."}
 DEFAULT_ANSWER_GOAL = "Find out who is calling and why, and offer to pass on a message."
@@ -89,6 +98,16 @@ STALLS = {"en": ["One moment.", "Just a moment, please.", "One second.", "Sorry,
           "ru": ["Одну секунду.", "Секундочку.", "Минутку, пожалуйста.", "Одну минуту.", "Извините, одну секунду."]}
 
 
+def phone_command(stay_on_phone=False):
+    command = ["iphonecall"]
+    selected = UserProfile().phone_device
+    if selected:
+        command += ["--device-id", selected]
+    if stay_on_phone:
+        command.append("--stay-on-phone")
+    return command
+
+
 class PhoneLine:
     """Drives iphonecall's shell over pipes, and turns what it prints into call events."""
 
@@ -97,19 +116,21 @@ class PhoneLine:
     READY = "commands:"
     END_GRACE_SECONDS = 5  # a call that comes back within this long never ended
 
-    def __init__(self, command=("iphonecall",), log_path=None, end_grace=END_GRACE_SECONDS):
-        self.proc = subprocess.Popen(list(command), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+    def __init__(self, command=None, log_path=None, end_grace=END_GRACE_SECONDS):
+        self.proc = subprocess.Popen(list(command) if command is not None else phone_command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                      stderr=subprocess.STDOUT, text=True, errors="replace", bufsize=1,
                                      creationflags=subprocess.CREATE_NO_WINDOW)
         self.events = queue.Queue()
         self.started = []
         self.ready = threading.Event()
         self.ended = threading.Event()
+        self.ringing = threading.Event()
         self.in_call = False
         self.audio = None
         self.log_path = log_path
         self.end_grace = end_grace
         self.end_timer = None
+        self.last_status = None
         threading.Thread(target=self._read, daemon=True).start()
 
     def _log(self, line):
@@ -134,6 +155,11 @@ class PhoneLine:
             ended = self.CALL_ENDED.search(line)
             if match:
                 direction, who, status = match.group(1, 2, 3)
+                self.last_status = status
+                if status == "Incoming":
+                    self.ringing.set()
+                else:
+                    self.ringing.clear()
                 self.audio = match.group(4)
                 if self.end_timer:
                     self.end_timer.cancel()
@@ -142,7 +168,12 @@ class PhoneLine:
                 self.in_call = True
                 self.events.put((status, who, direction))
             elif ended and int(ended.group(1)) == 0:
-                self.end_timer = threading.Timer(self.end_grace, self._call_is_over)
+                if self.ringing.is_set():
+                    self.ringing.clear()
+                    self.events.put(("RingingStopped", "", ""))
+                # Dialing can disappear briefly while Windows switches call objects. A connected call's end should be prompt.
+                delay = self.end_grace if self.last_status == "Dialing" else min(self.end_grace, 0.5)
+                self.end_timer = threading.Timer(delay, self._call_is_over)
                 self.end_timer.daemon = True
                 self.end_timer.start()
             elif line.startswith(("error:", "stuck:", "dial ")):
@@ -151,6 +182,7 @@ class PhoneLine:
         if self.end_timer:
             self.end_timer.cancel()
         self.ended.set()
+        self.ringing.clear()
         self.events.put(("Closed", "", ""))
 
     def wait_ready(self, seconds=60):
@@ -278,21 +310,39 @@ class CallerAudio:
 
 
 class LaptopTakeover:
-    """Puts Aziz on the call: the other person's voice on the real speaker, his real microphone into the cable."""
+    """Puts the owner on the call: the other person's voice on the real speaker, his real microphone into the cable."""
 
     def __init__(self, caller, speaker, microphone, cable):
         self.caller = caller
         self.closed = threading.Event()
-        rate = caller.rate
-        self.speaker = sd.OutputStream(samplerate=rate, channels=caller.channels, dtype="float32", device=speaker,
-                                       extra_settings=sd.WasapiSettings(auto_convert=True))
-        self.microphone = sd.Stream(samplerate=48000, channels=(1, 1), dtype="float32", device=(microphone, cable),
-                                    callback=self._pass_voice_on,
-                                    extra_settings=(sd.WasapiSettings(auto_convert=True), sd.WasapiSettings(auto_convert=True)))
+        from mic_relay import MicRelay
+        mic_info = sd.query_devices(microphone)
+        cable_info = sd.query_devices(cable)
+        input_rate = int(mic_info["default_samplerate"])
+        output_rate = int(cable_info["default_samplerate"])
+        input_channels = int(mic_info["max_input_channels"])
+        output_channels = min(2, int(cable_info["max_output_channels"]))
+        if not input_channels or not output_channels:
+            raise RuntimeError("The selected microphone or call output has no audio channels.")
+        self.relay = MicRelay(input_rate, output_rate)
+        self.streams = []
+        try:
+            self.speaker = sd.OutputStream(samplerate=caller.rate, channels=caller.channels, dtype="float32", device=speaker,
+                                           extra_settings=sd.WasapiSettings(auto_convert=True))
+            self.streams.append(self.speaker)
+            self.microphone = sd.InputStream(samplerate=input_rate, channels=input_channels, dtype="float32", device=microphone,
+                                             callback=self.relay.capture, latency="low")
+            self.streams.append(self.microphone)
+            self.cable = sd.OutputStream(samplerate=output_rate, channels=output_channels, dtype="float32", device=cable,
+                                         callback=self.relay.render, latency="low", extra_settings=sd.WasapiSettings(auto_convert=True))
+            self.streams.append(self.cable)
+        except Exception:
+            for stream in reversed(self.streams):
+                stream.close()
+            raise
         self.forwarding = threading.Thread(target=self._play_caller, daemon=True)
-
-    def _pass_voice_on(self, indata, outdata, frames, when, status):
-        outdata[:] = indata
+        print(f"Takeover microphone: {mic_info['name']} ({input_rate} Hz, {input_channels} channels); "
+              f"call output: {cable_info['name']} ({output_rate} Hz, {output_channels} channels)", flush=True)
 
     def _play_caller(self):
         while not self.closed.is_set():
@@ -304,17 +354,29 @@ class LaptopTakeover:
 
     def start(self):
         self.caller.drop_waiting()
-        self.speaker.start()
-        self.microphone.start()
-        self.forwarding.start()
+        try:
+            self.speaker.start()
+            self.microphone.start()
+            self.cable.start()
+            self.forwarding.start()
+        except Exception:
+            self.stop()
+            raise
 
     def stop(self):
+        if self.closed.is_set():
+            return
         self.closed.set()
-        self.forwarding.join(1)
-        self.microphone.stop()
-        self.microphone.close()
-        self.speaker.stop()
-        self.speaker.close()
+        if self.forwarding.is_alive():
+            self.forwarding.join(1)
+        for stream in reversed(self.streams):
+            try:
+                stream.stop()
+            except (OSError, RuntimeError) as error:
+                print(f"[takeover audio stop: {error}]", flush=True)
+            finally:
+                stream.close()
+        print("Takeover audio: " + self.relay.summary(), flush=True)
 
 
 class CableOutput:
@@ -337,7 +399,7 @@ class CableOutput:
 
 
 class Listening:
-    """Plays both sides of the call on the real speaker, with Aziz's microphone staying out of it."""
+    """Plays both sides of the call on the real speaker, with the owner's microphone staying out of it."""
 
     def __init__(self, caller, cable, voice_rate, speaker):
         settings = sd.WasapiSettings(auto_convert=True)
@@ -382,18 +444,33 @@ class SpeechDetector:
 
     CONTEXT = 64  # samples of the previous frame that Silero expects in front of each new one
 
-    def __init__(self):
-        import onnx_asr
-        self.session = onnx_asr.load_vad("silero")._model
+    def __init__(self, session=None, use_service=True):
+        self.remote = None
+        if session is None and use_service:
+            from speech_service import available, RemoteDetector
+            status = available()
+            if status:
+                self.remote = RemoteDetector(status)
+                return
+        if session is None:
+            import onnx_asr
+            session = onnx_asr.load_vad("silero")._model
+        self.session = session
         self.state = np.zeros((2, 1, 128), dtype=np.float32)
         self.context = np.zeros(self.CONTEXT, dtype=np.float32)
 
     def __call__(self, frame):
+        if self.remote:
+            return self.remote(frame)
         joined = np.concatenate((self.context, frame)).astype(np.float32)[None, :]
         output, self.state = self.session.run(
             None, {"input": joined, "state": self.state, "sr": np.array(MIC_RATE, dtype=np.int64)})
         self.context = frame[-self.CONTEXT:]
         return float(output[0][0])
+
+    def close(self):
+        if self.remote:
+            self.remote.close()
 
 
 class TurnDetector:
@@ -453,7 +530,7 @@ class TrackingMouth(Mouth):
     def __init__(self, voice, play=True):
         self.reply_pieces = []
         self.slow_rate = SLOW_CHARS_PER_SECOND
-        self.length_known = isinstance(voice, PiperVoice)
+        self.length_known = isinstance(voice, PiperVoice) or getattr(voice, "length_known", False)
         super().__init__(voice, play)
 
     def start_reply(self):
@@ -528,14 +605,14 @@ class Conversation:
     """One call: the voice-loop turn cycle, with speech detection in place of the talk key, and Sonnet beside it."""
 
     def __init__(self, line, frames, ear, mouth, brain, transcript, opening, max_seconds=300,
-                 nobody_seconds=NOBODY_THERE_SECONDS, observer=None, nonce="", owner="Aziz", language="en",
+                 nobody_seconds=NOBODY_THERE_SECONDS, observer=None, nonce="", owner=None, language="en",
                  task_message=None):
         self.task_message = task_message  # None when there's nobody to check for, and Haiku already has the task
         self.confirmed = task_message is None
         self.reached = "not_checked" if task_message is None else "unclear"
         self.observer = observer
         self.nonce = nonce
-        self.owner = owner
+        self.owner = owner or UserProfile().name or "the owner"
         self.language = language
         self.epoch = 0  # goes up each time the other person talks over Claude
         self.caller_turns = 0
@@ -564,6 +641,7 @@ class Conversation:
         self.sound = SoundMeter()
         self.turn_lock = threading.Lock()
         self.opening_done = threading.Event()
+        self.opening_pending = False
         self.last_reply = []  # the pieces of Haiku's last reply, whether or not they were played
 
     def someone_talking(self):
@@ -574,6 +652,7 @@ class Conversation:
             self.transcript.add("Claude", self.opening)
             self.mouth.say(self.opening, self.mouth.token)
             self.mouth.drain()
+            self.opening_pending = True
             self.opening_done.set()
 
     def _supervisor(self, note):
@@ -646,13 +725,25 @@ class Conversation:
         return "" if heard is None else self._supervisor(cut_message(heard))
 
     def _repeat_unheard_question(self, text, live, token):
-        """They said a bare yes or no before any of Claude's question reached them, so it can't be their answer, whatever Haiku would make of it.
-        The question is simply said again. Told only in words, Haiku still took the yes in 1 of 10 tries; before that, in 6 of 10."""
+        """A bare yes/no cannot answer an unheard question or an unfinished read-back."""
         reply = " ".join(self.last_reply)
-        if not live or self.pending_cut != "" or "?" not in reply or not is_bare_answer(text):
+        heard = self.pending_cut
+        if not live or heard is None or "?" not in reply or not is_bare_answer(text):
             return False
+        if heard:
+            main = confirmation_detail(reply)
+            main_words = word_tokens(main or "")
+            # Only the short closing tag may be missing. All substantive words must have played.
+            if main is None or word_tokens(heard)[:len(main_words)] == main_words:
+                return False
+            if reply.startswith(heard):
+                missing = reply[len(heard):].lstrip(" ,;:—–")
+                splitter = Splitter(self.mouth.voice.clause_chars)
+                self.last_reply = splitter.feed(missing) + splitter.flush()
         self.pending_cut = None
-        note = f'They said "{text}" over your last reply before hearing any of it, so it was said to them again as you wrote it.'
+        repeated = " ".join(self.last_reply)
+        note = (f'They said "{text}" over your last reply before hearing the full question or detail, so do not count that as its answer. '
+                f'You then repeated the missing part: "{repeated}". Their new words below respond to that repetition.')
         self.pending_note = f"{self.pending_note} {note}" if self.pending_note else note
         self.transcript.add("Cicero", "a bare answer before they could have heard the question, so it's said again")
         for piece in self.last_reply:
@@ -694,6 +785,13 @@ class Conversation:
             else:
                 message = self._supervisor(prompt or "They made a short sound, but speech recognition got no words. "
                                            "They may have answered you. Ask them briefly to repeat it, or say your next line if you weren't waiting for an answer.")
+            if self.opening_pending:
+                self.opening_pending = False
+                opening_note = (f'The call is connected. The person has just heard this opening in full: "{self.opening}" '
+                                "Their words below respond to that opening. Do not say the greeting again. "
+                                "If they clearly answer its identity question with yes, mark them confirmed now; "
+                                "do not ask the same identity question again. If their answer is unclear, clarify it.")
+                message = f"{self._supervisor(opening_note)}\n{message}"
             if self.pending_note:
                 message = f"{self._supervisor(self.pending_note)}\n{message}"
                 self.pending_note = None
@@ -775,8 +873,17 @@ class Conversation:
 
     def run(self):
         """Returns why the call stopped: "goodbye", "caller left", "time limit", "nobody there" or "handed over"."""
+        detector = SpeechDetector()
+        try:
+            return self._run(detector)
+        finally:
+            close = getattr(detector, "close", None)
+            if close:
+                close()
+
+    def _run(self, detector):
         started = last_heard = turn_started = last_busy = time.monotonic()
-        turns = TurnDetector(SpeechDetector())
+        turns = TurnDetector(detector)
         loudest = 0.0
         threading.Thread(target=self._say_opening, daemon=True).start()
         for frame in self.frames:
@@ -836,10 +943,37 @@ class Conversation:
         return "caller left"
 
 
+def word_tokens(text):
+    return re.findall(r"\w+", text.casefold())
+
+
+def confirmation_detail(reply):
+    """The substantive text before a short final confirmation tag, if there is one."""
+    clause = re.search(r"[^.!?;,]*\?\s*$", reply)
+    if clause:
+        words = set(word_tokens(clause.group()))
+        main = reply[:clause.start()].rstrip(" ,;:.!?—–")
+        if main and words & CONFIRMATION_CUES and words <= CONFIRMATION_WORDS:
+            return main
+    ending = CONFIRMATION_END.search(reply)
+    if ending:
+        return reply[:ending.start()].rstrip(" ,;:.!?—–") or None
+    return None
+
+
 def cut_message(heard):
     """What Haiku is told about a reply they talked over. Someone saying yes before the question reached them hasn't answered it."""
-    said = f'They heard only: "{heard}".' if heard else "They heard none of it."
-    return (f"You were cut off during your last reply. {said} So a plain yes or no now can't answer anything they didn't hear: "
+    if heard:
+        return (f'You were cut off during your last reply. They heard only: "{heard}". '
+                "A plain yes or no can answer a complete question or confirm a complete statement or value in those heard words, "
+                "even if only a short closing question such as 'Is that right?' was clipped. Use that answer: agreement confirms it; "
+                "disagreement rejects it, so ask for the correction if needed. Move on from an accepted detail; "
+                "do not ask them to confirm the same unchanged details again. "
+                "Every substantive value needed by that question or read-back must be in the heard words; a greeting, thanks or setup alone is not enough. "
+                "If the actual question or a needed value was not heard, ask it again, and don't count it as answered. "
+                "Repeat only the missing question or detail, not the greeting or setup they already heard. "
+                "If their words answer it by themselves, go by those. Say the rest again only if it still matters.")
+    return ("You were cut off during your last reply. They heard none of it. So a plain yes or no now can't answer anything they didn't hear: "
             "if you asked something they didn't hear, ask it again now, and don't count it as answered. If their words answer it by themselves, go by those. "
             "Say the rest again only if it still matters.")
 
@@ -884,7 +1018,7 @@ def fix_audio_defaults():
 
 
 def real_devices():
-    """Returns (speaker, microphone) to use when Aziz takes over. Either can be None if there's none."""
+    """Returns (speaker, microphone) to use when the owner takes over. Either can be None if there's none."""
     wasapi = [(index, device) for index, device in enumerate(sd.query_devices())
               if "WASAPI" in sd.query_hostapis(device["hostapi"])["name"]]
     return (pick_real_device([(i, d["name"]) for i, d in wasapi if d["max_output_channels"] > 0]),
@@ -958,6 +1092,20 @@ def only_one_copy():
 
 def load_speech(language, voice):
     """Returns (ear, mouth), with the mouth not yet connected to any speaker."""
+    from speech_service import available, RemoteEar, RemoteVoice
+    status = available()
+    if status:
+        selected = voice or (RU_TTS_VOICE if language == "ru" else DEFAULT_ENGLISH_VOICE)
+        ear = RemoteEar(status, language)
+        try:
+            speaker = RemoteVoice(status, language, selected)
+            mouth = TrackingMouth(speaker, play=False)
+        except Exception:
+            ear.close()
+            raise
+        if language == "en":
+            mouth.slow_rate = ENGLISH_VOICES.get(selected, {}).get("chars_per_second", SLOW_CHARS_PER_SECOND)
+        return ear, mouth
     if language == "ru":
         return BatchEar(RU_STT_MODEL, mic=False), TrackingMouth(PiperVoice(voice or RU_TTS_VOICE), play=False)
     voice = voice or DEFAULT_ENGLISH_VOICE
@@ -1009,7 +1157,7 @@ def start_brain(args, brief, opening, nonce, notes):
     print("Starting Claude...", flush=True)
     prompt = brief.haiku_prompt(SYSTEM_PROMPTS[brief.language], opening, args.owner, nonce, notes)
     brain = Brain(brief.language, system_prompt=prompt)
-    for _ in brain.ask(WARM_UP[brief.language]):
+    for _ in brain.ask(f"[SUPERVISOR-{nonce}] {WARM_UP[brief.language]}"):
         pass
     return brain
 
@@ -1048,7 +1196,7 @@ def load_notes(key, args):
 def remember_call(notes, transcript, owner, brief, reached):
     """Runs after the hang-up. The summary, if it may change, comes from a separate Claude that sees only the notes and the transcript."""
     print("Updating notes for this number...", flush=True)
-    when = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
+    when = current_time().isoformat(timespec="minutes")
     attempt = attempt_text(reached, brief.name.strip() or brief.company.strip())
     if not summary_may_change(reached, brief.who_answers()):
         report = merge_call(notes, transcript.spoken, None, when, attempt=attempt, update_summary=False)
@@ -1099,8 +1247,29 @@ def watch_take_over_key(conversation, is_down=None):
 def wait_for_go(go, cancelled, line):
     """True once told to pick up. False if told not to, or the call stopped ringing. The models are ready either way."""
     while not (go.is_set() or cancelled.is_set() or line.ended.is_set()):
+        if getattr(line, "ringing", None) is not None and not line.ringing.is_set():
+            return False
         time.sleep(0.05)
-    return go.is_set() and not line.ended.is_set()
+    still_ringing = getattr(line, "ringing", None) is None or line.ringing.is_set()
+    return go.is_set() and not cancelled.is_set() and not line.ended.is_set() and still_ringing
+
+
+def wait_for_current_incoming(line, cancelled, seconds=15):
+    """A note request belongs to the call that is ringing now, not a later call."""
+    deadline = time.monotonic() + seconds
+    while not cancelled.is_set() and not line.ended.is_set():
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            return None
+        try:
+            status, who, _ = line.events.get(timeout=min(0.1, remaining))
+        except queue.Empty:
+            continue
+        if status == "Incoming":
+            return (status, who) if getattr(line, "ringing", None) is None or line.ringing.is_set() else None
+        if status in ("Talking", "Ended", "Closed"):
+            return None
+    return None
 
 
 def start_live_notes(brief, spoken_so_far):
@@ -1114,7 +1283,7 @@ def start_live_notes(brief, spoken_so_far):
 
 
 def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable):
-    """Aziz talks from here on, until the call ends or he hangs up or moves it to the iPhone. Claude says nothing more."""
+    """The owner talks from here on, until the call ends or he hangs up or moves it to the iPhone. Claude says nothing more."""
     speaker, microphone = real_devices()
     if speaker is None or microphone is None:
         print("Can't take over: no real speaker or microphone found. Moving the call to the iPhone instead.", flush=True)
@@ -1124,12 +1293,20 @@ def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable):
     phrase = TAKING_OVER[brief.language].format(owner=args.owner, owner_ru=args.owner_ru)
     mouth.say(phrase, mouth.token)
     mouth.drain()
-    takeover = LaptopTakeover(caller, speaker, microphone, cable)
-    takeover.start()
-    print("You're on the call. Use wired headphones, or they'll hear an echo. Type h to hang up, p to move it to the iPhone.", flush=True)
-    while not (line.ended.is_set() or conversation.stopped.is_set() or conversation.hand_over.is_set()):
-        time.sleep(0.1)
-    takeover.stop()
+    takeover = None
+    try:
+        takeover = LaptopTakeover(caller, speaker, microphone, cable)
+        takeover.start()
+        print("You're on the call. Use wired headphones, or they'll hear an echo. Type h to hang up, p to move it to the iPhone.", flush=True)
+        while not (line.ended.is_set() or conversation.stopped.is_set() or conversation.hand_over.is_set()):
+            time.sleep(0.1)
+    except Exception as error:
+        print(f"Laptop audio failed: {error}. Moving the call to the iPhone.", flush=True)
+        line.to_phone()
+        conversation.hand_over.set()
+    finally:
+        if takeover:
+            takeover.stop()
 
 
 def main():
@@ -1151,8 +1328,10 @@ def main():
                         help="how sure you are the number is theirs")
     parser.add_argument("--lang", choices=sorted(SYSTEM_PROMPTS), default="ru")
     parser.add_argument("--voice", default=None, help=f"Russian: irina or ruslan. English: {', '.join(ENGLISH_VOICES)}")
-    parser.add_argument("--owner", default="Aziz", help="whose behalf Claude speaks on")
-    parser.add_argument("--owner-ru", default="Азиза", help="the same name in Russian, genitive case")
+    parser.add_argument("--owner", default=None, help="override the name saved in Pat's settings for this call")
+    parser.add_argument("--owner-ru", default=None, help="optional spoken Russian version of the owner's name")
+    parser.add_argument("--time-zone", help="IANA time zone for this call, such as Europe/London")
+    parser.add_argument("--date-format", choices=["iso", "dmy", "mdy"], help="date format for this call's reports")
     parser.add_argument("--max-minutes", type=float, default=5, help="hang up after this long")
     parser.add_argument("--audible", action="store_true", help="play the call on your real speaker instead of silently")
     parser.add_argument("--no-memory", action="store_true", help="don't read or update this number's notes")
@@ -1161,6 +1340,28 @@ def main():
     args = parser.parse_args()
     if args.action == "dial" and not (args.number and (args.brief or args.brief_file)):
         parser.error("dial needs a number and --brief or --brief-file")
+    if args.action in ("dial", "answer"):
+        refusal = setup_refusal()
+        if refusal:
+            write_result(args, **refusal)
+            sys.exit(refusal["reason"])
+        profile = UserProfile()
+        args.owner = args.owner or profile.name
+        args.owner_ru = args.owner_ru or args.owner
+        if args.action == "dial":
+            try:
+                args.number = international_number(args.number)
+            except ValueError as error:
+                write_result(args, status="failed", reason=str(error))
+                parser.error(str(error))
+        try:
+            brief = load_brief(args)
+            configure_dates(args.time_zone or brief.time_zone or None, args.date_format or brief.date_format or None)
+            from real_dates import preferences
+            brief.time_zone, brief.date_format = preferences()
+        except (ValueError, KeyError, TypeError) as error:
+            write_result(args, status="failed", reason=str(error))
+            parser.error(str(error))
 
     only_one_copy()
     if args.action == "prepare":
@@ -1186,10 +1387,10 @@ def main():
         return
 
     logging.disable(logging.INFO)
-    brief = load_brief(args)
     calls_folder = os.path.join(HERE, "calls")
     # The note can say "go" before this process has finished starting. It clears old commands itself.
-    live = LiveCall(calls_folder, keep_commands=args.wait_for_go, stage="starting", number=args.number or "", name=brief.target() or "", facts=[], summary="",
+    display_book = PrivateNumbers()
+    live = LiveCall(calls_folder, keep_commands=args.wait_for_go, stage="starting", number=args.number or "", name=brief.target() or display_book.display_name(args.number or ""), facts=[], summary="",
                     talking=False, listening=False)
     go = threading.Event()
     cancelled = threading.Event()
@@ -1246,14 +1447,18 @@ def main():
         else:
             print("Waiting for a call. Claude will answer the next one. Ctrl+C quits.", flush=True)
             answered = None
-            incoming = line.wait_for(["Incoming"])
+            incoming = wait_for_current_incoming(line, cancelled) if args.wait_for_go else line.wait_for(["Incoming"])
+            if args.wait_for_go and not incoming:
+                left_ringing = True
+                reason = "the requested incoming call stopped ringing"
+                return
             if incoming and incoming[0] == "Incoming":
                 print(f"Incoming: {incoming[1]}", flush=True)
                 # Only now is the number known, so Claude starts with the right notes while it rings.
                 key = number_key(incoming[1])
                 notes, known = load_notes(key, args)
                 brain = start_brain(args, brief, opening, nonce, known)
-                live.update(stage="ringing", number=incoming[1])
+                live.update(stage="ringing", number=incoming[1], name=display_book.display_name(incoming[1]))
                 if args.wait_for_go and not wait_for_go(go, cancelled, line):
                     left_ringing = True
                     reason = "the sticky note took this call, or it stopped ringing"
@@ -1360,6 +1565,10 @@ def main():
             notes_brain.close()
         if brain:
             brain.close()
+        for resource in (ear, getattr(mouth, "voice", None)):
+            close = getattr(resource, "close", None)
+            if close:
+                close()
         reached = conversation.reached if conversation else None
         report = observer.final_report(f"{reason} (who was reached: {reached})") if observer else None
         if sonnet:
@@ -1376,7 +1585,7 @@ def main():
         last_call = None
         if transcript:
             facts, summary, next_step = final_note(report, live_notes.facts if live_notes else [], live_notes.summary if live_notes else "")
-            last_call = dict(id=os.path.basename(transcript.path), number=live.fields.get("number", ""), name=brief.target() or "",
+            last_call = dict(id=os.path.basename(transcript.path), number=live.fields.get("number", ""), name=live.fields.get("name") or brief.target() or display_book.display_name(live.fields.get("number", "")),
                              facts=facts, summary=summary, next_step=next_step, flair=flair, pat_facts=pat_facts)
         poem = ""
         if args.summary_style and report:
@@ -1385,6 +1594,7 @@ def main():
             poem = write_poem(args.summary_style, report, lambda model: Brain("en", system_prompt="You write short, funny pieces about phone calls, for the person who asked for the call.", model=model))
         write_result(args, status=status, reason=reason, report=report, notes=notes_report, flair=flair, poem=poem,
                      number=args.number, seconds=seconds, reached=reached, target=brief.target(),
+                     time_zone=brief.time_zone, date_format=brief.date_format,
                      reply_delays=conversation.reply_delays if conversation else [],
                      transcript_file=transcript.path if transcript else None,
                      interventions=observer.interventions if observer else 0,

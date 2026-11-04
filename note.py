@@ -48,16 +48,9 @@ from easter_eggs import EasterEggs, choose_next_style, split_style  # noqa: E402
 from live_call import SoundMeter, read_last_call, read_live, send_command, take_commands  # noqa: E402
 from note_settings import SETTINGS_NAME, NoteSettings  # noqa: E402
 from phone_memory import number_key  # noqa: E402
-from private_numbers import PrivateNumbers  # noqa: E402
-
-
-def split_caller(who):
-    """(name, number) from iphonecall's "Name (number)" or plain "number"."""
-    who = (who or "").strip()
-    if who.endswith(")") and " (" in who:
-        name, number = who[:-1].rsplit(" (", 1)
-        return name.strip(), number.strip()
-    return "", who
+from private_numbers import PrivateNumbers, split_caller  # noqa: E402
+from phone_numbers import unambiguous_legacy_keys  # noqa: E402
+from user_profile import UserProfile  # noqa: E402
 
 
 class CallRules:
@@ -77,7 +70,11 @@ class CallRules:
             return {}
 
     def rule(self, number):
-        return self.rules.get(number_key(number))
+        key = number_key(number)
+        if key in self.rules:
+            return self.rules[key]
+        previous = {self.rules[old] for old in unambiguous_legacy_keys(key, os.path.dirname(self.path)) if old in self.rules}
+        return previous.pop() if len(previous) == 1 else None
 
     def has(self, number):
         return self.rule(number) == AI
@@ -86,6 +83,8 @@ class CallRules:
         key = number_key(number)
         if not key:  # a hidden number has nothing to remember
             return
+        for old in unambiguous_legacy_keys(key, os.path.dirname(self.path)):
+            self.rules.pop(old, None)
         if rule in (AI, ME):
             self.rules[key] = rule
         else:
@@ -141,16 +140,33 @@ def agent_words(reply):
     return lines[-1][:AGENT_REPLY_CHARS] if lines else ""
 
 
+def terminate_call_process(process):
+    """A Windows venv launcher can have a real Python child; stop the whole cancelled request."""
+    if os.name == "nt" and getattr(process, "pid", None):
+        try:
+            result = subprocess.run(["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                                    stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, timeout=5,
+                                    creationflags=subprocess.CREATE_NO_WINDOW)
+            if result.returncode == 0:
+                return
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+    process.kill()
+
+
 class Desk:
     """Everything the note knows and does, apart from drawing it. `line` is the note's own PhoneLine."""
 
-    def __init__(self, line, start_call, devices=None, always=None, settings=None, folder=CALLS, real_devices=None, make_level=CallLevel, cancel_seconds=CANCEL_SECONDS, private=None, eggs=None):
+    def __init__(self, line, start_call, devices=None, always=None, settings=None, folder=CALLS, real_devices=None, make_level=CallLevel, cancel_seconds=CANCEL_SECONDS, private=None, eggs=None, speech_ready=lambda: True):
         self.line = line
         self.private = private or PrivateNumbers()
         self.eggs = eggs or EasterEggs(os.path.dirname(self.private.book_path), folder)
         self.panel = self.eggs.first_open_panel()
         self.panel_style = ""
         self.start_call = start_call  # takes a result file; returns a process getting ready to pick up
+        self.speech_ready = speech_ready
+        self.prepare_requested = False
+        self.ai_requested = False
         self.devices = devices or CallDevices(folder)
         self.always = always or CallRules()
         self.settings = settings or NoteSettings(folder)
@@ -160,6 +176,7 @@ class Desk:
         self.cancel_seconds = cancel_seconds
         self.lock = threading.RLock()
         self.screen = "idle"
+        self.finished_session = None
         self.number = ""
         self.name = ""
         self.route = "iphone"
@@ -187,7 +204,7 @@ class Desk:
     def on_event(self, event):
         status, who, direction = event
         with self.lock:
-            if status == "Incoming" and self.screen == "idle":
+            if status == "Incoming" and self.screen in ("idle", "ending"):
                 self._ring(who)
             elif status == "Talking" and direction == "Incoming" and self.screen == "ringing":
                 # Picked up on the iPhone itself. Nothing here moves it.
@@ -196,8 +213,13 @@ class Desk:
                 self.route = "laptop" if self.line.audio == "LocalDevice" else "iphone"
             elif status in ("Ended", "Closed"):
                 self._back_to_idle()
+            elif status == "RingingStopped" and self.screen in ("ringing", "ai"):
+                live = read_live(self.folder) or {}
+                if live.get("stage") not in ("talking", "handed", "wrapping"):
+                    self._back_to_idle()
 
     def _ring(self, who):
+        self.finished_session = None
         self.name, self.number = split_caller(who)
         self.name = self.name or self.private.name_for(self.number)
         self.notice = ""
@@ -205,41 +227,63 @@ class Desk:
         take_commands(self.folder)  # from a call that was killed
         self.screen = "ringing"
         rule = self.always.decide(self.number, bool(self.private.name_for(self.number)), self.settings.unknown)
+        self.prepare_requested = rule != ME
         if rule != ME:  # Me never answers by itself: nobody may be at the laptop. The iPhone just rings as usual.
             self._get_claude_ready()
         if rule == AI:
             self._pick_up_with_ai()
 
     def _get_claude_ready(self):
+        if not self.speech_ready():
+            self.notice = "Speech is getting ready. You can answer on your iPhone meanwhile."
+            return
+        self.notice = ""
         self.result_file = os.path.join(self.folder, f"answer-{int(time.time())}.result.json")
         self.ready_call = self.start_call(self.result_file)
 
     def _back_to_idle(self):
         self._stop_level()
         self.devices.restore()
-        self._cancel_ready_call()
+        live = read_live(self.folder) or {}
+        if live:
+            self.finished_session = self._session_key(live)
+        self._cancel_ready_call(force=live.get("stage") not in ("talking", "handed", "wrapping"))
         self.screen = "idle"
         self.chosen_ai = False
         self.forwarding = False
         self.route = "iphone"
+        self.prepare_requested = False
+        self.ai_requested = False
+        if self.notice == "Ending call…":
+            self.notice = ""
+
+    @staticmethod
+    def _session_key(live):
+        return live.get("session_id") or (live.get("number", ""), live.get("name", ""))
 
     def _stop_level(self):
         if self.level:
             self.level.close()
             self.level = None
 
-    def _cancel_ready_call(self, call=None):
+    def _cancel_ready_call(self, call=None, force=False):
         call = call or self.ready_call
         self.ready_call = None
-        if call is None or call.poll() is not None or self.chosen_ai:
+        if call is None or call.poll() is not None or (self.chosen_ai and not force):
             return
         send_command(self.folder, "cancel")
         try:
             call.wait(self.cancel_seconds)
         except subprocess.TimeoutExpired:
-            call.kill()
+            terminate_call_process(call)
 
     def _pick_up_with_ai(self):
+        self.ai_requested = True
+        if self.ready_call is None:
+            self._get_claude_ready()
+        if self.ready_call is None:
+            return
+        self.ai_requested = False
         self.chosen_ai = True
         self.ai_since = time.monotonic()
         self.screen = "ai"
@@ -253,6 +297,7 @@ class Desk:
                 return
             if always:
                 self.always.add(self.number)
+            self.prepare_requested = True
             if self.ready_call is None:
                 self._get_claude_ready()
             self._pick_up_with_ai()
@@ -274,6 +319,8 @@ class Desk:
                 return
             self.screen = "me"
             self.route = route
+            self.prepare_requested = False
+            self.ai_requested = False
             call = self.ready_call
         # Not holding the lock: the note keeps drawing while this waits.
         self._cancel_ready_call(call)  # its iphonecall would pull the audio to the laptop
@@ -330,12 +377,20 @@ class Desk:
             self.number, self.name = live.get("number", ""), live.get("name", "")
         self.chosen_ai = False
         self.ready_call = None
+        self.prepare_requested = False
         self.screen = "me"
         self.route = "laptop"
         self.forwarding = True
         self._start_forwarded_level()
 
     def end_call(self):
+        with self.lock:
+            self.prepare_requested = False
+            self.ai_requested = False
+            self.screen = "ending"
+            self.notice = "Ending call…"
+            send_command(self.folder, "hang-up")
+            send_command(self.folder, "cancel")
         self.line.hang_up()
 
     def submit(self, text):
@@ -413,6 +468,8 @@ class Desk:
         if call is None or call.poll() is None:
             return
         self.ready_call = None
+        self.prepare_requested = False
+        self.ai_requested = False
         reason = "Claude couldn't start."
         try:
             with open(self.result_file, encoding="utf-8") as f:
@@ -426,7 +483,18 @@ class Desk:
 
     def state(self):
         with self.lock:
+            if self.screen == "ringing" and self.prepare_requested and self.ready_call is None and self.speech_ready():
+                self._get_claude_ready()
+                if self.ai_requested:
+                    self._pick_up_with_ai()
             live = read_live(self.folder)
+            if live and live.get("stage") == "wrapping" and self.screen in ("ai", "me", "ending"):
+                self._back_to_idle()
+            if live and (self._session_key(live) == self.finished_session or live.get("stage") == "wrapping"):
+                live = None
+            if self.screen == "ending" and not self.line.in_call:
+                self._back_to_idle()
+                live = None
             if self.screen == "ai" and not live and time.monotonic() - self.ai_since > 2:
                 if self.ready_call is not None:
                     self._read_failure()
@@ -461,6 +529,9 @@ class Desk:
                              next_step=last.get("next_step", ""), always=False, flair=last.get("flair", []), pat_facts=last.get("pat_facts", []), poem=last.get("poem", ""),
                              poem_style=last.get("poem_style", ""), poem_pending=last.get("poem_pending", False))
                 self.showing_last = last.get("id")
+            supplied_name, number = split_caller(state.get("number", ""))
+            state["name"] = state.get("name") or self.private.name_for(number) or supplied_name
+            state["number"] = number
             return state
 
     def dismiss(self):
@@ -492,7 +563,11 @@ def watch_line(make_line, desk_box, on_problem):
                 event = line.events.get(timeout=1)
             except queue.Empty:
                 continue
-            desk.on_event(event)
+            try:
+                desk.on_event(event)
+            except Exception as error:
+                on_problem(f"Couldn't update the call screen: {error}"[:NOTICE_CHARS])
+                print(f"[call screen event error: {error}]", flush=True)
             if event[0] == "Closed":
                 break
         line.close()
@@ -502,17 +577,22 @@ def watch_line(make_line, desk_box, on_problem):
 class LateDesk:
     """Lets the page ask for its state before the phone line is up."""
 
-    def __init__(self):
+    def __init__(self, speech=None):
         self.desk = None
         self.notice = ""
+        self.speech = speech
 
     def state(self):
         if self.desk:
             state = self.desk.state()
             if self.notice and not state["notice"]:
                 state["notice"] = self.notice
-            return state
-        return {"screen": "idle", "notice": self.notice}
+        else:
+            state = {"screen": "idle", "notice": self.notice}
+        if self.speech:
+            from speech_service import public_notice
+            state["speech_status"] = public_notice(self.speech.status())
+        return state
 
     def submit(self, text):
         if self.desk:
@@ -538,6 +618,9 @@ def main():
     from note_window import claim_single_copy, show  # slow: loads the window library
     if not claim_single_copy():  # before anything starts watching the line
         return
+    from onboarding import ensure_onboarding
+    if not ensure_onboarding():
+        return
 
     settings = NoteSettings()
     rules = CallRules(CALL_RULES_FILE, ALWAYS_AI_FILE)
@@ -551,11 +634,14 @@ def main():
         return subprocess.Popen([python, os.path.join(HERE, "cicero.py"), "answer", "--wait-for-go", "--lang", settings.language, "--result-file", result_file],
                                 stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT, cwd=HERE, creationflags=subprocess.CREATE_NO_WINDOW)
 
-    late = LateDesk()
+    from speech_service import ResidentSpeech
+    speech = ResidentSpeech()
+    speech.start()
+    late = LateDesk(speech)
 
     def make_line():
         import cicero  # slow: loads the audio libraries, so the window opens first
-        return cicero.PhoneLine(command=("iphonecall", "--stay-on-phone"), log_path=os.path.join(CALLS, "note-phone.log"))
+        return cicero.PhoneLine(command=cicero.phone_command(stay_on_phone=True), log_path=os.path.join(CALLS, "note-phone.log"))
 
     def desk_for(line):
         import cicero
@@ -565,7 +651,7 @@ def main():
             return (cicero.sd.query_devices(speaker)["name"] if speaker is not None else None,
                     cicero.sd.query_devices(microphone)["name"] if microphone is not None else None)
 
-        late.desk = Desk(line, start_call, always=rules, settings=settings, private=private, real_devices=real_names)
+        late.desk = Desk(line, start_call, always=rules, settings=settings, private=private, real_devices=real_names, speech_ready=speech.is_ready)
         return late.desk
 
     def on_problem(text):
@@ -573,7 +659,10 @@ def main():
 
     os.makedirs(CALLS, exist_ok=True)
     threading.Thread(target=watch_line, args=(make_line, desk_for, on_problem), daemon=True).start()
-    show(late, on_quit=lambda: late.desk and late.desk.quit(), options=types.SimpleNamespace(settings=settings, rules=rules, private=private, eggs=EasterEggs()))
+    try:
+        show(late, on_quit=lambda: late.desk and late.desk.quit(), options=types.SimpleNamespace(settings=settings, rules=rules, private=private, eggs=EasterEggs()))
+    finally:
+        speech.close()
 
 
 if __name__ == "__main__":

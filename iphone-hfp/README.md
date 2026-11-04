@@ -27,7 +27,7 @@ Both talk to the iPhone over Bluetooth hands-free. Use one at a time: only one p
 
 ### Every time
 
-If the iPhone isn't connected to the laptop, open **Settings > Bluetooth** on the iPhone and tap **XITS**. Then:
+If the iPhone isn't connected to the laptop, open **Settings > Bluetooth** on the iPhone and tap your laptop's name. Then:
 
 ```powershell
 iphonecall
@@ -44,7 +44,10 @@ iphonecall
 | `q` | quit (a call in progress continues on the phone) |
 
 Other forms: `iphonecall dial +998XXXXXXXXX`, `iphonecall status`, `iphonecall list`,
-`iphonecall unregister`, and `--device <name>` to pick another paired phone.
+`iphonecall unregister`, and `--device <name>` or `--device-id <id>` to pick a paired phone.
+Without a selection, exactly one paired hands-free phone must exist. Its name does not need to contain "iPhone".
+Several matches produce an error rather than picking the first phone. `iphonecall list-json` returns names and stable
+device IDs for Pat's phone settings; listing never dials or changes audio routing.
 
 **No terminal by itself:** it has no console, so the window Windows starts for each call stays out of sight. Running `iphonecall` by hand opens a terminal for it.
 

@@ -120,8 +120,13 @@ class CallDevices:
         try:
             with open(self.path, encoding="utf-8") as f:
                 saved = json.load(f)
+        except FileNotFoundError:
+            return []  # The call process or note already restored these defaults.
         except ValueError as error:
-            os.remove(self.path)
+            try:
+                os.remove(self.path)
+            except FileNotFoundError:
+                pass
             return [f"Couldn't read the saved audio defaults: {error}"]
         problems = []
         for ids in saved.values():
@@ -131,7 +136,10 @@ class CallDevices:
                         self.system.set_default(device_id, role)
                     except OSError as error:  # such as a headset that has since been unplugged
                         problems.append(f"Couldn't restore a default audio device: {error}")
-        os.remove(self.path)
+        try:
+            os.remove(self.path)
+        except FileNotFoundError:
+            pass
         return problems
 
 

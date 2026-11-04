@@ -211,7 +211,7 @@ class Calls(unittest.TestCase):
         result = self.start(number="Рустам", brief={"goal": "Find out the hours.", "confidence": "confirmed"})
         self.assertEqual((result["status"], result["calling"]), ("running", "Рустам"))
         used = self.args_used(result["call_id"])
-        self.assertIn("+998 90 000 00 05", used)
+        self.assertIn("+998900000005", used)
         with open(phone_mcp._path(result["call_id"], "brief.json"), encoding="utf-8") as f:
             self.assertIn("Рустам", f.read())
 
@@ -219,7 +219,7 @@ class Calls(unittest.TestCase):
         label = phone_mcp.private.protect("+998 90 000 00 06")
         result = self.start(number=label)
         self.assertEqual(result["calling"], label)
-        self.assertIn("+998 90 000 00 06", self.args_used(result["call_id"]))
+        self.assertIn("+998900000006", self.args_used(result["call_id"]))
 
     def test_an_unknown_contact_or_placeholder_is_refused_and_nothing_starts(self):
         for target in ("Nobody", "#7"):
@@ -275,14 +275,32 @@ class Connection(unittest.TestCase):
         from mcp.client.stdio import StdioServerParameters, stdio_client
 
         async def session_results():
-            params = StdioServerParameters(command=sys.executable, args=[os.path.join(HERE, "phone_mcp.py")], cwd=HERE)
+            # An integration test must never rely on a real contact being absent to avoid dialing.
+            folder = tempfile.mkdtemp()
+            bootstrap = ("import sys; import phone_mcp; from private_numbers import PrivateNumbers; "
+                         "from easter_eggs import EasterEggs; "
+                         "phone_mcp.CALLS=sys.argv[1]; phone_mcp.private=PrivateNumbers(sys.argv[1]); "
+                         "phone_mcp.eggs=EasterEggs(sys.argv[1],sys.argv[1]); "
+                         "phone_mcp.COMMAND=[sys.executable,'-c','raise SystemExit(0)']; phone_mcp.mcp.run()")
+            params = StdioServerParameters(command=sys.executable, args=["-c", bootstrap, folder], cwd=HERE,
+                                           env={"PAT_PROFILE_PATH": os.environ["PAT_PROFILE_PATH"],
+                                                "PAT_SPEECH_DESCRIPTOR": os.environ.get("PAT_SPEECH_DESCRIPTOR", os.path.join(folder, "speech-service.json")),
+                                                "PYTHONDONTWRITEBYTECODE": "1", "TEMP": tempfile.gettempdir(), "TMP": tempfile.gettempdir()})
             with anyio.fail_after(30):
                 async with stdio_client(params) as (read, write):
                     async with ClientSession(read, write) as session:
                         init = await session.initialize()
                         tools = await session.list_tools()
-                        # Must stay a number that gets refused: this runs the real command, so a valid one would dial.
+                        # This contact is absent from the test book, and even valid input uses a fake worker.
                         refused = await session.call_tool("place_call", {"number": "Mom", "goal": "test", "confidence": "guess", "name": "Рустам"})
+                        from user_profile import UserProfile
+                        profile = UserProfile()
+                        profile.save(accepted_terms="old-test-terms")
+                        gated = await session.call_tool("list_contacts", {})
+                        self.assertIn("setup_required", gated.content[0].text)
+                        profile.accept_terms()
+                        ready = await session.call_tool("list_contacts", {})
+                        self.assertNotIn("setup_required", ready.content[0].text)
                         return init, tools, refused
 
         init, listed, refused = anyio.run(session_results)
@@ -291,11 +309,13 @@ class Connection(unittest.TestCase):
         self.assertEqual(set(tools), {"place_call", "get_call", "end_call", "take_over", "contact_notes", "list_contacts"})
         schema = tools["place_call"].input_schema
         self.assertEqual(set(schema["required"]), {"number", "goal", "confidence"})
-        for name in ("voice", "name", "company", "role", "confidence", "confirm_question", "who_can_answer", "need_from_them", "context", "may_share", "must_not", "done_when", "if_stuck", "language"):
+        for name in ("voice", "name", "company", "role", "confidence", "confirm_question", "who_can_answer", "need_from_them", "context", "may_share", "must_not", "done_when", "if_stuck", "language", "time_zone", "date_format"):
             self.assertTrue(schema["properties"][name].get("description"), name)
         self.assertIn("refused", refused.content[0].text)
         self.assertIn("full phone number", refused.content[0].text)
 
+
+from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

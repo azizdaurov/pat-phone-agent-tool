@@ -2,3 +2,6 @@
 PyAudioWPatch==0.2.12.8
 mcp==2.3.0
 PySide6==6.10.0
+phonenumberslite==9.0.42
+tzlocal==5.4.5
+tzdata==2026.6

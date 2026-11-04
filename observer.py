@@ -35,10 +35,11 @@ def _first_json(reply):
 class Observer:
     """ask sends one message to a kept-open Sonnet, so each review sends only the lines it hasn't seen."""
 
-    def __init__(self, ask, spoken, owner="Aziz"):
+    def __init__(self, ask, spoken, owner=None):
         self.ask = ask
         self.spoken = spoken
-        self.owner = owner
+        from user_profile import UserProfile
+        self.owner = owner or UserProfile().name or "the owner"
         self.lock = threading.Lock()
         self.sent = 0
         self.interventions = 0

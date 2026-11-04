@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Calls;
 
-const string Usage = "usage: iphonecall [shell | dial <number> | status | list | unregister] [--device <name>] [--stay-on-phone]";
+const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | unregister] [--device <name> | --device-id <id>] [--stay-on-phone]";
 const string Help = "commands: d <number> dial | a answer | h hang up/reject | m mute on/off |\n" +
                     "          l audio on laptop | p audio on phone | s status | q quit";
 
@@ -18,17 +18,19 @@ if (!Terminal.HasPipes())
     if (!openedByWindows) Terminal.Open();
 }
 
-string deviceHint = "iPhone";
+string? deviceHint = null;
+string? deviceId = null;
 bool stayOnPhone = false;
 var rest = new List<string>();
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--device" && i + 1 < args.Length) deviceHint = args[++i];
+    else if (args[i] == "--device-id" && i + 1 < args.Length) deviceId = args[++i];
     else if (args[i] == "--stay-on-phone") stayOnPhone = true;
     else rest.Add(args[i]);
 }
 string action = rest.Count > 0 ? rest[0].ToLowerInvariant() : "shell";
-if (action is not ("shell" or "dial" or "status" or "list" or "unregister"))
+if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "unregister"))
 {
     Console.WriteLine(Usage);
     return action is "help" or "-h" or "--help" ? 0 : 1;
@@ -53,11 +55,16 @@ try
         await HandsFree.ListAsync();
         return 0;
     }
+    if (action == "list-json")
+    {
+        await HandsFree.ListJsonAsync();
+        return 0;
+    }
 
-    var info = await HandsFree.FindAsync(deviceHint);
+    var info = await HandsFree.FindAsync(deviceHint, deviceId);
     if (info == null)
     {
-        Console.WriteLine($"No paired hands-free phone matching \"{deviceHint}\". Try: iphonecall list");
+        Console.WriteLine("No paired hands-free phone matches the selection. Pair your phone or choose it in Pat's settings. Try: iphonecall list");
         return 1;
     }
     if (action == "unregister")
@@ -77,6 +84,11 @@ try
     if (action == "dial") session.Dial(rest[1]);
     await RunShellAsync(session);
     return 0;
+}
+catch (InvalidOperationException e)
+{
+    Console.WriteLine($"error: {e.Message}");
+    return 1;
 }
 catch (TimeoutException e)
 {

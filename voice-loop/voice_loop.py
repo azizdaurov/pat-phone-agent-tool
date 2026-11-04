@@ -1,4 +1,4 @@
-"""Push-to-talk voice chat with Claude Haiku 4.5 on your Claude plan, in English or Russian.
+"""Push-to-talk voice chat with Claude Haiku 5.5 on your Claude plan, in English or Russian.
 
 English uses Moonshine and Pocket TTS. Russian uses onnx-asr (GigaAM) and Piper, voice irina or ruslan.
 Hold the talk key, speak, release. Hold it again to stop a reply. Ctrl+C quits.
@@ -25,7 +25,7 @@ import time
 import numpy as np
 import sounddevice as sd
 
-MODEL = "claude-haiku-4-5"
+MODEL = "claude-haiku-5-5"
 FALLBACK_MODEL = "claude-haiku-5-5"
 SYSTEM_PROMPTS = {
     "en": "You are a voice assistant. Reply in one or two short spoken sentences. No lists, no markdown.",
@@ -106,10 +106,13 @@ class Brain:
         env["CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC"] = "1"
         args = [
             self.cli, "-p", "--input-format", "stream-json", "--output-format", "stream-json", "--verbose",
-            "--include-partial-messages", "--model", self.model, "--fallback-model", FALLBACK_MODEL,
+            "--include-partial-messages", "--model", self.model, "--fallback-model",
+            "claude-haiku-4-5" if self.model == FALLBACK_MODEL else FALLBACK_MODEL,
             "--tools", "", "--system-prompt", self.system_prompt, "--no-session-persistence",
             "--strict-mcp-config", "--setting-sources", "", "--disable-slash-commands",
         ]
+        if self.model == "claude-haiku-5-5":
+            args += ["--effort", "low"]
         self.proc = subprocess.Popen(
             args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             env=env, cwd=self.workdir, text=True, encoding="utf-8", errors="replace", bufsize=1,
@@ -180,9 +183,9 @@ class PocketVoice:
     warm_text = "Ready."
     clause_chars = None
 
-    def __init__(self, language=TTS_LANGUAGE, voice=TTS_VOICE):
+    def __init__(self, language=TTS_LANGUAGE, voice=TTS_VOICE, model=None):
         from pocket_tts import TTSModel
-        self.model = TTSModel.load_model(language=language)
+        self.model = model if model is not None else TTSModel.load_model(language=language)
         self.voice = self.model.get_state_for_audio_prompt(voice)
         self.sample_rate = self.model.sample_rate
 
@@ -231,8 +234,9 @@ class Mouth:
         self.underruns = 0
         self.thread = threading.Thread(target=self._run, daemon=True)
         self.thread.start()
-        for _ in voice.stream(voice.warm_text, threading.Event()):
-            pass
+        if not getattr(voice, "already_warm", False):
+            for _ in voice.stream(voice.warm_text, threading.Event()):
+                pass
 
     def say(self, text, token, on_first_audio=None):
         self.queue.put((text, token, on_first_audio))

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Calls;
 using Windows.Devices.Enumeration;
+using System.Text.Json;
 
 // Finds the paired phone and brings up Windows' hands-free link to it. The order of the steps and
 // the manifest entries both matter; read "Things that matter" in ..\README.md before changing them.
@@ -21,8 +22,11 @@ static class HandsFree
         }
     }
 
-    public static async Task<DeviceInformation?> FindAsync(string nameHint) =>
-        (await AllAsync()).FirstOrDefault(d => d.Name.Contains(nameHint, StringComparison.OrdinalIgnoreCase));
+    public static async Task ListJsonAsync() =>
+        Console.WriteLine(JsonSerializer.Serialize((await AllAsync()).Select(d => new { id = d.Id, name = d.Name })));
+
+    public static async Task<DeviceInformation?> FindAsync(string? nameHint = null, string? deviceId = null) =>
+        PhoneSelection.Choose(await AllAsync(), d => d.Name, d => d.Id, nameHint, deviceId);
 
     public static void Unregister(DeviceInformation info) => PhoneLineTransportDevice.FromId(info.Id).UnregisterApp();
 

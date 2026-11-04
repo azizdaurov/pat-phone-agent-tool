@@ -1,12 +1,67 @@
 # Pat, the Phone Agent Tool
 
-Claude speaks on your iPhone calls. It hears the other person, thinks with Haiku 4.5 on your Claude plan,
+Claude speaks on your iPhone calls. It hears the other person, thinks with Haiku 5.5 on your Claude plan,
 and answers aloud. This repository has everything it needs:
 
 - [`voice-loop`](voice-loop): speech recognition, Claude and speech. Pat imports `voice_loop.py`.
 - [`iphonecall`](iphone-hfp/README.md): the call itself. Pat runs it and drives its shell over pipes.
 
 **Status: two real test calls so far, both rough.** See "Not proven yet".
+
+## Legal notice
+
+Pat places phone calls with an AI voice. **You are the caller.** You alone are responsible for following the laws that apply to
+your calls, including, where they apply, the US Telephone Consumer Protection Act and the FCC's ruling that AI-generated voices
+are artificial voices, Do Not Call lists, and the call-recording and consent laws of every country and state involved. Get the
+consent the law requires before you call. Never use Pat to deceive anyone about who is calling, and do not use it for sales,
+bulk calls, harassment or emergencies. Pat's built-in limits reduce misuse but do not make a call lawful or consented. AI and
+speech recognition make mistakes. Pat is provided "as is", without warranty and without liability, as the Apache License says.
+[TERMS.md](TERMS.md) is the agreement for using Pat as Oasis Team provides it.
+
+## License
+
+Pat's source code is licensed under the [Apache License 2.0](LICENSE); see also [NOTICE](NOTICE). The names "Pat" and
+"Oasis Team" are not licensed: see [TRADEMARK.md](TRADEMARK.md). A modified version or fork is its maker's work, not Oasis Team's.
+The speech models, voices and audio drivers that Pat downloads or installs each have their own licenses.
+
+## First run and personal settings
+
+Pat first asks what it should call you. It then shows a Terms of Use window. The checkbox starts unchecked and
+**Agree and open Pat** stays disabled until you check it. Cancel closes setup before any phone watcher or call starts.
+The note, command-line calling and MCP phone tools require this setup. Hanging up or taking over an existing call stays available.
+
+`TERMS.md` contains the supplied Terms of Use, shown as formatted text in that window. Replacing its contents requires
+users to accept the new text on their next launch. This checkbox records acceptance; it does not claim to verify that someone read it.
+Your name and acceptance record are saved locally in `contacts/user-profile.json`, which is ignored by Git. No email or Git identity is changed.
+
+Right-click the tray icon and choose **Your name, region and phone...** to change:
+
+- Your name, used by outgoing and incoming AI calls. There is no default owner name.
+- The country for local numbers. With none selected, enter full international numbers beginning with `+` and the country code.
+- Your IANA time zone and the date format for reports. ISO `YYYY-MM-DD` is the default; `DD-MM-YYYY` and `MM/DD/YYYY` are available.
+- Which paired phone to use. **Find paired phones** lists device names and saves the selected device's ID, so renaming it does not break selection.
+
+Automatic phone selection works only when one hands-free phone is paired, regardless of its name. With several phones,
+choose one explicitly rather than letting Pat guess. After updating this version, rebuild the phone helper with `setup.ps1`.
+
+## Speech stays ready while Pat is open
+
+After first-run setup, the note starts a separate local speech process. It loads English and Russian recognition,
+the supported voices and speech detection once, then keeps their weights in memory. English voices share one TTS model.
+Call processes reuse these models through authenticated local Windows pipes; they do not load another copy for each call.
+The resident process opens no microphone or speaker and makes no phone calls.
+
+The prompt bar shows **Speech is getting ready…** during the one-time startup. The message disappears when speech is ready.
+Start Pat before you need it and wait for the message to disappear. Warmup depends on the computer and can take a couple of minutes.
+While it loads, you can answer on the iPhone. An AI request is kept only while that same call is still ringing;
+expired or cancelled requests cannot wait for and pick up a later call.
+
+Hiding the note or closing it to the tray keeps the models loaded. **Quit** releases them once an active AI call has
+finished, so closing the note does not cut off its speech. Direct command-line calls without the note keep the standalone
+loading behavior. More RAM is used while the note is running, in exchange for avoiding model startup on every call.
+
+`calls/speech-service.log` records loading failures; the private service descriptor in `calls/` is ignored by Git.
+The offline regression suite in `test_speech_service.py` uses fake models and cannot open audio devices or place calls.
 
 ## How the sound travels
 
@@ -130,7 +185,12 @@ rings or dials: `.venv\Scripts\python.exe evals\note_demo.py`.
 
 ## Real dates
 
-Notes, reports and the sticky note write real dates such as 4-11-2026, never "tomorrow", so a note from yesterday can't be misread today. The models get a table of the coming days, and `real_dates.py` catches any relative word they still write. A transcript stays word for word, with the time of each line.
+Notes, reports and the sticky note use complete dates in your chosen format, never "tomorrow", so older notes stay clear.
+The calendar uses the saved IANA time zone, including daylight-saving changes. For someone in another zone, supply
+`time_zone` in the phone tool or brief, or use `--time-zone America/New_York` on the command line. Use `date_format`
+or `--date-format iso|dmy|mdy` to override report formatting for that call. The models receive the local date, time,
+UTC offset and coming days in the chosen zone, and are told to clarify a different zone if the other person means one.
+`real_dates.py` replaces leftover relative dates. A transcript stays word for word.
 
 ## Keeping numbers private
 
@@ -208,14 +268,17 @@ When the brief names someone, Haiku starts the call knowing only who to check fo
 message after it marks the person confirmed, so it has nothing to reveal to the wrong person. Sonnet, which has the whole
 brief, doesn't read the call until then either.
 
+Pat passes the opening it actually spoke to Haiku with the first caller response. A clear yes to that opening's identity
+question moves straight to the task. Confirmed details are kept without another confirmation at the end.
+
 ```
-Pick-up ─► "Это виртуальный ассистент Азиза. Скажите, пожалуйста, это Рустам?"
+Pick-up ─► "Я виртуальный ассистент. Мой пользователь — [имя]. Скажите, пожалуйста, это Рустам?"
               ├─ Yes ───────► task
               ├─ Not them ──► apologize, "Рустам рядом?"
               │                  ├─ Yes ► wait up to 60 s, ask again
               │                  └─ No  ► "Мы перезвоним", goodbye
               ├─ Wrong number ► apologize, goodbye
-              ├─ "Why?" ────► "calling for Aziz", ask again
+              ├─ "Why?" ────► "calling for [your name]", ask again
               └─ Unclear ───► ask again, then end
 ```
 
@@ -250,22 +313,31 @@ The brief, which the tool's own descriptions explain to the agent:
 | `must_not` | | Limits on top of the built-in ones |
 | `done_when`, `if_stuck` | | When to finish, and what to do if stuck |
 | `language` | | `ru` or `en` |
+| `time_zone` | | Optional IANA zone for the person being called; otherwise your saved zone |
+| `date_format` | | Optional `iso`, `dmy` or `mdy`; otherwise your saved report format |
 
 The result also has `reached`, set by code: `confirmed`, `not_available`, `wrong_number` or `unclear`. The report back: `outcome` (done, partial or failed), `answers` (each with a short `label` and a `confirmed` flag), `summary`,
 `important_details` and `follow_up`. `get_call` also returns `chat_summary`, a framed card drawn by `call_card.py` from that
 report, which the agent shows as it is in a code block. Failed and unanswered calls get a card too.
 
-**An agent can dial any full phone number. This is the development setting.** Claude Code's permission prompt is the only
-check, and auto mode may not show one. The tool only refuses anything under 9 digits, which keeps out emergency numbers and
-carrier codes like `*100#`. Planned for production: a Windows pop-up for each new number, with approved numbers remembered
-so they aren't asked about again.
+**After first-run setup, an agent can dial full phone numbers.** Terms acceptance is a setup gate, not approval of each call.
+Claude Code's permission prompt may ask about a call; auto mode may not. Phone numbers are parsed with country numbering
+metadata and passed to the dialer as `+` followed by digits. Valid short international numbers are supported. Emergency
+and service-code restrictions remain. The privacy filter also covers short numbers and text such as `Call:+29022023`.
 
 By hand, `--brief-file brief.json` takes the same fields, and `--no-observer` runs a call without Sonnet.
 
 ## Memory for each number
 
-`contacts/` holds one Markdown file per number, ignored by git. The file is named after the number's last 9 digits, so
-`+998 90...`, `998 90...` and `90...` share one file. Hidden numbers and `--no-memory` calls read and save nothing.
+`contacts/` holds one Markdown file per full international number, ignored by git. The filename includes the country code,
+so different countries or area codes never share notes merely because their last nine digits match. Formatting differences
+such as spaces or parentheses are normalized. Local numbers require the appropriate country in settings.
+Hidden numbers and `--no-memory` calls read and save nothing.
+
+Old nine-digit notes and answer rules are carried over only when the saved contact/placeholder book identifies a single
+full number for that old key. The original notes file is kept. Ambiguous old records remain untouched and are not assigned
+to either person; inspect them before moving them to full-number filenames. Notes store their date format so older dates
+are not silently reinterpreted after a preference change.
 
 ```
 calls: 3
@@ -307,8 +379,7 @@ Every attempt goes in an `## Attempts` list that Pat writes itself, keeping the 
 
 ## What Claude will and won't do
 
-- It always opens with a fixed line saying it is not a person, and whose assistant it is, such as "Здравствуйте, это виртуальный ассистент
-  Азиза. Скажите, пожалуйста, это Рустам?". That line isn't written by the model, no option removes it, and talking over it
+- It always opens with a fixed line saying it is not a person, and whose assistant it is, such as "Hello, this is [your name]'s AI assistant.". That line isn't written by the model, no option removes it, and talking over it
   doesn't cut it off.
 - Its instructions say to never claim to be human, and not to agree to payments, contracts or appointments or give out
   personal details unless your brief says so. These rely on the model following them, so write briefs with that in mind.
@@ -360,6 +431,8 @@ Make the first test call to a second phone of your own, or to someone who knows 
   rounds down to a full word, so it errs early: Claude may repeat a few words but shouldn't skip any. The transcript gets a
   `(cut off, heard only: ...)` line, and Haiku is told before its next reply. Earlier lines in the transcript stay as
   written, so Sonnet and the notes rely on that line to know what went unheard. The phone network's delay hasn't been measured.
+  If a complete detail was heard and only a short confirmation tag was cut off, a clear answer counts and Pat moves on.
+  If the read-back itself was not heard in full, a bare yes/no cannot confirm it; Pat repeats the missing part.
 - Silence during the task: after 8 s with nobody talking, Claude checks they're still there, at most twice in a row. Speech that
   recognition can't turn into words also gets a reply, at most twice in a row. Each transcript logs how long each reply took
   to start, and the result has them as `reply_delays`.
@@ -391,4 +464,9 @@ test_*.py        tests that need no call and no cable
 requirements.txt everything to install, including voice-loop's
 voice-loop/      speech recognition, Claude and speech
 iphone-hfp/      iphonecall, and the older Python dialer
+LICENSE, NOTICE  Apache License 2.0 for the code
+TERMS.md         the Terms of Use shown at first run
+TRADEMARK.md     what the names Pat and Oasis Team may be used for
 ```
+
+Offline phone-selection checks: `dotnet run --project evals/phone-selection/phone-selection.csproj`. These checks use fake device names and never connect to a phone.

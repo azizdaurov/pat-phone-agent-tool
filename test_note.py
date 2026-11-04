@@ -245,6 +245,7 @@ class AnsweringWithAI(DeskCase):
         self.ring()
         self.desk.answer_ai(always=True)
         self.commands()
+        self.set_live(stage="talking")
         self.desk.on_event(("Ended", "", ""))
         self.assertEqual(self.commands(), [], "a call Claude took isn't told to step aside")
         fresh = note.CallRules(self.always.path)
@@ -483,6 +484,8 @@ class Settings(unittest.TestCase):
         old = os.path.join(folder, "always_ai.json")
         with open(old, "w", encoding="utf-8") as f:
             json.dump(["900000001"], f)
+        with open(os.path.join(folder, "book.json"), "w", encoding="utf-8") as f:
+            json.dump({"Known contact": "+998900000001"}, f)
         rules = note.CallRules(os.path.join(folder, "rules.json"), old)
         self.assertTrue(rules.has("+998 90 000 00 01"))
         rules.set("+998900000002", "me")
@@ -557,6 +560,22 @@ class TrayHelpers(unittest.TestCase):
 class AfterACall(DeskCase):
     LONG = "Alex confirmed the meeting at 11:00 at the tower, and asked for a suit. " * 3
 
+    def test_old_summary_with_blank_name_resolves_the_saved_contact(self):
+        self.desk.private.add_contact("Alex", "+998900000001")
+        live_call.write_last_call(self.folder, id="blank-name", number="+998900000001", name="", summary="Finished")
+        self.assertEqual(self.desk.state()["name"], "Alex")
+
+    def test_phone_supplied_name_is_kept_when_pat_has_no_saved_contact(self):
+        live_call.write_last_call(self.folder, id="phone-name", number="Alex (+1 (415) 555-0101)", name="", summary="Finished")
+        state = self.desk.state()
+        self.assertEqual(state["name"], "Alex")
+        self.assertEqual(state["number"], "+1 (415) 555-0101")
+
+    def test_running_call_with_blank_name_resolves_the_saved_contact(self):
+        self.desk.private.add_contact("Alex", "+998900000001")
+        self.set_live(stage="talking", number="+998900000001", name="")
+        self.assertEqual(self.desk.state()["name"], "Alex")
+
     def finish_a_call(self, call_id="call-1"):
         live_call.write_last_call(self.folder, id=call_id, number="+998900000001", name="Alex", summary=self.LONG,
                                   next_step="Bring a suit.", facts=[{"label": "Time", "value": "11:00"}])
@@ -589,10 +608,10 @@ class AfterACall(DeskCase):
         self.desk.on_event(("Ended", "", ""))
         self.assertEqual(self.desk.state()["screen"], "done")
 
-    def test_not_shown_while_the_call_is_still_wrapping_up(self):
+    def test_finished_summary_can_show_while_worker_finishes_cleanup(self):
         self.finish_a_call()
         self.set_live(stage="wrapping", number="+998900000003")
-        self.assertEqual(self.desk.state()["screen"], "ai")
+        self.assertEqual(self.desk.state()["screen"], "done")
 
 
 class Sound(unittest.TestCase):
@@ -914,6 +933,8 @@ class Names(unittest.TestCase):
                               ("Ali (2) (+99890)", ("Ali (2)", "+99890")), ("", ("", "")), (None, ("", ""))):
             self.assertEqual(note.split_caller(who), expected)
 
+
+from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

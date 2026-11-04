@@ -477,6 +477,8 @@ def _settings_menu(menu, window, options):
     menu.addAction(QAction("Zoom out", menu, triggered=lambda: zoom_by(-1)))
     menu.addSeparator()
     window.submenus = {}
+    from onboarding import ProfileDialog
+    menu.addAction(QAction("Your name, region and phone...", menu, triggered=lambda: ProfileDialog(window).exec()))
     for title, choices, name in (("Incoming calls speak", LANGUAGES, "language"), ("Unknown numbers", FOR_UNKNOWN, "unknown"),
                                  ("English voice", english_voices(), "voice_en"), ("Russian voice", RUSSIAN_VOICES, "voice_ru")):
         window.submenus[title] = _choices(menu, title, choices, getattr(settings, name), lambda value, name=name: settings.change(name, value))

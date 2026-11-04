@@ -11,6 +11,13 @@ DIGITS = "900000001"
 
 
 class Contacts(unittest.TestCase):
+    def test_display_name_uses_the_saved_name_even_if_the_phone_supplies_an_alias(self):
+        self.assertEqual(self.private.display_name("Different label (+998900000001)"), "Рустам")
+
+    def test_caller_labels_do_not_break_parenthesized_area_codes(self):
+        from private_numbers import split_caller
+        self.assertEqual(split_caller("Alex (+1 (415) 555-0101)"), ("Alex", "+1 (415) 555-0101"))
+
     def setUp(self):
         self.private = PrivateNumbers(tempfile.mkdtemp())
         self.private.add_contact("Рустам", NUMBER)
@@ -18,7 +25,7 @@ class Contacts(unittest.TestCase):
         self.private.add_contact("Rustam Aliyev", "+998 90 000 00 03")
 
     def test_name_gives_the_number_in_any_case(self):
-        self.assertEqual(self.private.resolve("рустам"), (NUMBER, "Рустам"))
+        self.assertEqual(self.private.resolve("рустам"), ("+998900000001", "Рустам"))
 
     def test_part_of_a_name_works_if_only_one_fits(self):
         self.assertEqual(self.private.resolve("Karimov")[1], "Rustam Karimov")
@@ -63,7 +70,7 @@ class TypedNumbers(unittest.TestCase):
 
     def test_a_placeholder_gives_the_number_back(self):
         label = self.private.protect("+998 90 123 45 67")
-        self.assertEqual(self.private.resolve(label), ("+998 90 123 45 67", ""))
+        self.assertEqual(self.private.resolve(label), ("+998901234567", ""))
         self.assertEqual(self.private.reveal(f"Calling {label} now"), "Calling +998 90 123 45 67 now")
 
     def test_two_numbers_in_one_message(self):
@@ -112,6 +119,8 @@ class Results(unittest.TestCase):
         self.private.add_contact("Рустам", "+998 90 000 00 02")
         self.assertEqual(self.private.hide("Dialing +998900000002"), "Dialing Рустам")
 
+
+from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

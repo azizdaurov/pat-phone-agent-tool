@@ -5,6 +5,7 @@ import math
 import os
 import threading
 import time
+import uuid
 
 LIVE_NAME = "live.json"
 LAST_CALL_NAME = "last-call.json"
@@ -125,7 +126,7 @@ class LiveCall:
 
     def __init__(self, folder, keep_commands=False, **fields):
         self.folder = folder
-        self.fields = fields
+        self.fields = {"session_id": uuid.uuid4().hex, **fields}
         self.sources = {}  # field name -> function giving its current value
         self.handlers = {}
         self.closed = threading.Event()

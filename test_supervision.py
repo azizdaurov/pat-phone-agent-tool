@@ -526,8 +526,8 @@ class IdentityBrief(unittest.TestCase):
         self.assertEqual(CallBrief.from_dict({**TARGET_BRIEF, "confirm_question": "Это Рустам Каримов?"}).check_question(), "Это Рустам Каримов?")
 
     def test_opening_says_ai_and_whose(self):
-        for language, words in (("ru", "виртуальный ассистент Азиза"), ("en", "Aziz's AI assistant")):
-            self.assertIn(words, cicero.OPENINGS["dial"][language].format(owner="Aziz", owner_ru="Азиза"))
+        for language, words in (("ru", "виртуальный ассистент. Мой пользователь — Азиз"), ("en", "Aziz's AI assistant")):
+            self.assertIn(words, cicero.OPENINGS["dial"][language].format(owner="Aziz", owner_ru="Азиз"))
 
 
 def checked_call(brain, observer=None):
@@ -735,6 +735,8 @@ class Report(unittest.TestCase):
     def test_report_failure_is_none(self):
         self.assertIsNone(Observer(lambda text: "nonsense", []).final_report("goodbye"))
 
+
+from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

@@ -40,6 +40,7 @@ form{display:flex;align-items:center;gap:6px;padding:0 20px 0 2px}
 #prompt:focus{outline:none;background:rgba(243,233,211,.75)}
 #send{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:50%}
 #notice{margin:6px 8px 2px;font-size:12px;font-style:italic;line-height:1.3;color:var(--muted)}
+#speech-status{margin:3px 8px 2px;font-size:11px;line-height:1.3;color:var(--muted)}
 .ringing{margin-bottom:7px;font-size:12px;font-style:italic;color:var(--muted);pointer-events:none}
 #s-header{padding-right:58px}
 h1{margin:0;font-size:19px;font-weight:700;line-height:1.2;pointer-events:none}
@@ -111,10 +112,11 @@ pre{margin:0 0 7px;font:12px/1.15 Consolas,'Courier New',monospace;color:var(--m
 
     <section id="s-idle">
       <form id="form">
-        <label for="prompt" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">What should Claude do?</label>
-        <input id="prompt" type="text" placeholder="Ask Claude to call someone" autocomplete="off">
+        <label for="prompt" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">What should Pat do?</label>
+        <input id="prompt" type="text" placeholder="Ask Pat to call someone" autocomplete="off">
         <button id="send" class="dark" type="submit" aria-label="Send to Claude"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"></path></svg></button>
       </form>
+      <p id="speech-status" role="status" hidden></p>
     </section>
     <p id="notice" hidden></p>
     <section id="panel" aria-live="polite" hidden>
@@ -267,12 +269,16 @@ function render(state) {
   $('ringing').hidden = screen !== 'ringing';
   $('s-ringing').hidden = screen !== 'ringing';
   $('s-ai').hidden = screen !== 'ai';
-  $('s-me').hidden = screen !== 'me';
+  $('s-me').hidden = screen !== 'me' && screen !== 'ending';
+  $('route-row').hidden = screen === 'ending';
+  $('end').textContent = screen === 'ending' ? 'End call again' : 'End call';
   $('s-done').hidden = screen !== 'done';
   $('name').textContent = state.name || 'Unknown caller';
   $('number').textContent = state.always ? `${state.number} · Always AI` : state.number;
   $('notice').textContent = state.notice || '';
   $('notice').hidden = !state.notice;
+  $('speech-status').textContent = state.speech_status || '';
+  $('speech-status').hidden = !state.speech_status;
   if (screen !== 'ringing' && menuOpen) setMenu(false);
 
   const onLaptop = screen === 'me' && state.route === 'laptop';

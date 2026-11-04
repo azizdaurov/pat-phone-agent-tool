@@ -13,6 +13,8 @@ voice-loop/models/
 iphone-hfp/iphonecall/bin/
 iphone-hfp/iphonecall/obj/
 iphone-hfp/iphonecall/pkg/
+evals/phone-selection/bin/
+evals/phone-selection/obj/
 
 # Made by running things
 fisheggs/pat_fact_00#fishegg.png

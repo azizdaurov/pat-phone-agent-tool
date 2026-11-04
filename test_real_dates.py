@@ -94,5 +94,7 @@ class WhereTheyAreKept(unittest.TestCase):
         notes.close()
 
 
+from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+
 if __name__ == "__main__":
     unittest.main()

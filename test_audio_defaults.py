@@ -3,6 +3,7 @@ Run: .venv\\Scripts\\python.exe -m unittest test_audio_defaults -v"""
 import os
 import tempfile
 import unittest
+from unittest import mock
 
 from audio_defaults import CAPTURE, RENDER, CallDevices, WindowsAudio, repair_defaults
 
@@ -28,6 +29,15 @@ class PretendWindows:
 
 
 class Switching(unittest.TestCase):
+    def test_other_process_can_remove_saved_defaults_before_they_are_opened(self):
+        with mock.patch("audio_defaults.os.path.exists", return_value=True), mock.patch("builtins.open", side_effect=FileNotFoundError):
+            self.assertEqual(self.devices.restore(), [])
+
+    def test_other_process_can_remove_saved_defaults_during_restore(self):
+        self.devices.use(speaker="Boom Audio")
+        with mock.patch("audio_defaults.os.remove", side_effect=FileNotFoundError):
+            self.assertEqual(self.devices.restore(), [])
+
     def setUp(self):
         self.folder = tempfile.mkdtemp()
         self.system = PretendWindows()

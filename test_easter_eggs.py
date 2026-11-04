@@ -573,5 +573,7 @@ class HiddenFiles(unittest.TestCase):
         self.assertEqual(bytes(byte ^ HATCH_KEY[index % len(HATCH_KEY)] for index, byte in enumerate(egg[:8])), b"\x89PNG\r\n\x1a\n")
 
 
+from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+
 if __name__ == "__main__":
     unittest.main()

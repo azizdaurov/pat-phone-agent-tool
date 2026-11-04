@@ -24,10 +24,10 @@ class Keys(unittest.TestCase):
     def test_same_number_however_written(self):
         forms = ["+998 90-000-00-01", "998900000001", "90 000 00 01", "Mom (+998 90 000 00 01)",
                  " +998 90-000-00-01  (+998 90 000 00 01)"]
-        self.assertEqual({number_key(f) for f in forms}, {"900000001"})
+        self.assertEqual({number_key(f) for f in forms}, {"998900000001"})
 
     def test_name_with_digits_uses_the_number(self):
-        self.assertEqual(number_key("Ali 2 (+998 90 000 00 01)"), "900000001")
+        self.assertEqual(number_key("Ali 2 (+998 90 000 00 01)"), "998900000001")
 
     def test_hidden_number(self):
         for text in ["", None, "Unknown", "No Caller ID"]:
@@ -168,6 +168,8 @@ class Attempts(unittest.TestCase):
                 ("wrong_number", "anyone_there", False)):
             self.assertEqual(summary_may_change(reached, answers), expected, (reached, answers))
 
+
+from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()
