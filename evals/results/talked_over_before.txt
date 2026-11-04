@@ -1,0 +1,119 @@
+﻿=== yes over the question, heard none of it (ru): should ask again
+   NO  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> [CONFIRMED]
+   NO  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> [CONFIRMED]
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> Спасибо, Алекс. Когда вы сможете забрать еду?
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> Спасибо! Значит, вы заберёте еду?
+   NO  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> [CONFIRMED]
+=== yes over the question, heard only the first sentence (ru): should ask again
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> Вы сможете её забрать?
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> Вы сможете её забрать?
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> Вы сможете забрать еду?
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> Вы сможете её забрать?
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> Вы сможете её забрать?
+=== control: a full answer over the question (ru): should take it as the answer
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | Да, заберу еду. -> Спасибо! Отлично, Daurove будет рад.
+
+[END]
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | Да, заберу еду. -> [CONFIRMED]
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | Да, заберу еду. -> [CONFIRMED]
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | Да, заберу еду. -> [CONFIRMED]
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | Да, заберу еду. -> [CONFIRMED]
+=== control: yes after hearing it all (ru): should take it as the answer
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> [CONFIRMED]
+   ok  asked: Daurove просит забрать еду. Вы сможете её забрать? | да -> Спасибо, Алекс! До свидания.
+
+[END]
+   NO  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> Спасибо! Когда вы сможете забрать еду?
+   ok  asked: Daurove просит вас забрать еду. Вы сможете её забрать? | да -> [CONFIRMED]
+   ok  asked: Daurove просит вас забрать еду. Вы заберёте её? | да -> Спасибо! До свидания.
+
+[END]
+=== yes over the question, heard none of it (en): should ask again
+   NO  asked: Daurove is asking if you can pick up the food for him—will you be able to do that? | yes -> Great, so you will pick up the food—thank you. I'll let Daurove know.
+
+[END]
+   ok  asked: Hi Alex, Daurove asks if you can pick up the food for him—will you be able to do that? | yes -> Hi Alex, Daurove asks if you can pick up the food for him—will you be able to do that?
+   ok  asked: Daurove asks if you can pick up the food for him—will you be able to do that? | yes -> Daurove asks if you can pick up the food for him—will you be able to do that?
+   NO  asked: Daurove asks if you can pick up the food for him—will you be able to do that? | yes -> Great, so you'll pick up the food for Daurove—thank you for that. Goodbye.
+
+[END]
+   NO  asked: Daurove is asking if you can pick up the food—will you be able to do that? | yes -> Great, so you will pick up the food. Thanks Alex, that's all I needed—goodbye!
+
+[END]
+=== yes over the question, heard only the first sentence (en): should ask again
+   ok  asked: Daurove is asking whether you can pick up the food for him. | yes -> Will you be able to pick it up?
+   NO  asked: Daurove asks if you can pick up the food for him—will you be able to do that? | yes -> Great, thanks so much for helping out.
+   ok  asked: Hi Alex, Daurove asked me to call and see if you can pick up the food—will you be able to do that? | yes -> Great, so you will pick up the food?
+   NO  asked: Daurove asks if you can pick up the food for him, will you be able to do that? | yes -> [CONFIRMED]
+   NO  asked: Hi Alex, Daurove is asking whether you can pick up the food for him—will you be able to do that? | yes -> [CONFIRMED]
+=== control: a full answer over the question (en): should take it as the answer
+   ok  asked: Daurove is asking whether you can pick up the food for him. | Yes, I'll pick up the food. -> [CONFIRMED]
+   ok  asked: Daurove is asking if you can pick up the food—will you be able to do that? | Yes, I'll pick up the food. -> Great, thank you—I'll let Daurove know you're picking it up.
+
+[END]
+   ok  asked: Daurove is asking whether you can pick up the food for him. | Yes, I'll pick up the food. -> [CONFIRMED]
+   ok  asked: Hi Alex, Daurove is asking whether you can pick up the food for him. | Yes, I'll pick up the food. -> [CONFIRMED]
+   ok  asked: Hi Alex, Daurove is asking whether you can pick up the food for him—will you be able to do that? | Yes, I'll pick up the food. -> Great, thank you! I'll let Daurove know you're picking it up.
+
+[END]
+=== control: yes after hearing it all (en): should take it as the answer
+   NO  asked: Daurove is asking whether you can pick up the food for him—will you be able to do that? | yes -> Great, thank you. When would work for you to pick it up?
+   ok  asked: Daurove asks if you can pick up the food for him, will you be able to do that? | yes -> Great, thank you!
+
+[END]
+   ok  asked: Daurove asks if you can pick up the food for him, will you be able to do that? | yes -> Great, thank you. [END]
+   ok  asked: Daurove is asking whether you can pick up the food for him. | yes -> [CONFIRMED]
+   ok  asked: Daurove asks if you can pick up the food for him, will you be able to do that? | yes -> Great, thank you! [END]
+Haiku, should ask again: 11 of 20
+Haiku, should take it as the answer: 18 of 20
+=== over the opening, ru: 'да': should ask again
+   ok  Спасибо, это Алекс? Или я попал на другой номер?
+   ok  Спасибо! Это Алекс? Или кто сейчас у телефона?
+   ok  Спасибо, это Алекс? Или я могу с ним поговорить?
+   ok  Спасибо! Это Алекс?
+   ok  Спасибо! Это Алекс? Daurove просил вас найти.
+=== over the opening, en: 'yes': should ask again
+   ok  Is this Alex?
+   ok  Is this Alex?
+   ok  Is this Alex?
+   ok  Is this Alex?
+   ok  Is this Alex?
+=== over the opening, ru: 'Да, это Алекс.': confirms
+   ok  [CONFIRMED]
+   ok  [CONFIRMED]
+   ok  [CONFIRMED]
+   ok  [CONFIRMED]
+   ok  [CONFIRMED]
+=== over the opening, en: 'Yes, this is Alex.': confirms
+   ok  [CONFIRMED]
+   ok  [CONFIRMED]
+   ok  [CONFIRMED]
+   ok  [CONFIRMED]
+   ok  [CONFIRMED]
+Haiku, over the opening: 20 of 20
+=== report, the real call: never heard the question
+   NO  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pickup", "answer": "Yes", "confirmed": true}], "summary": "Alex said yes when asked to pick up the food.", "important_details": [], "follow_up": ""}
+   NO  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pickup", "answer": "Yes", "confirmed": true}], "summary": "Alex said yes when asked to pick up the food.", "important_details": [], "follow_up": ""}
+   NO  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pick up food", "answer": "Yes", "confirmed": true}], "summary": "Alex said yes when asked whether he would pick up the food.", "important_details": [], "follow_up": ""}
+   NO  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pick up food", "answer": "Yes", "confirmed": true}], "summary": "Alex agreed to pick up the food.", "important_details": [], "follow_up": ""}
+   NO  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pickup", "answer": "Yes", "confirmed": true}], "summary": "Alex said yes to picking up the food.", "important_details": [], "follow_up": ""}
+=== report, control: asked again, then yes
+   ok  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pickup", "answer": "Yes", "confirmed": true}], "summary": "Alex agreed to pick up the food.", "important_details": [], "follow_up": ""}
+   ok  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pickup", "answer": "Yes", "confirmed": true}], "summary": "Alex agreed to pick up the food.", "important_details": [], "follow_up": ""}
+   ok  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pick up food", "answer": "Yes", "confirmed": true}], "summary": "Alex said yes, he will pick up the food, and repeated yes when asked again.", "important_details": [], "follow_up": ""}
+   ok  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pickup", "answer": "Yes", "confirmed": true}], "summary": "Alex agreed to pick up the food, confirming twice when asked.", "important_details": [], "follow_up": ""}
+   ok  {"outcome": "done", "answers": [{"need": "Will you pick up the food?", "label": "Pickup", "answer": "Yes", "confirmed": true}], "summary": "Alex said yes, he will pick up the food.", "important_details": [], "follow_up": ""}
+Sonnet report: 5 of 10
+=== live note, the real call
+   NO  yes
+   NO  yes
+   NO  да
+   NO  yes
+   NO  да
+=== live note, control: asked again, then yes
+   ok  yes
+   ok  yes
+   ok  yes
+   ok  yes
+   ok  yes
+Live note: 5 of 10

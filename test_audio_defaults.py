@@ -4,7 +4,7 @@ import os
 import tempfile
 import unittest
 
-from audio_defaults import CAPTURE, RENDER, CallDevices, WindowsAudio
+from audio_defaults import CAPTURE, RENDER, CallDevices, WindowsAudio, repair_defaults
 
 
 class PretendWindows:
@@ -84,6 +84,38 @@ class Switching(unittest.TestCase):
             f.write("{not json")
         self.assertIn("Couldn't read", self.devices.restore()[0])
         self.assertFalse(os.path.exists(self.devices.path))
+
+
+class Repairing(unittest.TestCase):
+    REAL = ("Speakers (Realtek(R) Audio)", "Microphone Array (Realtek(R) Audio)")
+
+    @staticmethod
+    def virtual(name):
+        return "CABLE" in name or "Boom" in name
+
+    def test_only_the_virtual_roles_move(self):
+        system = PretendWindows()  # the calls role on the cable, the others on the real speaker
+        changed = repair_defaults(*self.REAL, self.virtual, system)
+        self.assertEqual(system.current[RENDER], ["real", "real", "real"])
+        self.assertEqual(system.current[CAPTURE], ["real-mic", "real-mic", "real-mic"])
+        self.assertEqual(changed, ["CABLE Input (VB-Audio Virtual Cable) -> Speakers (Realtek(R) Audio)"])
+
+    def test_nothing_to_do_changes_nothing(self):
+        system = PretendWindows()
+        system.current[RENDER] = ["real", "real", "real"]
+        self.assertEqual(repair_defaults(*self.REAL, self.virtual, system), [])
+
+    def test_no_default_at_all_gets_the_real_device(self):
+        system = PretendWindows()
+        system.current[CAPTURE] = [None, None, None]
+        repair_defaults(*self.REAL, self.virtual, system)
+        self.assertEqual(system.current[CAPTURE], ["real-mic"] * 3)
+
+    def test_with_no_real_device_it_leaves_things_alone(self):
+        system = PretendWindows()
+        system.current[RENDER] = ["cable-in"] * 3
+        self.assertEqual(repair_defaults(None, None, self.virtual, system), [])
+        self.assertEqual(system.current[RENDER], ["cable-in"] * 3)
 
 
 class RealWindows(unittest.TestCase):

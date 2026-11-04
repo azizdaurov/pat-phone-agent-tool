@@ -1,54 +1,51 @@
-# Cicero
+# Pat, the Phone Agent Tool
 
 Claude speaks on your iPhone calls. It hears the other person, thinks with Haiku 4.5 on your Claude plan,
 and answers aloud. This repository has everything it needs:
 
-- [`voice-loop`](voice-loop): speech recognition, Claude and speech. Cicero imports `voice_loop.py`.
-- [`iphonecall`](iphone-hfp/README.md): the call itself. Cicero runs it and drives its shell over pipes.
+- [`voice-loop`](voice-loop): speech recognition, Claude and speech. Pat imports `voice_loop.py`.
+- [`iphonecall`](iphone-hfp/README.md): the call itself. Pat runs it and drives its shell over pipes.
 
 **Status: two real test calls so far, both rough.** See "Not proven yet".
 
 ## How the sound travels
 
-Windows handles the call audio itself, and programs can't open it directly. So Cicero goes through the
+Windows handles the call audio itself, and programs can't open it directly. So Pat goes through the
 Windows default devices:
 
 ```
-Other person --> Windows plays the call on the default speaker --> Cicero records that speaker (loopback)
+Other person --> Windows plays the call on the default speaker --> Pat records that speaker (loopback)
                                                                      --> speech recognition --> Claude --> speech
-Other person <-- Windows reads the default mic = CABLE Output <-- CABLE Input <-- Cicero plays Claude's voice
+Other person <-- Windows reads the default mic = CABLE Output <-- CABLE Input <-- Pat plays Claude's voice
 ```
 
-Cicero makes a **silent speaker** the default just before each call: a virtual speaker with no sound in the room, which it can
+Pat makes a **silent speaker** the default just before each call: a virtual speaker with no sound in the room, which it can
 still record. Your real microphone isn't in the call either. So you hear nothing and they hear only Claude, until you take over.
 When the call ends, every default goes back to what it was.
 
 ## Setup
 
-On any Windows 11 laptop, after cloning:
+On any Windows 11 laptop, including a second one for the same iPhone, after cloning:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File setup.ps1
 ```
 
-It installs Python and the .NET SDK if they're missing, creates `.venv`, downloads the speech models, builds and installs
-`iphonecall`, and registers the phone tool with Claude Code for every folder. It's safe to run again. Then it checks the audio
-and lists what's left. These only you can do:
+It installs what's missing: Python, the .NET SDK, the packages, about 2 GB of speech models, `iphonecall`, and the two free audio
+drivers ([VB-CABLE](https://vb-audio.com/Cable/) and [Voicemeeter](https://vb-audio.com/Voicemeeter/)). It turns on Developer Mode,
+registers the phone tool, and puts your default speaker and microphone back on the real ones. It's safe to run again. Then:
 
-1. **Turn on Developer Mode:** Settings > System > Advanced > For developers. `iphonecall` can't be installed without it.
-2. **Install two free audio drivers from their maker, then restart:**
-   - [VB-CABLE](https://vb-audio.com/Cable/): Claude's voice reaches the call through it. Run its installer as administrator.
-   - [Voicemeeter](https://vb-audio.com/Voicemeeter/): only its virtual speaker is used, as the silent speaker. Use a current
-     version, because older drivers crash on Windows 11 24H2. **Leave the Voicemeeter app closed**; if it runs, it can pass the
-     call to your speakers.
-
-   Installing VB-CABLE can make **CABLE Input** the default speaker. Set that back to your real speaker afterwards.
-3. **Connect the iPhone:** Settings > Bluetooth on the iPhone, then tap the laptop's name.
-4. **Log in to Claude Code.**
-5. **Disconnect Bluetooth headphones from the laptop.** With the Redmi Buds connected, the call's audio stayed on the iPhone
+1. **Approve** what Windows asks: Developer Mode, and each driver. A driver may also ask whether you trust it.
+2. **Restart** when it offers. Setup carries on by itself afterwards.
+3. **Connect the iPhone:** setup opens Bluetooth settings and waits. Pair it if needed, then on the iPhone go to Settings > Bluetooth and tap the laptop's name.
+4. **Keep the Voicemeeter app closed.** Only its virtual speaker is used; if the app runs, it can pass the call to your speakers.
+5. **Disconnect Bluetooth headphones from the laptop** before calls. With the Redmi Buds connected, the call's audio stayed on the iPhone
    on every test, even with the Realtek speakers as the default. Windows reported each move as done, and 14 tries over two
-   calls changed nothing. Cicero now refuses to dial while a Bluetooth headset is connected. Wired headphones and the
+   calls changed nothing. Pat now refuses to dial while a Bluetooth headset is connected. Wired headphones and the
    laptop speakers don't trigger this check.
+
+When it's all ready, setup opens the sticky note. To see what it would do, changing nothing, add `-Rehearse`. The Claude Code app must already
+be installed and logged in; setup checks.
 
 Then check the setup without making a call:
 
@@ -56,18 +53,20 @@ Then check the setup without making a call:
 .venv\Scripts\python.exe cicero.py check
 ```
 
-Cicero looks for a silent speaker in this order: Voicemeeter, VB-CABLE A or B, Steam Streaming Speakers, then Boom Audio. To use
+Pat looks for a silent speaker in this order: Voicemeeter, VB-CABLE A or B, Steam Streaming Speakers, then Boom Audio. To use
 another, first run `.venv\Scripts\python.exe evals\silent_output_probe.py "Part of its name"`. The tone should appear only on
 that device. Then set `CICERO_SILENT_SPEAKER` to that name.
 
-If a call is killed, the laptop stays on the silent speaker until the next Cicero start, or until you run:
+If a call is killed, the laptop stays on the silent speaker until the next Pat start, or until you run:
 
 ```powershell
 .venv\Scripts\python.exe cicero.py restore-audio
 ```
 
-`calls/` and `contacts/` are private and aren't in the repository. To keep your notes on people, copy `contacts/` to the new
-laptop yourself.
+`calls/` and `contacts/` are private and aren't in the repository. To keep your notes, contacts and who-picks-up choices, copy
+`contacts/` to the new laptop yourself, and `calls/note-settings.json` for the menu's settings.
+
+An iPhone talks hands-free to one laptop at a time. Before using a laptop, tap its name in the iPhone's Bluetooth settings.
 
 ## Using it
 
@@ -92,6 +91,89 @@ them on the [voice audition page](https://claude.ai/artifact/MLBwxThbP2g62TCN82g
 Other options: `--audible` to hear the call on your real speaker, `--voice irina|ruslan`, `--lang en`, `--max-minutes` (default 5), `--owner`, `--owner-ru`.
 Each call's text and timings are saved in `calls/` (ignored by git). Audio is saved only with `--save-audio`, which
 keeps the other person's voice as a WAV; use it only with their agreement.
+
+## The sticky note
+
+A small window that stays on top, watches the phone line, and decides who takes each incoming call:
+
+```powershell
+.venv\Scripts\pythonw.exe note.py
+```
+
+To try the window with a pretend phone, so nothing
+rings or dials: `.venv\Scripts\python.exe evals\note_demo.py`.
+
+| Screen | What's on it |
+|---|---|
+| No call | Just a prompt bar. Type what you want and an agent places the call through the phone tool |
+| Incoming | The caller, then `AI once`, `Always AI` and `Me (iPhone)`. The arrow chooses iPhone or Laptop for `Me`. Claude gets ready as soon as it rings, about 10 s, so the choice is quick |
+| After the call | The bullet points, the full summary and what to do next, for as long as you want. `Done` goes back to the bar |
+| Claude on the call | A mixer that follows the sound of both voices, bullet points that fill in during the call (dots until then), a few words on what it's about, `Listen` and `Take over`. Calls placed by agents show here too |
+| You on the call | iPhone/Laptop switch and `End call`. The mixer only appears on the laptop: on the iPhone, the laptop can't hear the call |
+
+- **`Always AI`** is for that number only. To undo it, set it back in Contacts.
+- **Settings** are on the right-click menu of the note's icon, in the hidden icons:
+  - **Zoom in, Zoom out:** the size of the note.
+  - **Incoming calls speak:** the language Claude answers in. English by default.
+  - **Unknown numbers:** show the note's options (the default), Always AI, or Always me.
+  - **English voice, Russian voice:** who Claude sounds like. Agents' calls use this too, unless the agent names another voice.
+  - **Contacts...:** see, add and remove contacts, and choose for each one: Ask, AI or Me.
+- **AI** answers by itself. **Me** never answers by itself, since you may be away: Claude stays out and the iPhone rings as usual, and the note still offers its buttons.
+- **`Listen`** plays both sides on your real speaker, and your microphone stays out of the call.
+- **`Take over`** puts you on the call on the laptop, after Claude says it's passing them to you, the same as F9. The switch moves it to the iPhone.
+- **`Me`** answers on the iPhone the first time, then wherever the arrow last pointed, even after a restart. The switch during a call doesn't change that choice.
+- **Only one copy** can run. Opening it again brings the open one to the front.
+- **Bullet points** come from a small Claude beside the call, which only reads the transcript and can't affect the call. Values come through speech recognition, so they can be wrong.
+- **Hiding:** with no call, the note slides to the nearest screen edge and leaves a sliver; move the pointer onto it to bring it back. During a call the arrow does the same. A ringing call always brings it back.
+- **The small buttons:** the dash minimizes to the taskbar. The cross closes it to the hidden icons, where it keeps watching for calls and comes back when one rings. To stop it, right-click its icon there and choose Quit.
+- Drag it by any blank part of the paper.
+
+## Real dates
+
+Notes, reports and the sticky note write real dates such as 4-11-2026, never "tomorrow", so a note from yesterday can't be misread today. The models get a table of the coming days, and `real_dates.py` catches any relative word they still write. A transcript stays word for word, with the time of each line.
+
+## Keeping numbers private
+
+Real numbers stay on this laptop. The AI only sees a contact's name or a placeholder such as `#1`, and the phone tool swaps it back
+when dialing. Results, summary cards and call ids show the name or placeholder too.
+
+- **Contacts** live in `contacts/book.json`, which isn't in the repository. Then you can say "call Рустам", in the note or in a chat:
+
+  ```powershell
+  .venv\Scripts\python.exe private_numbers.py add "Рустам" "+998 90 000 00 01"
+  .venv\Scripts\python.exe private_numbers.py list
+  ```
+
+- **A number typed into the note** is swapped for its contact's name or a placeholder before anything leaves the laptop. The note shows you the real number.
+- **A number typed into a Claude Code chat** reaches Claude before any of this can act, so use a contact's name in chats. It still dials if you do type one.
+- **What still goes to Claude:** names, the task, and everything said on the call, including any number someone says aloud. To keep a call's content private as well, the AI would have to run on this laptop.
+
+## Easter eggs
+
+Type these in the sticky note's prompt bar, or try them with `.venv\Scripts\python.exe easter_eggs.py "pat pat"`:
+
+| Type | What happens |
+|---|---|
+| A request ending in `--haiku`, `--sonnet` or `--cicero` | That piece appears under the call's summary, with a Copy button. A chat agent passes it as `summary_style` |
+| `stats` | Calls, time on the phone and badges. Also on the tray icon's menu |
+| `predict tea or coffee` | Pat the Octopus, heir to Paul, eats from one box. It's random |
+| `pat pat` | A pat on the back |
+| `facts` | The Pat facts you've found. Also on the tray icon's menu, as `Facts found` |
+| A few famous phone numbers, and a few words | Find out. Each joke plays once |
+
+The rules behind them, in `easter_eggs.py`:
+
+- **They only show on your screen.** The person on a call never hears a joke, and the opening line doesn't change.
+- **A joke number can't ring anyone.** After its joke it gets a plain refusal, here and in the phone tool, unless it's one of your contacts.
+- **Emergency and crisis numbers are never jokes.** They always get a plain refusal, even though the list can't be complete: dial those yourself.
+- **Only short requests can trigger a joke.** `Mom` does, once, and offers `Proceed` if she's a contact. `call Mom and ask about dinner` goes straight through.
+- **The poems are for fun.** They can get details wrong, so the summary above each one is the record. They also cost a little of your Claude plan, and only run when asked for.
+
+**Pat facts** are small lines under the summary after some calls, and they stop at 24. Turn them off on the tray icon's menu, under `Pat facts`. That also hides the rest of their story, and the jokes stay. Pat picks up where it left off if you turn them back on, one fact per call.
+
+What has played is in `contacts/easter_eggs.json`. Delete the file to see them all again.
+
+Any file whose last line is `#fisheggs` is an easter egg too, not part of how Pat works. Start with [fisheggs/READ_ME_FIRST.md](fisheggs/READ_ME_FIRST.md).
 
 ## Who does what on a call
 
@@ -137,12 +219,12 @@ Pick-up ─► "Это виртуальный ассистент Азиза. С�
               └─ Unclear ───► ask again, then end
 ```
 
-Cicero never calls back by itself: the result says who was reached, and the agent tells you. By hand, use `--name`,
+Pat never calls back by itself: the result says who was reached, and the agent tells you. By hand, use `--name`,
 `--company` and `--confidence`. A hand-run call with neither name nor company skips the check. So do incoming calls.
 
 ## Agents placing calls (MCP)
 
-`phone_mcp.py` is an MCP server. `setup.ps1` registers it as `cicero-phone` for every folder, so a new Claude Code chat anywhere can use it.
+`phone_mcp.py` is an MCP server. `setup.ps1` registers it as `pat-phone` for every folder, so a new Claude Code chat anywhere can use it.
 
 | Tool | What it does |
 |---|---|
@@ -189,7 +271,7 @@ By hand, `--brief-file brief.json` takes the same fields, and `--no-observer` ru
 calls: 3
 last_call: 2026-11-02 10:00
 
-## Pinned (yours; Cicero never changes this)
+## Pinned (yours; Pat never changes this)
 My dentist. Speak formally.
 
 ## Summary (rewritten after each call)
@@ -213,7 +295,7 @@ Full transcripts in `calls/` are never fed back into calls; the summary is all a
 into the wrong digits, and it twice added a language nobody stated, even after a rule against both. Put anything that
 must be exact under Pinned.
 
-Every attempt goes in an `## Attempts` list that Cicero writes itself, keeping the last 5:
+Every attempt goes in an `## Attempts` list that Pat writes itself, keeping the last 5:
 
 | Outcome | Attempts | Summary |
 |---|---|---|
@@ -234,18 +316,38 @@ Every attempt goes in an `## Attempts` list that Cicero writes itself, keeping t
 - The call ends when Claude says goodbye, the other person leaves, 60 seconds pass with no speech, or the time limit is reached.
 - **Russian and English only.** There's no Uzbek: an Uzbek speaker would be misheard, so check the language before dialing.
 
+## How Pat hears
+
+Russian uses GigaAM v3 RNN-T and English uses Parakeet TDT v2, both on the CPU through onnx-asr. They transcribe when the person stops
+talking, in about 0.2 s for a short turn. Parakeet needs about 1.1 GB of memory, GigaAM about 0.4 GB.
+
+Word errors on the same 60 clips per language, compared with the models Pat used before (full run of 200 clips in brackets):
+
+| | Simulated phone line | Plus background voices |
+|---|---|---|
+| Russian, GigaAM RNN-T | 18.9% (16.0%) | 25.9% (23.9%) |
+| Russian, GigaAM CTC, before | 20.6% (19.2%) | 31.2% (28.8%) |
+| English, Parakeet v2 | 19.2% (16.2%) | 26.5% (23.5%) |
+| English, Moonshine, before | 29.9% (25.8%) | 59.0% (51.1%) |
+
+The Russian clips are real phone calls (Open STT), the English ones are conference calls (Earnings22), and the background voices
+were mixed in by the test. Loading Parakeet adds about 6 s before an English call dials. On seven real English turns from one of our calls, Parakeet was no better than Moonshine and sometimes repeated words, so
+the gain may be smaller on a real call. Whisper turbo tied Parakeet on English but took 8.5 s per turn. Saved calls have nothing above 4 kHz.
+
+The scripts are `evals/stt_*.py`. They need `soundfile`, `scipy` and a `stt-test-data` folder beside this one, and aren't part of the setup.
+
 ## Not proven yet
 
 Tested without a call: `python -m unittest test_cicero` (phone control against a fake `iphonecall`, turn detection, and a
 full turn with real speech models and real Haiku), plus recording the real speaker through loopback, including across
-silence. Also confirmed: the real `iphonecall` runs under Cicero's pipes with its package identity, up to `connect`.
+silence. Also confirmed: the real `iphonecall` runs under Pat's pipes with its package identity, up to `connect`.
 
 What only a real call can show, in the order to check:
 
 1. **Does the call's audio reach the loopback recording?** The existing notes only say that Windows plays it on the default speaker.
 2. **Does Windows read CABLE Output as the call's microphone?** Probably, but neither the default-device choice nor which of the two "default" kinds it uses has been tested.
 3. **Does `Talking` mean the person has picked up?** If it comes earlier, the opening line plays to a ringing line.
-4. **How well does recognition work on phone audio?** The recognizer was measured on clean generated speech, not on narrowband call audio.
+4. **Do the new recognizers help on real calls?** See "How Pat hears": they were chosen on recorded calls, and neither has been on a live call yet.
 5. **Does the other person's echo interrupt Claude?** Any speech detected cuts Claude off. `START_FRAMES` is the setting to raise.
 6. **Do `h` and `p` work during a live call?**
 
@@ -254,7 +356,7 @@ Make the first test call to a second phone of your own, or to someone who knows 
 ## Known limits
 
 - Loopback records everything the laptop plays, so a notification sound or music also reaches Claude. Close other audio during a call.
-- If the other person interrupts, Cicero estimates what they heard from the audio played, minus `CUT_MARGIN_SECONDS`, and
+- If the other person interrupts, Pat estimates what they heard from the audio played, minus `CUT_MARGIN_SECONDS`, and
   rounds down to a full word, so it errs early: Claude may repeat a few words but shouldn't skip any. The transcript gets a
   `(cut off, heard only: ...)` line, and Haiku is told before its next reply. Earlier lines in the transcript stay as
   written, so Sonnet and the notes rely on that line to know what went unheard. The phone network's delay hasn't been measured.
@@ -265,7 +367,6 @@ Make the first test call to a second phone of your own, or to someone who knows 
   anyway (`_finish_if_goodbye` in `cicero.py`), so someone can't hold Claude on the line by interrupting every goodbye.
   Until then, `--max-minutes` is what limits that.
 - `iphonecall`'s every line goes to `calls/phone-<time>.log`, which is the first place to look when a call misbehaves.
-- Windows opens the extra `iphonecall` window for each call, as described in the iphonecall README.
 - The risks in `voice-loop` still apply: it depends on `claude -p` working on your plan login, and on Haiku 4.5 staying available.
 
 ## Files
@@ -273,6 +374,14 @@ Make the first test call to a second phone of your own, or to someone who knows 
 ```
 setup.ps1        gets everything ready on a laptop
 audio_defaults.py switches Windows' default speaker and microphone for a call, and puts them back
+real_dates.py    turns "tomorrow" into a real date in what's kept
+private_numbers.py the contact list, and the placeholders that keep numbers off the AI
+note.py          the sticky note: watches the line, and decides who takes each call
+note_settings.py what the tray menu sets
+note_window.py   its window: see-through, slides to an edge, lives in the tray
+note/            what the note looks like
+live_call.py     the state and commands passed between a running call and the note
+live_notes.py    the note's bullet points and summary
 cicero.py        PhoneLine (iphonecall), CallerAudio (loopback), SpeechDetector + TurnDetector (replace the talk key), Conversation
 call_brief.py    the brief's fields, Haiku's prompt, Sonnet's prompt
 observer.py      Sonnet's reviews, questions and final report; the rarity limits

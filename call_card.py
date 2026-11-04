@@ -60,24 +60,17 @@ def _answer_rows(answers):
         else:
             value = _clean(value) + ("" if item.get("confirmed") else " (not confirmed)")
         rows.append((label, value))
-    labels = _wrap_labels(rows)
-    column = max((display_width(label) for label in labels), default=0) + 2
+    # A long label wraps in its own column, so nothing is cut and answers stay tidy.
+    labels = [_wrap(label, MAX_LABEL_WIDTH) for label, _ in rows]
+    column = max((display_width(part) for parts in labels for part in parts), default=0) + 2
     lines = []
     for (_, value), label in zip(rows, labels):
-        for index, part in enumerate(_wrap(value, TEXT_WIDTH - column)):
-            start = label if index == 0 else ""
+        values = _wrap(value, TEXT_WIDTH - column)
+        for index in range(max(len(label), len(values))):
+            start = label[index] if index < len(label) else ""
+            part = values[index] if index < len(values) else ""
             lines.append(start + " " * (column - display_width(start)) + part)
     return lines
-
-
-def _wrap_labels(rows):
-    """Long labels are shortened, so answers stay in one tidy column."""
-    labels = []
-    for label, _ in rows:
-        if display_width(label) > MAX_LABEL_WIDTH:
-            label = _wrap(label, MAX_LABEL_WIDTH - 1)[0].rstrip(",;:") + "…"
-        labels.append(label)
-    return labels
 
 
 def _bullets(items):
@@ -124,6 +117,11 @@ def render_card(state):
         sections.append(["NEXT"] + _wrap(_clean(report["follow_up"]), TEXT_WIDTH))
     if not report and state.get("reason"):
         sections.append(_wrap(_clean(state["reason"]), TEXT_WIDTH))
+    for extra in state.get("flair") or []:
+        art = [part for part in str(extra.get("art") or "").split("\n") if part]
+        sections.append(art + _wrap(_clean(extra.get("text") or ""), TEXT_WIDTH))
+    if state.get("poem"):
+        sections.append([part for line in str(state["poem"]).splitlines() for part in (_wrap(_clean(line), TEXT_WIDTH) or [""])])
 
     inner = TEXT_WIDTH + 4
     title = " Call Summary "

@@ -5,15 +5,26 @@ using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Calls;
 
-const string Usage = "usage: iphonecall [shell | dial <number> | status | list | unregister] [--device <name>]";
+const string Usage = "usage: iphonecall [shell | dial <number> | status | list | unregister] [--device <name>] [--stay-on-phone]";
 const string Help = "commands: d <number> dial | a answer | h hang up/reject | m mute on/off |\n" +
                     "          l audio on laptop | p audio on phone | s status | q quit";
 
+// Windows opens this for every call and agents drive it over pipes, and neither wants a terminal. Only a person running it does.
+if (!Terminal.HasPipes())
+{
+    bool openedByWindows;
+    try { openedByWindows = Windows.ApplicationModel.AppInstance.GetActivatedEventArgs() is PhoneCallActivatedEventArgs; }
+    catch (Exception) { openedByWindows = false; }
+    if (!openedByWindows) Terminal.Open();
+}
+
 string deviceHint = "iPhone";
+bool stayOnPhone = false;
 var rest = new List<string>();
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--device" && i + 1 < args.Length) deviceHint = args[++i];
+    else if (args[i] == "--stay-on-phone") stayOnPhone = true;
     else rest.Add(args[i]);
 }
 string action = rest.Count > 0 ? rest[0].ToLowerInvariant() : "shell";
@@ -59,7 +70,7 @@ try
     var line = await HandsFree.ConnectAsync(info);
     if (line == null) return 1;
 
-    var session = new CallSession(line) { CloseAfterCalls = openedForCall };
+    var session = new CallSession(line) { CloseAfterCalls = openedForCall, MoveToLaptop = !(openedForCall || stayOnPhone) };
     if (openedForCall) Console.WriteLine("opened by Windows for a call; this window closes when the call ends");
     session.PrintStatus();
     if (action == "status") return 0;
@@ -82,6 +93,11 @@ static async Task RunShellAsync(CallSession session)
 {
     using var cts = new CancellationTokenSource();
     var monitor = session.MonitorAsync(cts.Token);
+    if (session.CloseAfterCalls)
+    {
+        await monitor; // nobody to type here; it exits by itself once the call is over
+        return;
+    }
     Console.WriteLine(Help);
     while (true)
     {
@@ -112,4 +128,19 @@ static async Task RunShellAsync(CallSession session)
     }
     cts.Cancel();
     await monitor;
+}
+
+static class Terminal
+{
+    [DllImport("kernel32.dll")] private static extern IntPtr GetStdHandle(int which);
+    [DllImport("kernel32.dll")] private static extern bool AllocConsole();
+    private const int StdOutput = -11;
+
+    public static bool HasPipes()
+    {
+        IntPtr output = GetStdHandle(StdOutput);
+        return output != IntPtr.Zero && output != new IntPtr(-1);
+    }
+
+    public static void Open() => AllocConsole();
 }

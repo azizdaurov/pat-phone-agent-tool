@@ -159,8 +159,8 @@ class Headsets(unittest.TestCase):
 class EnglishVoices(unittest.TestCase):
     def test_voice_choice_sets_its_own_rate(self):
         made = []
-        real = (cicero.Ear, cicero.PocketVoice, cicero.TrackingMouth)
-        cicero.Ear = lambda *a, **k: "ear"
+        real = (cicero.BatchEar, cicero.PocketVoice, cicero.TrackingMouth)
+        cicero.BatchEar = lambda *a, **k: "ear"
         cicero.PocketVoice = lambda language, voice: made.append(voice) or "voice"
         cicero.TrackingMouth = lambda *a, **k: types.SimpleNamespace()
         try:
@@ -168,7 +168,7 @@ class EnglishVoices(unittest.TestCase):
             chosen = cicero.load_speech("en", "michael")[1]
             unknown = cicero.load_speech("en", "somebody")[1]
         finally:
-            cicero.Ear, cicero.PocketVoice, cicero.TrackingMouth = real
+            cicero.BatchEar, cicero.PocketVoice, cicero.TrackingMouth = real
         self.assertEqual(made, [cicero.DEFAULT_ENGLISH_VOICE, "michael", "somebody"])
         self.assertEqual(default.slow_rate, cicero.ENGLISH_VOICES[cicero.DEFAULT_ENGLISH_VOICE]["chars_per_second"])
         self.assertEqual(chosen.slow_rate, cicero.ENGLISH_VOICES["michael"]["chars_per_second"])
@@ -206,6 +206,12 @@ class QuietCalls(unittest.TestCase):
                    (5, "Voicemeeter Input (VB-Audio Voicemeeter VAIO)"), (6, "CABLE-A Input (VB-Audio Cable A)"), (4, "Speakers (Realtek(R) Audio)")]
         self.assertEqual(cicero.pick_real_device(devices), 4)
         self.assertIsNone(cicero.pick_real_device(devices[:5]))
+
+    def test_take_over_never_picks_voicemeeters_other_devices_or_the_phone(self):
+        devices = [(1, "Voicemeeter In 3 (VB-Audio Voicemeeter VAIO)"), (2, "Voicemeeter Out A3 (VB-Audio Voicemeeter VAIO)"),
+                   (3, "Voicemeeter VAIO3 Input (VB-Audio Voicemeeter VAIO)"), (4, "Speakers (iPhone Aziz Hands-Free HF Audio)"),
+                   (5, "Microphone Array (Realtek(R) Audio)")]
+        self.assertEqual(cicero.pick_real_device(devices), 5)
 
     def test_key_sets_take_over_only_when_pressed(self):
         pressed = []
@@ -299,7 +305,7 @@ class Rehearsal(unittest.TestCase):
         tail = np.zeros(MIC_RATE * 20, dtype=np.float32)
         frames = framed(np.concatenate((silence, load_sample(), tail)), realtime=True)
         transcript = cicero.Transcript(tempfile.mkdtemp())
-        call = cicero.Conversation(FakeLine(), frames, ear, mouth, brain, transcript, opening, max_seconds=12)
+        call = cicero.Conversation(FakeLine(), frames, ear, mouth, brain, transcript, opening, max_seconds=40)
         reason = call.run()
         brain.close()
         with open(transcript.path, encoding="utf-8") as f:

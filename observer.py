@@ -4,6 +4,7 @@ import re
 import threading
 
 from call_brief import CONSULT_REQUEST, REPORT_REQUEST
+from real_dates import WRITE_REAL_DATES, date_lines, real_dates
 
 OBSERVER_MODEL = "claude-sonnet-5-5"
 REVIEW_EVERY_TURNS = 3  # reads the transcript after every third reply from Haiku
@@ -95,8 +96,8 @@ class Observer:
         def run():
             with self.lock:
                 try:
-                    request = self._new_lines() + "\n\n" + REPORT_REQUEST.format(reason=reason, owner=self.owner)
-                    report.append(_first_json(self.ask(request)))
+                    request = f"{self._new_lines()}\n\n{REPORT_REQUEST.format(reason=reason, owner=self.owner)}\n\n{date_lines()} {WRITE_REAL_DATES}"
+                    report.append(real_dates(_first_json(self.ask(request))))
                 except Exception:
                     pass
 

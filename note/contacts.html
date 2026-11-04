@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pat contacts</title>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<style>
+:root{--paper:#E6D6B8;--edge:#CDB995;--card:#F3E9D3;--card-hover:#FBF4E4;--line:#A98E67;--ink:#3B2A1A;--ink-hover:#54402C;--on-ink:#F5ECD9;--muted:#6B5238;--rule:rgba(107,82,56,.24);--rust:#8A3F1E}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{display:flex;flex-direction:column;padding:18px 18px 16px;font-family:Georgia,'Times New Roman',serif;color:var(--ink);background:var(--paper)}
+h1{margin:0;font-size:19px;line-height:1.2}
+#hint{margin:4px 0 12px;font-size:12px;font-style:italic;line-height:1.35;color:var(--muted)}
+#list{flex:1;min-height:0;overflow-y:auto;margin:0;padding:0;list-style:none;border-top:1px solid var(--rule)}
+#empty{padding:18px 0;font-size:14px;font-style:italic;color:var(--muted)}
+li{display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--rule)}
+.who{flex:1;min-width:0}
+.name{overflow:hidden;font-size:14px;font-weight:700;text-overflow:ellipsis;white-space:nowrap}
+.number{margin-top:1px;font-size:12px;color:var(--muted)}
+button{font:12px Georgia,'Times New Roman',serif;color:var(--ink);cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+.rule{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));flex-shrink:0;width:132px;overflow:hidden;border:1px solid var(--line);border-radius:999px}
+.rule button{height:26px;padding:0;background:var(--card);border:0;transition:background .15s,color .15s}
+.rule button:hover{background:var(--card-hover)}
+.rule button.on{color:var(--on-ink);background:var(--ink)}
+.remove{display:flex;align-items:center;justify-content:center;flex-shrink:0;width:22px;height:22px;padding:0;color:var(--muted);background:transparent;border:0;border-radius:50%}
+.remove:hover{color:var(--ink);background:rgba(107,82,56,.16)}
+form{display:flex;gap:7px;margin-top:13px}
+input{flex:1;min-width:0;height:32px;padding:0 12px;font:13px Georgia,'Times New Roman',serif;color:var(--ink);background:var(--card);border:1px solid var(--line);border-radius:999px}
+input::placeholder{color:var(--muted);opacity:1}
+#add{flex-shrink:0;height:32px;padding:0 14px;font-size:13px;color:var(--on-ink);background:var(--ink);border:0;border-radius:999px}
+#add:hover{background:var(--ink-hover)}
+#problem{min-height:16px;margin:6px 2px 0;font-size:12px;font-style:italic;color:var(--rust)}
+</style>
+</head>
+<body>
+<h1>Contacts</h1>
+<p id="hint">Who picks up when each one calls. Ask shows the note's buttons. AI lets Claude answer by itself. Me keeps Claude out, and your iPhone rings as usual.</p>
+<ul id="list"></ul>
+<div id="empty" hidden>No contacts yet. Add one below.</div>
+<form id="form">
+  <input id="name" type="text" placeholder="Name" aria-label="Name" autocomplete="off">
+  <input id="number" type="text" placeholder="+998 90 000 00 00" aria-label="Phone number" autocomplete="off">
+  <button id="add" type="submit">Add</button>
+</form>
+<p id="problem" role="status"></p>
+<script>
+const $ = (id) => document.getElementById(id);
+const RULES = [['ask', 'Ask'], ['ai', 'AI'], ['me', 'Me']];
+let bridge = null;
+
+function draw(rows) {
+  $('empty').hidden = rows.length > 0;
+  $('list').hidden = rows.length === 0;
+  $('list').replaceChildren(...rows.map((row) => {
+    const item = document.createElement('li');
+    item.dataset.name = row.name;
+
+    const who = document.createElement('div');
+    who.className = 'who';
+    const name = document.createElement('div');
+    name.className = 'name';
+    name.textContent = row.name;
+    name.title = row.name;
+    const number = document.createElement('div');
+    number.className = 'number';
+    number.textContent = row.number;
+    who.append(name, number);
+
+    const rule = document.createElement('div');
+    rule.className = 'rule';
+    rule.setAttribute('role', 'group');
+    rule.setAttribute('aria-label', `Who picks up for ${row.name}`);
+    for (const [value, label] of RULES) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.dataset.rule = value;
+      button.textContent = label;
+      button.classList.toggle('on', row.rule === value);
+      button.setAttribute('aria-pressed', row.rule === value);
+      button.onclick = () => bridge.set_rule(row.number, value, refresh);
+      rule.appendChild(button);
+    }
+
+    const remove = document.createElement('button');
+    remove.type = 'button';
+    remove.className = 'remove';
+    remove.setAttribute('aria-label', `Remove ${row.name}`);
+    remove.title = 'Remove';
+    remove.innerHTML = '<svg aria-hidden="true" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m3 3 6 6M9 3l-6 6"></path></svg>';
+    remove.onclick = () => bridge.remove(row.name, row.number, refresh);
+
+    item.append(...(row.story ? [who] : [who, rule, remove]));
+    return item;
+  }));
+}
+
+function refresh() {
+  bridge.rows((text) => draw(JSON.parse(text)));
+}
+
+$('form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  bridge.add($('name').value, $('number').value, (problem) => {
+    $('problem').textContent = problem;
+    if (!problem) {
+      $('name').value = '';
+      $('number').value = '';
+      $('name').focus();
+      refresh();
+    }
+  });
+});
+
+new QWebChannel(qt.webChannelTransport, (channel) => {
+  bridge = channel.objects.bridge;
+  refresh();
+  window.addEventListener('focus', refresh);
+});
+</script>
+</body>
+</html>

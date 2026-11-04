@@ -135,6 +135,25 @@ class CallDevices:
         return problems
 
 
+def repair_defaults(real_speaker, real_mic, is_virtual, system=None):
+    """Installing a virtual audio driver can make it the default, which silences other programs. Puts any such default back on the real
+    device, one role at a time, and leaves a real default alone. Returns what changed."""
+    system = system or WindowsAudio()
+    changed = []
+    for kind, real in ((RENDER, real_speaker), (CAPTURE, real_mic)):
+        names = system.endpoints(kind)
+        real_id = next((device_id for name, device_id in names.items() if real and real in name), None)
+        by_id = {device_id: name for name, device_id in names.items()}
+        if real_id is None:
+            continue
+        for role, device_id in zip(ROLES, system.defaults(kind)):
+            name = by_id.get(device_id)
+            if name is None or is_virtual(name):
+                system.set_default(real_id, role)
+                changed.append(f"{name or 'nothing'} -> {by_id[real_id]}")
+    return changed
+
+
 if __name__ == "__main__":
     audio = WindowsAudio()
     for label, kind in (("Speakers", RENDER), ("Microphones", CAPTURE)):

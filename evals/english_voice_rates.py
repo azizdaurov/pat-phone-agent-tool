@@ -18,7 +18,7 @@ TEXTS = ["Hello, I am calling to find out whether your clinic is open this Sunda
          "I understand, you are open from nine in the morning until three in the afternoon, is that right?",
          "Great. And where is the meeting taking place?", "I'm sorry, I didn't catch that. Could you repeat it?"]
 CUTS = (0.25, 0.5, 0.75)
-ear = cicero.Ear(cicero.STT_ARCH, mic=False)
+ear = cicero.BatchEar(cicero.EN_STT_MODEL, mic=False)
 
 
 def transcribe(audio):

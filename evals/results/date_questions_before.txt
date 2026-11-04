@@ -1,0 +1,52 @@
+=== a weekday: says the real date back (should pin down)
+   ok  В пятницу. -> Спасибо. Встреча в пятницу, шестого ноября. Во сколько?
+   ok  В пятницу. -> В пятницу, шестого ноября, понял. А во сколько встреча?
+=== a weekday, English (should pin down)
+   ok  On Friday. -> So the meeting is on Friday the 6th of November, is that right?
+   ok  On Friday. -> So the meeting is on Friday, November 6th. What time is it scheduled for?
+=== an hour with no morning or evening (should pin down)
+   ok  В пятницу в пять. -> Спасибо. Встреча в пятницу шестого ноября в пять часов вечера?
+   NO  В пятницу в пять. -> Спасибо, в пятницу шестого ноября в семнадцать часов. Правильно?
+=== an hour with no morning or evening, English (should pin down)
+   NO  Friday at five. -> So that's Friday the sixth of November at five o'clock, is that right?
+   NO  Friday at five. -> So that's Friday the sixth of November at five o'clock, is that right?
+=== only next week (should pin down)
+   ok  На следующей неделе. -> Спасибо. Можете сказать точный день и время встречи?
+   NO  На следующей неделе. -> Спасибо, уточните день недели и время встречи, пожалуйста.
+=== only next week, English (should pin down)
+   ok  Sometime next week. -> Thanks, that helps. Can you tell me the specific day next week? Is it Monday, Tuesday, Wednesday, or another day?
+   ok  Sometime next week. -> Can you give me the specific day next week? Is it Monday, Tuesday, Wednesday, Thursday, or Friday?
+=== already clear (should leave alone)
+   ok  Завтра в одиннадцать утра. -> Спасибо, встреча завтра, четвёртого ноября, в одиннадцать утра. Правильно?
+   ok  Завтра в одиннадцать утра. -> Спасибо, завтра четвёртого ноября в одиннадцать утра. Всё правильно?
+=== already clear, English (should leave alone)
+   ok  Tomorrow at eleven in the morning. -> Got it, so the meeting is tomorrow, Wednesday the fourth of November, at eleven in the morning. Is that correct?
+   ok  Tomorrow at eleven in the morning. -> Great, so the meeting is tomorrow, Wednesday the fourth of November, at eleven in the morning. Is that correct?
+=== mentioned in passing (should leave alone)
+   ok  В прошлый понедельник было дороже, а сейчас сто тысяч. -> Спасибо, сто тысяч рублей за осмотр. А нужна ли предварительная запись?
+   ok  В прошлый понедельник было дороже, а сейчас сто тысяч. -> Спасибо, сто тысяч рублей за осмотр. Нужна ли предварительная запись?
+=== mentioned in passing, English (should leave alone)
+   ok  It was more last Monday, but now it's a hundred dollars. -> Thank you, so a check-up is a hundred dollars. Do I need to book an appointment, or can you just walk in?
+   ok  It was more last Monday, but now it's a hundred dollars. -> So the check-up is a hundred dollars, is that right?
+=== a date the brief already names (should leave alone)
+   ok  Да, в воскресенье работаем. -> Спасибо за информацию. Daurove узнает об этом.
+   ok  Да, в воскресенье работаем. -> Спасибо за информацию! Daurove передам, что вы работаете в воскресенье, восьмого ноября. До свидания!
+=== they don't know, and say so (should leave alone)
+   ok  Пока не знаю, ещё не решили. -> Понимаю. Передам Daurove, что встреча на следующей неделе. Спасибо за информацию, до свидания.
+   ok  Пока не знаю, ещё не решили. -> Понял. Можете ли вы узнать и перезвонить Daurove, или он сам свяжется с вами?
+=== they don't know, English (should leave alone)
+   ok  I don't know yet, it isn't decided. -> Okay, so it hasn't been decided yet. Will you be able to confirm the day with me once it's been decided, or should I have Daurove reach out to you about it?
+   ok  I don't know yet, it isn't decided. -> Okay, so it hasn't been confirmed yet. Will you be the one deciding on the day, or will Daurove let you know?
+should pin down: 8 of 12
+should leave alone: 14 of 14
+   ok  Sonnet, left vague and about to finish: correct Don't end the call yet. 'Sometime next week' isn't a specific answer, so politely ask if they know which day a
+   ok  Sonnet, left vague and about to finish: correct Don't end the call yet. Politely say you'd like to be sure, and ask if they know which day and time next week 
+   ok  Sonnet, Haiku is already asking: none 
+   ok  Sonnet, Haiku is already asking: none 
+   NO  Sonnet, clear date: correct You have the answer: the meeting is Friday 6-11-2026 at 11 in the morning. Thank them briefly, say goodbye and
+   NO  Sonnet, clear date: correct Thank the person, say goodbye and end the call. The goal is done: the meeting is Friday 6-11-2026 at 11 in the
+   ok  Sonnet, they said they don't know: none 
+   ok  Sonnet, they said they don't know: none 
+Sonnet right: 6 of 8
+   report: {"outcome": "partial", "answers": [{"need": "When is the meeting?", "label": "Meeting date", "answer": "Sometime next week (week of 9-11-2026), exact day not known yet", "confirmed": false}], "summary": "They said the meeting is sometime next week but don't know the day yet.", "important_details": [], "follow_up": "Check again later for the exact day of the 
+   report: {"outcome": "partial", "answers": [{"need": "When is the meeting?", "label": "Meeting date", "answer": "Sometime next week (week of 9-11-2026), day not yet known", "confirmed": false}], "summary": "Meeting is sometime the week of 9-11-2026, but the exact day is not yet decided.", "important_details": ["Exact day still undecided by them"], "follow_up": "Ask a

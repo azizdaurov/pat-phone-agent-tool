@@ -69,7 +69,7 @@ class Notes(unittest.TestCase):
         notes = self.notes()
         notes.summary = "OPEN: call back"
         merge_call(notes, REAL_CALL, ask, "2026-11-02 10:00")
-        for expected in ("OPEN: call back", "Рустам", "2026-11-02"):
+        for expected in ("OPEN: call back", "Рустам", "2-11-2026"):
             self.assertIn(expected, ask.asked[0])
 
     def test_too_long_gets_one_retry(self):

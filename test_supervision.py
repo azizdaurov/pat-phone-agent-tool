@@ -329,6 +329,71 @@ class Cuts(unittest.TestCase):
         call._turn("вопрос", call.epoch)
         self.assertIn("They heard none of it", call.brain.messages[0])
 
+    def talked_over(self, reply="Азиз просит забрать еду. Вы заберёте?", heard=""):
+        """Haiku has just asked something, and they spoke over it having heard only `heard`."""
+        call, transcript = conversation(FakeBrain(reply))
+        call._turn("да да да", call.epoch)
+        call.brain.messages.clear()
+        call.mouth.spoken.clear()
+        call.mouth.busy = True
+        call.mouth.heard = heard
+        call._cut_speech()
+        call.mouth.busy = False
+        return call, transcript
+
+    def test_a_yes_over_a_question_they_heard_none_of_gets_the_question_again(self):
+        call, transcript = self.talked_over()
+        call._turn("да", call.epoch)
+        self.assertEqual(call.brain.messages, [])
+        self.assertIn("Вы заберёте?", " ".join(call.mouth.spoken))
+        self.assertIn("Азиз просит забрать еду", " ".join(call.mouth.spoken))
+        self.assertIn(("Claude", cicero.HEARD_NOTHING), transcript.spoken)
+        self.assertFalse(call.finished.is_set())
+
+    def test_their_real_answer_after_that_reaches_haiku_which_is_told_what_happened(self):
+        call, _ = self.talked_over()
+        call._turn("да", call.epoch)
+        call._turn("да", call.epoch)
+        self.assertEqual(len(call.brain.messages), 1)
+        self.assertIn('They said "да" over your last reply', call.brain.messages[0])
+        self.assertTrue(call.brain.messages[0].endswith("\nда"))
+
+    def test_saying_yes_over_it_every_time_keeps_getting_the_question(self):
+        call, _ = self.talked_over()
+        call._turn("да", call.epoch)
+        call.mouth.spoken.clear()
+        call.mouth.busy = True
+        call._cut_speech()
+        call.mouth.busy = False
+        call._turn("да да", call.epoch)
+        self.assertEqual(call.brain.messages, [])
+        self.assertIn("Вы заберёте?", " ".join(call.mouth.spoken))
+
+    def test_words_that_say_something_go_to_haiku(self):
+        call, _ = self.talked_over()
+        call._turn("да заберу", call.epoch)
+        self.assertEqual(len(call.brain.messages), 1)
+        self.assertIn("They heard none of it", call.brain.messages[0])
+        self.assertTrue(call.brain.messages[0].endswith("\nда заберу"))
+
+    def test_a_yes_after_hearing_part_of_it_goes_to_haiku_told_what_they_heard(self):
+        call, _ = self.talked_over(heard="Азиз просит")
+        call._turn("да", call.epoch)
+        self.assertEqual(len(call.brain.messages), 1)
+        self.assertIn('They heard only: "Азиз просит"', call.brain.messages[0])
+        self.assertIn("ask it again", call.brain.messages[0])
+
+    def test_a_yes_over_something_that_asked_nothing_goes_to_haiku(self):
+        call, _ = self.talked_over(reply="Спасибо, до свидания.")
+        call._turn("да", call.epoch)
+        self.assertEqual(len(call.brain.messages), 1)
+
+    def test_bare_answers(self):
+        for text in ("да", "Да, да!", "угу", "ну да", "yes", "Yeah.", "uh-huh", "no"):
+            self.assertTrue(cicero.is_bare_answer(text), text)
+        for text in ("", "да заберу", "алло", "yes I will", "кто это"):
+            self.assertFalse(cicero.is_bare_answer(text), text)
+
     def test_reply_already_finished_is_not_called_cut_off(self):
         call, transcript = conversation(FakeBrain())
         call._cut_speech()
@@ -438,7 +503,7 @@ class IdentityBrief(unittest.TestCase):
 
     def test_task_message_holds_the_task_notes_and_date(self):
         message = CallBrief.from_dict(TARGET_BRIEF).task_message("Aziz", "SECRETNOTES")
-        for part in ("SECRETGOAL", "SECRETNEED", "SECRETCONTEXT", "SECRETSHARE", "SECRETLIMIT", "SECRETNOTES", "Today is 20", "[ASK]"):
+        for part in ("SECRETGOAL", "SECRETNEED", "SECRETCONTEXT", "SECRETSHARE", "SECRETLIMIT", "SECRETNOTES", "Today is ", "[ASK]"):
             self.assertIn(part, message)
         self.assertNotIn("{", message)
 

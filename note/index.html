@@ -1,0 +1,434 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Pat</title>
+<script src="qrc:///qtwebchannel/qwebchannel.js"></script>
+<script src="wave.js"></script>
+<style>
+:root{--paper:#E6D6B8;--edge:#CDB995;--card:#F3E9D3;--card-hover:#FBF4E4;--line:#A98E67;--ink:#3B2A1A;--ink-hover:#54402C;--on-ink:#F5ECD9;--muted:#6B5238;--pale:#B9A27A;--rule:rgba(107,82,56,.24)}
+@keyframes worm{0%,55%,100%{transform:translateY(0)}68%{transform:translateY(-7px)}80%{transform:translateY(1px)}90%{transform:translateY(0)}}
+@media (prefers-reduced-motion:reduce){.dot{animation:none!important}}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0;background:transparent;overflow:hidden;user-select:none}
+body{padding:8px 12px 0;font-family:Georgia,'Times New Roman',serif;color:var(--ink)}
+button{font:13px Georgia,'Times New Roman',serif;color:var(--ink);cursor:pointer}
+button:focus-visible{outline:2px solid var(--ink);outline-offset:2px}
+#note{position:relative;width:304px;overflow:hidden;background:var(--paper);border:1px solid var(--edge);border-radius:20px;box-shadow:0 6px 14px -3px rgba(44,30,14,.38);transition:max-height .45s cubic-bezier(.3,.8,.3,1)}
+#note.open{overflow:visible}
+#grain{position:absolute;inset:0;overflow:hidden;border-radius:19px;pointer-events:none}
+#grain svg{display:block;opacity:.14;mix-blend-mode:multiply}
+#content{position:relative;padding:18px 16px 16px}
+#note.idle #content{padding:8px}
+#controls{position:absolute;top:12px;right:12px;z-index:6;display:flex;gap:1px}
+#note.idle #controls{top:8px;right:6px;flex-direction:column;gap:2px}
+#controls button{display:flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;color:var(--muted);background:transparent;border:0;border-radius:50%;transition:background .15s,color .15s}
+#note.idle #controls button{width:17px;height:17px}
+#controls button:hover{color:var(--ink);background:rgba(107,82,56,.16)}
+#note.idle #edge{display:none}
+.left #edge svg{transform:rotate(180deg)}
+[hidden]{display:none!important}
+.tag{height:32px;padding:0;background:var(--card);border:1px solid var(--line);border-radius:999px;transition:background .15s}
+.tag:hover{background:var(--card-hover)}
+.dark{height:34px;padding:0;color:var(--on-ink);background:var(--ink);border:0;border-radius:999px;transition:background .15s}
+.dark:hover{background:var(--ink-hover)}
+.on{color:var(--on-ink);background:var(--ink)}
+.on:hover{background:var(--ink-hover)}
+form{display:flex;align-items:center;gap:6px;padding:0 20px 0 2px}
+#prompt{flex:1;min-width:0;height:36px;padding:0 8px;font:italic 14px Georgia,'Times New Roman',serif;color:var(--ink);background:transparent;border:0;border-radius:999px;transition:background .15s;user-select:text}
+#prompt::placeholder{color:var(--muted);opacity:1}
+#prompt:focus{outline:none;background:rgba(243,233,211,.75)}
+#send{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:50%}
+#notice{margin:6px 8px 2px;font-size:12px;font-style:italic;line-height:1.3;color:var(--muted)}
+.ringing{margin-bottom:7px;font-size:12px;font-style:italic;color:var(--muted);pointer-events:none}
+#s-header{padding-right:58px}
+h1{margin:0;font-size:19px;font-weight:700;line-height:1.2;pointer-events:none}
+#number{margin-top:2px;font-size:13px;color:var(--muted);pointer-events:none}
+#mixer{display:flex;align-items:center;justify-content:space-between;height:53px;margin-top:13px;padding-top:12px;border-top:1px solid var(--rule)}
+.bar{display:block;width:6px;height:6px;border-radius:3px;background:var(--pale)}
+#done-summary{margin:13px 0 0;font-size:14px;line-height:1.35;user-select:text}
+#done-next{margin:8px 0 0;font-size:13px;font-style:italic;line-height:1.35;color:var(--muted);user-select:text}
+#done{width:100%;margin-top:13px}
+ul{display:flex;flex-direction:column;gap:6px;margin:13px 0 0;padding:12px 0 0 15px;font-size:14px;line-height:1.3;border-top:1px solid var(--rule)}
+li span{pointer-events:none}
+.label{color:var(--muted)}
+.worm{display:inline-flex;align-items:center;gap:3px;height:14px;margin-left:4px;vertical-align:middle}
+.dot{width:5px;height:5px;border-radius:50%;background:var(--pale);animation:worm 2.6s ease-in-out infinite}
+.dot:nth-child(2){animation-delay:.13s}
+.dot:nth-child(3){animation-delay:.26s}
+#summary{margin:13px 0 0;font-size:15px;font-style:italic;line-height:1.3;pointer-events:none}
+.two{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:13px}
+#listen{display:flex;align-items:center;justify-content:center;gap:6px}
+#choices{display:grid;grid-template-columns:.8fr .95fr 1.45fr;align-items:start;gap:7px;margin-top:15px}
+#choices .tag{height:34px}
+#me-wrap{position:relative}
+.split{display:flex;height:34px}
+#me{flex:1;min-width:0;padding-left:4px;white-space:nowrap;border-right:0;border-radius:999px 0 0 999px}
+#arrow{display:flex;align-items:center;justify-content:center;width:26px;flex-shrink:0;padding:0 3px 0 0;border-radius:0 999px 999px 0}
+#arrow svg{transition:transform .2s}
+.open #arrow svg{transform:rotate(180deg)}
+#menu{position:absolute;top:39px;left:0;right:0;z-index:5;padding:4px;background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 6px 12px rgba(44,30,14,.3)}
+#menu button{display:flex;align-items:center;justify-content:space-between;width:100%;height:30px;padding:0 8px;background:transparent;border:0;border-radius:10px}
+#menu button:hover{background:var(--paper)}
+#route-row{display:flex;align-items:center;gap:10px;margin-top:13px}
+#route-row>span{flex-shrink:0;font-size:12px;color:var(--muted);pointer-events:none}
+#route{display:grid;flex:1;grid-template-columns:repeat(2,minmax(0,1fr));overflow:hidden;border:1px solid var(--line);border-radius:999px}
+#route button{display:flex;align-items:center;justify-content:center;gap:5px;height:32px;padding:0;background:var(--card);border:0;transition:background .2s,color .2s}
+#route button.on{color:var(--on-ink);background:var(--ink)}
+#on-phone{margin:13px 0 0;padding-top:12px;font-size:14px;font-style:italic;line-height:1.35;border-top:1px solid var(--rule);pointer-events:none}
+#end{width:100%;margin-top:13px}
+#panel{margin:8px 8px 4px;padding-top:9px;border-top:1px solid var(--rule)}
+#panel h2{margin:0 0 7px;font-size:14px;font-weight:700}
+#panel p{margin:0 0 5px;font-size:13px;line-height:1.35;user-select:text}
+pre{margin:0 0 7px;font:12px/1.15 Consolas,'Courier New',monospace;color:var(--muted);pointer-events:none}
+#panel-rows{display:grid;grid-template-columns:1fr auto;gap:4px 12px;margin-bottom:8px;font-size:13px}
+#panel-rows span:nth-child(odd){color:var(--muted)}
+#panel-calling{font-size:13px;font-style:italic;color:var(--muted)}
+#panel-lines.scroll{max-height:220px;overflow-y:auto}
+#panel-lines::-webkit-scrollbar{width:6px}
+#panel-lines::-webkit-scrollbar-thumb{background:var(--pale);border-radius:3px}
+.pat-fact{margin-top:6px;font-size:12px;color:var(--muted)}
+#panel-buttons{display:flex;gap:7px;margin-top:9px}
+#panel-buttons button{flex:1;padding:0 8px}
+#done-flair{margin:11px 0 0;padding-top:10px;font-size:13px;font-style:italic;line-height:1.35;border-top:1px solid var(--rule)}
+#poem-wrap{margin:11px 0 0;padding-top:10px;border-top:1px solid var(--rule)}
+#poem{max-height:190px;margin:0;overflow-y:auto;font:italic 13px/1.4 Georgia,'Times New Roman',serif;white-space:pre-wrap;color:var(--ink);pointer-events:auto;user-select:text}
+#poem::-webkit-scrollbar{width:6px}
+#poem::-webkit-scrollbar-thumb{background:var(--pale);border-radius:3px}
+#poem-writing{font-size:12px;font-style:italic;color:var(--muted)}
+#copy-poem{width:100%;margin-top:8px}
+</style>
+</head>
+<body>
+<main id="note" class="idle">
+  <div id="grain" aria-hidden="true"><svg width="100%" height="100%"><filter id="kraft"><feTurbulence type="fractalNoise" baseFrequency=".75 .22" numOctaves="3" seed="8"></feTurbulence><feColorMatrix values="0 0 0 0 .42  0 0 0 0 .3  0 0 0 0 .16  0 0 0 .7 -.1"></feColorMatrix></filter><rect width="100%" height="100%" filter="url(#kraft)"></rect></svg></div>
+  <div id="controls">
+    <button id="edge" type="button" aria-label="Slide to the screen edge" title="Slide to the edge"><svg aria-hidden="true" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M4.5 2 8.5 6l-4 4"></path></svg></button>
+    <button id="minimize" type="button" aria-label="Minimize to the taskbar" title="Minimize to the taskbar"><svg aria-hidden="true" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="M2.5 6h7"></path></svg></button>
+    <button id="close" type="button" aria-label="Close to the hidden icons. It keeps watching for calls" title="Close to the hidden icons. It keeps watching for calls"><svg aria-hidden="true" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m3 3 6 6M9 3l-6 6"></path></svg></button>
+  </div>
+  <div id="content">
+
+    <section id="s-idle">
+      <form id="form">
+        <label for="prompt" style="position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)">What should Claude do?</label>
+        <input id="prompt" type="text" placeholder="Ask Claude to call someone" autocomplete="off">
+        <button id="send" class="dark" type="submit" aria-label="Send to Claude"><svg aria-hidden="true" width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M3 8h10M9 4l4 4-4 4"></path></svg></button>
+      </form>
+    </section>
+    <p id="notice" hidden></p>
+    <section id="panel" aria-live="polite" hidden>
+      <h2 id="panel-title" hidden></h2>
+      <pre id="panel-art" aria-hidden="true" hidden></pre>
+      <div id="panel-calling" hidden></div>
+      <div id="panel-rows"></div>
+      <div id="panel-lines"></div>
+      <div id="panel-buttons"></div>
+    </section>
+
+    <header id="s-header" hidden>
+      <div id="ringing" class="ringing" hidden>Incoming call</div>
+      <h1 id="name"></h1>
+      <div id="number"></div>
+    </header>
+
+    <div id="mixer" aria-hidden="true" hidden></div>
+
+    <ul id="facts" hidden></ul>
+
+    <section id="s-done" hidden>
+      <p id="done-summary"></p>
+      <p id="done-next"></p>
+      <div id="done-flair" hidden></div>
+      <div id="poem-wrap" hidden>
+        <div id="poem-writing" hidden></div>
+        <pre id="poem" tabindex="0" hidden></pre>
+        <button id="copy-poem" class="tag" type="button" hidden>Copy</button>
+      </div>
+      <button id="done" class="tag" type="button">Done</button>
+    </section>
+
+    <section id="s-ai" hidden>
+      <p id="summary"></p>
+      <div class="two">
+        <button id="listen" class="tag" type="button"><svg aria-hidden="true" width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10V8a5 5 0 0 1 10 0v2"></path><rect x="2" y="9.5" width="3" height="4.5" rx="1"></rect><rect x="11" y="9.5" width="3" height="4.5" rx="1"></rect></svg><span id="listen-label">Listen</span></button>
+        <button id="take-over" class="tag" type="button">Take over</button>
+      </div>
+    </section>
+
+    <section id="s-ringing" hidden>
+      <div id="choices">
+        <button id="once" class="dark" type="button">AI once</button>
+        <button id="always" class="tag" type="button">Always AI</button>
+        <div id="me-wrap">
+          <div class="split">
+            <button id="me" class="tag" type="button">Me (iPhone)</button>
+            <button id="arrow" class="tag" type="button" aria-label="Choose where to answer" aria-expanded="false"><svg aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4.5 6 8l3.5-3.5"></path></svg></button>
+          </div>
+          <div id="menu" role="group" aria-label="Where to answer" hidden>
+            <button type="button" data-route="iphone"><span>iPhone</span><svg class="check" aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m2 6.5 2.7 2.7L10 3.5"></path></svg></button>
+            <button type="button" data-route="laptop"><span>Laptop</span><svg class="check" aria-hidden="true" width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="m2 6.5 2.7 2.7L10 3.5"></path></svg></button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <section id="s-me" hidden>
+      <p id="on-phone">Talking on your iPhone. It stays there until you switch.</p>
+      <div id="route-row">
+        <span>Audio on</span>
+        <div id="route" role="group" aria-label="Where the call's audio goes">
+          <button type="button" data-route="iphone"><svg aria-hidden="true" width="11" height="14" viewBox="0 0 11 16" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><rect x="1" y="1" width="9" height="14" rx="1.8"></rect><path d="M4.5 12.7h2"></path></svg>iPhone</button>
+          <button type="button" data-route="laptop"><svg aria-hidden="true" width="16" height="12" viewBox="0 0 18 13" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="1" width="12" height="8.5" rx="1"></rect><path d="M1 12h16"></path></svg>Laptop</button>
+        </div>
+      </div>
+      <button id="end" class="tag" type="button">End call</button>
+    </section>
+  </div>
+</main>
+<script>
+const $ = (id) => document.getElementById(id);
+const MENU_ROOM = 66;     // how far the options list can hang below a short note
+let menuOpen = false;
+let route = 'iphone';     // where Me answers: iPhone the first time, then the last choice
+let lastHeight = 0;
+let last = {};
+
+let bridge = null;
+new QWebChannel(qt.webChannelTransport, (channel) => {
+  bridge = channel.objects.bridge;
+  lastHeight = 0;
+  fit();
+});
+const api = () => bridge;
+
+function renderFacts(facts) {
+  const list = $('facts');
+  const signature = JSON.stringify(facts);
+  if (list.dataset.signature === signature) return;
+  list.dataset.signature = signature;
+  list.replaceChildren(...facts.map((fact) => {
+    const item = document.createElement('li');
+    const label = document.createElement('span');
+    label.className = 'label';
+    label.textContent = `${fact.label}: `;
+    item.appendChild(label);
+    if (fact.value) {
+      const value = document.createElement('span');
+      value.textContent = fact.value;
+      item.appendChild(value);
+    } else {
+      const worm = document.createElement('span');
+      worm.className = 'worm';
+      worm.setAttribute('role', 'img');
+      worm.setAttribute('aria-label', 'still finding out');
+      for (let i = 0; i < 3; i++) {
+        const dot = document.createElement('span');
+        dot.className = 'dot';
+        worm.appendChild(dot);
+      }
+      item.appendChild(worm);
+    }
+    return item;
+  }));
+}
+
+function renderRoute(chosen) {
+  const name = chosen === 'laptop' ? 'Laptop' : 'iPhone';
+  $('me').textContent = `Me (${name})`;
+  for (const button of document.querySelectorAll('#route button')) {
+    const on = button.dataset.route === chosen;
+    button.classList.toggle('on', on);
+    button.setAttribute('aria-pressed', on);
+  }
+  for (const button of document.querySelectorAll('#menu button')) {
+    const on = button.dataset.route === chosen;
+    button.querySelector('.check').style.visibility = on ? 'visible' : 'hidden';
+    button.setAttribute('aria-pressed', on);
+  }
+}
+
+function setMenu(open) {
+  menuOpen = open;
+  $('menu').hidden = !open;
+  $('note').classList.toggle('open', open);
+  $('arrow').setAttribute('aria-expanded', open);
+  fit();
+}
+
+function render(state) {
+  last = state;
+  const screen = state.screen;
+  if (state.me_route) route = state.me_route;
+  document.body.classList.toggle('left', state.side === 'left');
+  $('note').classList.toggle('idle', screen === 'idle');
+  $('s-idle').hidden = screen !== 'idle';
+  $('s-header').hidden = screen === 'idle';
+  $('ringing').hidden = screen !== 'ringing';
+  $('s-ringing').hidden = screen !== 'ringing';
+  $('s-ai').hidden = screen !== 'ai';
+  $('s-me').hidden = screen !== 'me';
+  $('s-done').hidden = screen !== 'done';
+  $('name').textContent = state.name || 'Unknown caller';
+  $('number').textContent = state.always ? `${state.number} · Always AI` : state.number;
+  $('notice').textContent = state.notice || '';
+  $('notice').hidden = !state.notice;
+  if (screen !== 'ringing' && menuOpen) setMenu(false);
+
+  const onLaptop = screen === 'me' && state.route === 'laptop';
+  $('mixer').hidden = !(screen === 'ai' || onLaptop);
+  $('on-phone').hidden = !(screen === 'me' && state.route !== 'laptop');
+  renderRoute(screen === 'me' ? state.route : route);
+  renderFacts(state.facts || []);
+  $('facts').hidden = !(screen === 'ai' || screen === 'done') || !(state.facts || []).length;
+  $('done-summary').textContent = state.summary || '';
+  $('done-summary').hidden = !state.summary;
+  $('done-next').textContent = state.next_step || '';
+  $('done-next').hidden = !state.next_step;
+  $('summary').textContent = state.summary || '';
+  $('summary').hidden = !state.summary;
+  $('listen').classList.toggle('on', Boolean(state.listening));
+  $('listen-label').textContent = state.listening ? 'Listening' : 'Listen';
+  $('listen').setAttribute('aria-pressed', Boolean(state.listening));
+  renderPanel(screen === 'idle' ? state.panel : null);
+  renderAfterCall(state);
+  reportTyping();
+  fit();
+}
+
+function renderPanel(panel) {
+  const signature = JSON.stringify(panel || null);
+  if ($('panel').dataset.signature === signature) return;
+  $('panel').dataset.signature = signature;
+  $('panel').hidden = !panel;
+  if (!panel) return;
+  $('panel-title').textContent = panel.title || '';
+  $('panel-title').hidden = !panel.title;
+  $('panel-art').textContent = panel.art || '';
+  $('panel-art').hidden = !panel.art;
+  $('panel-rows').replaceChildren(...(panel.rows || []).flat().map((text) => {
+    const cell = document.createElement('span');
+    cell.textContent = text;
+    return cell;
+  }));
+  $('panel-lines').replaceChildren(...(panel.lines || []).map((text) => {
+    const line = document.createElement('p');
+    line.textContent = text;
+    return line;
+  }));
+  // Calling Octo is only an animation. The buttons wait with the words, so it plays out.
+  const waiting = Boolean(panel.calling);
+  $('panel-calling').textContent = panel.calling || '';
+  $('panel-calling').hidden = !waiting;
+  $('panel-lines').hidden = waiting;
+  $('panel-lines').classList.toggle('scroll', Boolean(panel.scroll));
+  $('panel-buttons').hidden = waiting;
+  if (waiting) {
+    setTimeout(() => {
+      if ($('panel').dataset.signature !== signature) return;
+      $('panel-calling').hidden = true;
+      $('panel-lines').hidden = false;
+      $('panel-buttons').hidden = false;
+      fit();
+    }, panel.delay * 1000);
+  }
+  $('panel-buttons').replaceChildren(...(panel.buttons || []).map((button, index, all) => {
+    const element = document.createElement('button');
+    element.type = 'button';
+    element.className = index === 0 && all.length > 1 ? 'dark' : 'tag';
+    element.textContent = button.label;
+    element.onclick = () => api().press(button.id);
+    return element;
+  }));
+}
+
+function renderAfterCall(state) {
+  const flair = state.flair || [];
+  const patFacts = state.pat_facts || [];
+  $('done-flair').hidden = !(flair.length || patFacts.length);
+  const signature = JSON.stringify([flair, patFacts]);
+  if ($('done-flair').dataset.signature !== signature) $('done-flair').dataset.signature = signature, $('done-flair').replaceChildren(...flair.map((extra) => {
+    const block = document.createElement('div');
+    if (extra.art) {
+      const art = document.createElement('pre');
+      art.textContent = extra.art;
+      block.appendChild(art);
+    }
+    block.appendChild(document.createTextNode(extra.text || ''));
+    return block;
+  }).concat(patFacts.map((text) => {
+    const line = document.createElement('div');
+    line.className = 'pat-fact';
+    line.textContent = text;
+    return line;
+  })));
+  const poem = state.poem || '';
+  $('poem-wrap').hidden = !(poem || state.poem_pending);
+  $('poem-writing').hidden = !state.poem_pending;
+  $('poem-writing').textContent = state.poem_pending ? `Pat is writing your ${state.poem_style}...` : '';
+  if ($('poem').textContent !== poem) $('poem').textContent = poem;
+  $('poem').hidden = !poem;
+  $('copy-poem').hidden = !poem;
+}
+
+function fit() {
+  const height = $('content').offsetHeight + 2;
+  $('note').style.maxHeight = `${height}px`;
+  const wanted = height + (menuOpen ? MENU_ROOM : 0);
+  if (wanted !== lastHeight && api()) {
+    lastHeight = wanted;
+    api().fit(wanted);
+  }
+}
+
+function reportTyping() {
+  const input = $('prompt');
+  // An open panel counts as typing, so the note doesn't slide away with a joke on it.
+  if (api()) api().set_typing(!$('panel').hidden || input.value.length > 0 || (document.activeElement === input && document.hasFocus()));
+}
+
+$('form').addEventListener('submit', (event) => {
+  event.preventDefault();
+  const text = $('prompt').value.trim();
+  if (text && api()) {
+    api().submit(text);
+    $('prompt').value = '';
+    $('prompt').blur();
+    reportTyping();
+  }
+});
+$('once').onclick = () => api().answer_ai(false);
+$('always').onclick = () => api().answer_ai(true);
+$('me').onclick = () => api().answer_me(route);
+$('arrow').onclick = () => setMenu(!menuOpen);
+for (const button of document.querySelectorAll('#menu button')) {
+  button.onclick = () => {
+    route = button.dataset.route;
+    api().choose_route(route);
+    renderRoute(route);
+    setMenu(false);
+  };
+}
+for (const button of document.querySelectorAll('#route button')) {
+  button.onclick = () => api().set_route(button.dataset.route);
+}
+$('listen').onclick = () => api().listen(!last.listening);
+$('take-over').onclick = () => api().take_over();
+$('end').onclick = () => api().end_call();
+$('done').onclick = () => api().dismiss();
+$('copy-poem').onclick = () => api().copy($('poem').textContent);
+startWave($('mixer'), () => last.level || 0);
+$('edge').onclick = () => api().hide_to_edge();
+$('minimize').onclick = () => api().minimize();
+$('close').onclick = () => api().close_note();
+for (const event of ['input', 'focus', 'blur']) $('prompt').addEventListener(event, reportTyping);
+window.addEventListener('blur', reportTyping);
+window.addEventListener('focus', reportTyping);
+document.addEventListener('mousedown', (event) => {
+  if (event.button === 0 && !event.target.closest('button, input') && api()) api().start_drag();
+});
+new ResizeObserver(fit).observe($('content'));
+render({ screen: 'idle' });
+</script>
+</body>
+</html>

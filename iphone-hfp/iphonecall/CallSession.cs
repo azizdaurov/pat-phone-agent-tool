@@ -9,12 +9,16 @@ sealed class CallSession
     private readonly PhoneLine _line;
     private readonly Dictionary<string, (PhoneCallStatus Status, PhoneCallAudioDevice Audio)> _seen = new();
     private readonly Dictionary<string, (DateTime Last, int Tries)> _moveTries = new();
-    private bool _keepOnPhone;
+    private bool? _chosenPhone; // set by 'l' or 'p' for the current call
     private readonly DateTime _started = DateTime.UtcNow;
     private bool _sawCall;
     private DateTime? _quietSince;
 
     public CallSession(PhoneLine line) => _line = line;
+
+    // Off for the shell a call's owner doesn't need the laptop in: the window Windows opens by itself
+    // for a call, and --stay-on-phone. Those leave a call's audio where it is unless told otherwise.
+    public bool MoveToLaptop { get; init; } = true;
 
     // Set for the windows Windows opens by itself for a call: exit 3 s after the last call ends,
     // or after a minute if no call ever shows up.
@@ -85,7 +89,7 @@ sealed class CallSession
     {
         var call = ActiveCalls().FirstOrDefault(c => IsLive(c) || c.Status == PhoneCallStatus.Incoming)
                    ?? throw new InvalidOperationException("no call");
-        _keepOnPhone = target == PhoneCallAudioDevice.RemoteDevice;
+        _chosenPhone = target == PhoneCallAudioDevice.RemoteDevice;
         Console.WriteLine($"audio -> {target}: {await call.ChangeAudioDeviceAsync(target)}");
     }
 
@@ -111,7 +115,7 @@ sealed class CallSession
                 {
                     _seen.Remove(gone);
                     _moveTries.Remove(gone);
-                    if (current.Count == 0) _keepOnPhone = false;
+                    if (current.Count == 0) _chosenPhone = null;
                     Console.WriteLine($"\n-- call ended ({current.Count} active)");
                 }
 
@@ -144,7 +148,8 @@ sealed class CallSession
     // 2 s until the call really shows LocalDevice. 'p' stops this, for taking a call on the phone.
     private async Task KeepAudioOnLaptopAsync(PhoneCall call)
     {
-        if (_keepOnPhone || call.AudioDevice == PhoneCallAudioDevice.LocalDevice) return;
+        bool stayOnPhone = _chosenPhone ?? !MoveToLaptop;
+        if (stayOnPhone || call.AudioDevice == PhoneCallAudioDevice.LocalDevice) return;
         var now = DateTime.UtcNow;
         _moveTries.TryGetValue(call.CallId, out var tried);
         if (tried.Tries > 0 && now - tried.Last < TimeSpan.FromSeconds(2)) return;

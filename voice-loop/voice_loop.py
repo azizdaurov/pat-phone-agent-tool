@@ -366,7 +366,7 @@ class Ear(Mic):
 
 
 class BatchEar(Mic):
-    """Russian: onnx-asr has no streaming for GigaAM, so it transcribes everything at release."""
+    """For onnx-asr models, which don't stream: it transcribes everything at release."""
 
     def __init__(self, model=RU_STT_MODEL, mic=True):
         import onnx_asr

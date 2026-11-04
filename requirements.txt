@@ -1,3 +1,4 @@
 -r voice-loop/requirements.txt
 PyAudioWPatch==0.2.12.8
 mcp==2.3.0
+PySide6==6.10.0

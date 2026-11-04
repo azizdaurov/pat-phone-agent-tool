@@ -1,0 +1,43 @@
+   ok  on the call, ru: no currency added or asked: Спасибо. Осмотр стоит сто тысяч. Нужна ли предварительная запись?
+   ok  on the call, ru: no currency added or asked: Сто тысяч, понял. А нужна ли предварительная запись на осмотр?
+   ok  on the call, ru: no currency added or asked: Спасибо, сто тысяч. А нужна ли предварительная запись на осмотр?
+   ok  report, ru: just the number: {'outcome': 'done', 'answers': [{'need': 'Сколько стоит осмотр?', 'label': 'Price', 'answer': '100000', 'confirmed': True}, {'need': 'Нужна ли запись?', 'label': 'Appointment', 'answer': 'Not needed', 'confirme
+   ok  report, ru: just the number: {'outcome': 'done', 'answers': [{'need': 'Сколько стоит осмотр?', 'label': 'Price', 'answer': '100000', 'confirmed': True}, {'need': 'Нужна ли запись?', 'label': 'Appointment', 'answer': 'Not needed', 'confirme
+   ok  report, ru: just the number: {'outcome': 'done', 'answers': [{'need': 'Сколько стоит осмотр?', 'label': 'Price', 'answer': '100000', 'confirmed': True}, {'need': 'Нужна ли запись?', 'label': 'Appointment', 'answer': 'Not needed', 'confirme
+   ok  notes, ru: just the number: WHO: speaks Russian
+FACTS: examination costs 100000; no recording needed
+LAST: 3-11-2026, confirmed exam price and recording not required
+   ok  notes, ru: just the number: WHO: Russian speaker, wants to be addressed formally
+FACTS: examination costs 100000
+OPEN: they said recording is not needed
+LAST: 3-11-2026 – quoted price for examination
+   ok  notes, ru: just the number: WHO: Russian speaker, offers inspections/examinations
+FACTS: inspection costs 100000, no appointment needed
+LAST: 3-11-2026, quoted price for inspection service
+   ok  sticky note, ru: just the number: [{'label': 'Cost', 'value': '100000'}, {'label': 'Appointment needed', 'value': 'No'}]
+   ok  sticky note, ru: just the number: [{'label': 'Cost', 'value': '100000'}, {'label': 'Appointment needed', 'value': 'No'}]
+   ok  sticky note, ru: just the number: [{'label': 'Cost', 'value': '100000'}, {'label': 'Appointment needed', 'value': 'No'}]
+   ok  on the call, en: no currency added or asked: A hundred, got it. Do I need to book a check-up in advance?
+   ok  on the call, en: no currency added or asked: A hundred, got it. And do you need to book a check-up, or can you just walk in?
+   ok  on the call, en: no currency added or asked: A hundred, got it. Do I need to book an appointment for the check-up?
+   ok  report, en: just the number: {'outcome': 'done', 'answers': [{'need': 'How much is a check-up?', 'label': 'Price', 'answer': '100', 'confirmed': True}, {'need': 'Do I need to book?', 'label': 'Booking', 'answer': 'No booking needed', 'conf
+   ok  report, en: just the number: {'outcome': 'done', 'answers': [{'need': 'How much is a check-up?', 'label': 'Price', 'answer': '100', 'confirmed': True}, {'need': 'Do I need to book?', 'label': 'Booking', 'answer': 'No booking needed', 'conf
+   ok  report, en: just the number: {'outcome': 'done', 'answers': [{'need': 'How much is a check-up?', 'label': 'Price', 'answer': '100', 'confirmed': True}, {'need': 'Do I need to book?', 'label': 'Booking', 'answer': 'No booking needed', 'conf
+   ok  notes, en: just the number: FACTS: Check-up costs 100. No booking needed.
+LAST: 3-11-2026, asked about check-up price and booking requirements.
+   ok  notes, en: just the number: WHO: clinic or medical provider
+FACTS: check-up costs 100, no booking needed
+LAST: 3-11-2026 called about check-up pricing
+   ok  notes, en: just the number: FACTS: check-up costs 100, no booking needed
+LAST: 3-11-2026 called about check-up pricing
+   ok  sticky note, en: just the number: [{'label': 'Check-up cost', 'value': '100'}, {'label': 'Booking needed', 'value': 'No'}]
+   ok  sticky note, en: just the number: [{'label': 'Check-up cost', 'value': '100'}, {'label': 'Booking needed', 'value': 'No'}]
+   ok  sticky note, en: just the number: [{'label': 'Check-up cost', 'value': '100'}, {'label': 'Booking needed', 'value': 'No'}]
+on the call, ru: no currency added or asked: 3 of 3
+report, ru: just the number: 3 of 3
+notes, ru: just the number: 3 of 3
+sticky note, ru: just the number: 3 of 3
+on the call, en: no currency added or asked: 3 of 3
+report, en: just the number: 3 of 3
+notes, en: just the number: 3 of 3
+sticky note, en: just the number: 3 of 3

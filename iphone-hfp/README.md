@@ -46,7 +46,9 @@ iphonecall
 Other forms: `iphonecall dial +998XXXXXXXXX`, `iphonecall status`, `iphonecall list`,
 `iphonecall unregister`, and `--device <name>` to pick another paired phone.
 
-**Where the voice goes:** each call's audio is moved to the laptop automatically, and Windows plays it on
+**No terminal by itself:** it has no console, so the window Windows starts for each call stays out of sight. Running `iphonecall` by hand opens a terminal for it.
+
+**Where the voice goes:** with `--stay-on-phone`, and in the window Windows opens by itself for a call, audio stays where it is unless you type `l` or `p`. Otherwise each call's audio is moved to the laptop automatically, and Windows plays it on
 the current **default** speaker and microphone (Settings > System > Sound). If you hear nothing, check
 which device is the default; it may be your headphones. Use headphones to stop the caller hearing an echo.
 
@@ -138,7 +140,7 @@ It targets .NET 10 (long-term support, to November 2028) with the Windows 11 SDK
 
 9. **Finished calls stay in the "active" list.** `GetAllActivePhoneCalls()` kept returning a call with status `Ended`
    minutes after it finished, so `CallSession.ActiveCalls` filters those out. Without that, a new run reports the old
-   call as if it had just ended, which made Cicero give up on the next call.
+   call as if it had just ended, which made Pat give up on the next call.
 
 10. **`ChangeAudioDeviceAsync` can report `Succeeded` and change nothing.** On 3 of the 4 logged calls on 2026-11-02 it
     did, and the call stayed `audio=RemoteDevice`, with no sound reaching the laptop. Trust the call's `AudioDevice`, not

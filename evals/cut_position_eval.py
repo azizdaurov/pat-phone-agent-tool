@@ -96,4 +96,4 @@ piper = cicero.PiperVoice(cicero.RU_TTS_VOICE)
 speed(piper)
 run("Russian (Piper, length known)", piper, cicero.BatchEar(cicero.RU_STT_MODEL, mic=False), transcribe_ru, RUSSIAN, True)
 run("English (Pocket TTS, length guessed)", cicero.PocketVoice(cicero.TTS_LANGUAGE, cicero.TTS_VOICE),
-    cicero.Ear(cicero.STT_ARCH, mic=False), transcribe_en, ENGLISH, False)
+    cicero.BatchEar(cicero.EN_STT_MODEL, mic=False), transcribe_en, ENGLISH, False)

@@ -1,5 +1,6 @@
 """The phone tool, through a real MCP connection and with a fake cicero.py, so nothing dials.
 Run: .venv\\Scripts\\python.exe -m unittest test_phone_mcp -v"""
+import json
 import os
 import sys
 import tempfile
@@ -9,6 +10,7 @@ import anyio
 
 import phone_mcp
 from call_card import TEXT_WIDTH, display_width, render_card
+from private_numbers import PrivateNumbers
 
 HERE =os.path.dirname(os.path.abspath(__file__))
 FAKE_CICERO = r"""
@@ -52,6 +54,13 @@ class Card(unittest.TestCase):
         for part in ("Call Summary", "Done", "+998 90 000 00 01", "1 min 12 s", "Place", "Los Angeles", "Bring a suit",
                      "Reply by Friday", "come early"):
             self.assertIn(part, card)
+
+    def test_long_labels_wrap_instead_of_being_cut(self):
+        card = render_card({"status": "done", "report": {"outcome": "done", "answers": [{"label": "Time and place of the meeting", "answer": "11:00", "confirmed": True}]}})
+        self.assert_frame_lines_up(card)
+        self.assertNotIn("…", card)
+        for word in ("Time", "place", "meeting", "11:00"):
+            self.assertIn(word, card)
 
     def test_unconfirmed_and_missing_answers_are_marked(self):
         card = render_card(FULL_REPORT)
@@ -103,6 +112,7 @@ class Calls(unittest.TestCase):
         with open(self.fake, "w", encoding="utf-8") as f:
             f.write(FAKE_CICERO)
         phone_mcp.CALLS = folder
+        phone_mcp.private = PrivateNumbers(folder)
         phone_mcp.running.clear()
 
     def start(self, number=NUMBER, brief=BRIEF, voice="", save_audio=False):
@@ -196,6 +206,63 @@ class Calls(unittest.TestCase):
         self.assertEqual(state["status"], "crashed")
         self.assertIn("Failed", state["chat_summary"])
 
+    def test_a_contact_can_be_called_by_name_and_is_who_is_asked_for(self):
+        phone_mcp.private.add_contact("Рустам", "+998 90 000 00 05")
+        result = self.start(number="Рустам", brief={"goal": "Find out the hours.", "confidence": "confirmed"})
+        self.assertEqual((result["status"], result["calling"]), ("running", "Рустам"))
+        used = self.args_used(result["call_id"])
+        self.assertIn("+998 90 000 00 05", used)
+        with open(phone_mcp._path(result["call_id"], "brief.json"), encoding="utf-8") as f:
+            self.assertIn("Рустам", f.read())
+
+    def test_a_placeholder_dials_the_real_number(self):
+        label = phone_mcp.private.protect("+998 90 000 00 06")
+        result = self.start(number=label)
+        self.assertEqual(result["calling"], label)
+        self.assertIn("+998 90 000 00 06", self.args_used(result["call_id"]))
+
+    def test_an_unknown_contact_or_placeholder_is_refused_and_nothing_starts(self):
+        for target in ("Nobody", "#7"):
+            self.assertEqual(self.start(number=target)["status"], "refused", target)
+        self.assertEqual(phone_mcp.running, {})
+
+    def test_call_ids_have_no_digits_of_the_number(self):
+        call_id = self.start(number="+998 90 000 00 07")["call_id"]
+        self.assertNotIn("900000007", call_id)
+        self.assertNotIn("0000007", call_id)
+
+    def test_nothing_handed_back_has_the_number(self):
+        call_id = self.start(number="+998 90 000 00 08")["call_id"]
+        phone_mcp.end_call(call_id)
+        phone_mcp.running[call_id].wait(10)
+        with open(phone_mcp._path(call_id, "result.json"), "w", encoding="utf-8") as f:
+            json.dump({"status": "done", "number": "+998 90 000 00 08", "reason": "called 998900000008", "seconds": 5, "notes": "see contacts\\900000008.md",
+                       "transcript_file": "calls\\20261103-120000-900000008.txt", "report": {"outcome": "done", "summary": "Reached +998900000008."}}, f)
+        everything = json.dumps(phone_mcp.read_call(call_id), ensure_ascii=False)
+        self.assertNotIn("900000008", everything)
+        self.assertNotIn("000 00 08", everything)
+        self.assertIn("#1", phone_mcp.read_call(call_id)["chat_summary"])
+
+    def test_a_crashed_call_hands_back_no_number_either(self):
+        call_id = self.start(number="+998 90 000 00 08")["call_id"]
+        phone_mcp.running[call_id].kill()
+        phone_mcp.running[call_id].wait(5)
+        with open(phone_mcp._path(call_id, "log"), "w", encoding="utf-8") as f:
+            f.write("Dialing +998 90 000 00 08. Claude's task\nNotes in contacts\\900000008.md\n")
+        self.assertNotIn("900000008", json.dumps(phone_mcp.read_call(call_id), ensure_ascii=False))
+        self.assertNotIn("000 00 08", json.dumps(phone_mcp.read_call(call_id), ensure_ascii=False))
+
+    def test_list_contacts_has_names_only(self):
+        phone_mcp.private.add_contact("Рустам", "+998 90 000 00 09")
+        listed = phone_mcp.list_contacts()
+        self.assertEqual(listed, {"contacts": ["Рустам"]})
+
+    def test_contact_notes_by_name_placeholder_or_unknown(self):
+        phone_mcp.private.add_contact("Рустам", "+998 90 000 00 09")
+        self.assertIn("known", phone_mcp.contact_notes("Рустам"))
+        self.assertEqual(phone_mcp.contact_notes("Nobody"), {"known": False})
+        self.assertEqual(phone_mcp.contact_notes("#99"), {"known": False})
+
     def test_unknown_call_and_path_tricks(self):
         self.assertEqual(phone_mcp.read_call("..\\..\\secret")["status"], "unknown")
 
@@ -221,7 +288,7 @@ class Connection(unittest.TestCase):
         init, listed, refused = anyio.run(session_results)
         self.assertIn("real phone calls", init.instructions)
         tools = {tool.name: tool for tool in listed.tools}
-        self.assertEqual(set(tools), {"place_call", "get_call", "end_call", "take_over", "contact_notes"})
+        self.assertEqual(set(tools), {"place_call", "get_call", "end_call", "take_over", "contact_notes", "list_contacts"})
         schema = tools["place_call"].input_schema
         self.assertEqual(set(schema["required"]), {"number", "goal", "confidence"})
         for name in ("voice", "name", "company", "role", "confidence", "confirm_question", "who_can_answer", "need_from_them", "context", "may_share", "must_not", "done_when", "if_stuck", "language"):

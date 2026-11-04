@@ -71,14 +71,16 @@ def moonshine_engine():
 
 def main():
     engine = sys.argv[1]
-    wanted_language = sys.argv[2] if len(sys.argv) > 2 else None
+    wanted_language = sys.argv[2] or None if len(sys.argv) > 2 else None
     conditions = set(sys.argv[3].split(",")) if len(sys.argv) > 3 else None
+    clip_limit = int(sys.argv[4]) if len(sys.argv) > 4 else None
     only = next((language for mark, language in ONE_LANGUAGE.items() if mark in engine), None)
     with open(os.path.join(DATA, "set", "manifest.json"), encoding="utf-8") as f:
         entries = json.load(f)
     entries = [e for e in entries if (only is None or e["language"] == only)
                and (wanted_language is None or e["language"] == wanted_language)
-               and (conditions is None or e["condition"] in conditions)]
+               and (conditions is None or e["condition"] in conditions)
+               and (clip_limit is None or e["condition"] == "real_call" or int(e["id"][2:]) < clip_limit)]
     os.makedirs(os.path.join(DATA, "results"), exist_ok=True)
     out = os.path.join(DATA, "results", engine.replace("/", "_").replace(":", "_") + ".jsonl")
     done = set()
