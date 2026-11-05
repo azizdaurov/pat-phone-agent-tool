@@ -7,7 +7,7 @@ using System.Text.Json;
 // the manifest entries both matter; read "Things that matter" in ..\README.md before changing them.
 static class HandsFree
 {
-    private const string AddressKey = "System.DeviceInterface.Bluetooth.DeviceAddress";
+    public const string AddressKey = "System.DeviceInterface.Bluetooth.DeviceAddress";
 
     private static async Task<IReadOnlyList<DeviceInformation>> AllAsync() =>
         await DeviceInformation.FindAllAsync(
@@ -26,18 +26,103 @@ static class HandsFree
     public static async Task ListJsonAsync() =>
         Console.WriteLine(JsonSerializer.Serialize((await AllAsync()).Select(d => new { id = d.Id, name = d.Name })));
 
-    public static async Task<DeviceInformation?> FindAsync(string? nameHint = null, string? deviceId = null) =>
-        PhoneSelection.Choose(await AllAsync(), d => d.Name, d => d.Id, nameHint, deviceId);
+    // With no phone chosen and several paired, the one that owns Windows' default phone line: the phone that connected last.
+    public static async Task<DeviceInformation?> FindAsync(string? nameHint = null, string? deviceId = null)
+    {
+        var all = await AllAsync();
+        if (string.IsNullOrEmpty(nameHint) && string.IsNullOrEmpty(deviceId) && all.Count > 1)
+        {
+            var active = await ActiveTransportIdAsync();
+            var match = active == null ? null : all.FirstOrDefault(d =>
+                string.Equals(PhoneLineTransportDevice.FromId(d.Id).DeviceId, active, StringComparison.OrdinalIgnoreCase));
+            if (match != null) return match;
+        }
+        return PhoneSelection.Choose(all, d => d.Name, d => d.Id, nameHint, deviceId);
+    }
+
+    private static async Task<string?> ActiveTransportIdAsync()
+    {
+        try
+        {
+            var store = await Timed(PhoneCallManager.RequestStoreAsync().AsTask(), 15, "phone call store");
+            var id = await Timed(store.GetDefaultLineAsync().AsTask(), 10, "default line");
+            var line = await Timed(PhoneLine.FromIdAsync(id).AsTask(), 10, "default line lookup");
+            return line.TransportDeviceId;
+        }
+        catch (Exception) { return null; }
+    }
 
     public static void Unregister(DeviceInformation info) => PhoneLineTransportDevice.FromId(info.Id).UnregisterApp();
 
+    // The chosen phone first. If it can't be reached, such as one that was switched off or left in a drawer, each other
+    // paired phone that has a Windows phone line, so whichever phone is here takes the call.
+    // Tries the phones in PhoneSelection.Order: one that is connected before one that isn't, whatever Windows' default says.
+    // Returns the line and the phone it belongs to, or (null, null).
+    public static async Task<(PhoneLine? line, DeviceInformation? phone)> ConnectAnyAsync(DeviceInformation first)
+    {
+        // Open the call store first, and only once: opened after ConnectAsync in the same process, it never returns.
+        var store = await Timed(PhoneCallManager.RequestStoreAsync().AsTask(), 15, "phone call store");
+        var all = await AllAsync();
+        var order = PhoneSelection.Order(await CandidatesAsync(all, store, first));
+        string? tried = null;
+        foreach (var candidate in order)
+        {
+            var info = all.First(d => d.Id == candidate.Id);
+            if (tried != null) Console.WriteLine($"phone    : {tried} isn't reachable, trying {info.Name}");
+            var line = await ConnectAsync(info, store);
+            if (line != null) return (line, info);
+            tried = info.Name;
+        }
+        return (null, null);
+    }
+
+    // What Windows says about each paired phone: Bluetooth connection, phone line, default line. Reads only.
+    private static async Task<List<PhoneSelection.Candidate>> CandidatesAsync(IReadOnlyList<DeviceInformation> all, PhoneCallStore store,
+                                                                            DeviceInformation? first)
+    {
+        var transports = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var (ids, _) = ListLineIds(store, 5);
+        foreach (var id in ids)
+        {
+            try { transports.Add((await Timed(PhoneLine.FromIdAsync(id).AsTask(), 10, "phone line lookup")).TransportDeviceId); }
+            catch (Exception) { }
+        }
+        string? defaultTransport = null;
+        try
+        {
+            var defaultId = await Timed(store.GetDefaultLineAsync().AsTask(), 10, "default line");
+            defaultTransport = (await Timed(PhoneLine.FromIdAsync(defaultId).AsTask(), 10, "default line lookup")).TransportDeviceId;
+        }
+        catch (Exception) { }
+        var candidates = new List<PhoneSelection.Candidate>();
+        foreach (var d in all)
+        {
+            string transport = PhoneLineTransportDevice.FromId(d.Id).DeviceId;
+            bool connected = (await PhoneWatch.DeviceAsync(d))?.ConnectionStatus == Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected;
+            candidates.Add(new(d.Id, d.Name, connected, transports.Contains(transport), d.Id == first?.Id,
+                               string.Equals(transport, defaultTransport, StringComparison.OrdinalIgnoreCase)));
+        }
+        return candidates;
+    }
+
+    // `iphonecall phones`: each paired phone, whether it is connected, whether it has a phone line, which line is Windows'
+    // default, and the order Pat would try them in. Reads only.
+    public static async Task PhonesAsync(DeviceInformation? first)
+    {
+        var store = await Timed(PhoneCallManager.RequestStoreAsync().AsTask(), 15, "phone call store");
+        var all = await AllAsync();
+        var candidates = await CandidatesAsync(all, store, first);
+        Console.WriteLine($"{"phone",-28} {"connected",-10} {"line",-6} {"default",-8} first");
+        foreach (var c in candidates)
+            Console.WriteLine($"{c.Name,-28} {(c.Connected ? "yes" : "no"),-10} {(c.HasLine ? "yes" : "no"),-6} {(c.Default ? "yes" : ""),-8} {(c.First ? "yes" : "")}");
+        Console.WriteLine("Pat tries: " + string.Join(", then ", PhoneSelection.Order(candidates).Select(c => c.Name)));
+    }
+
     // Prints each step on its own line (they fail independently, and which one fails is the
     // diagnosis) and returns the phone's line once the link is up, or null.
-    public static async Task<PhoneLine?> ConnectAsync(DeviceInformation info)
+    private static async Task<PhoneLine?> ConnectAsync(DeviceInformation info, PhoneCallStore store)
     {
         var device = PhoneLineTransportDevice.FromId(info.Id);
-        // Open the call store first: opened after ConnectAsync in the same process, it never returns.
-        var store = await Timed(PhoneCallManager.RequestStoreAsync().AsTask(), 15, "phone call store");
 
         Console.WriteLine($"phone    : {info.Name}");
         Console.WriteLine($"access   : {await StepAsync(async () => (await device.RequestAccessAsync()).ToString())}");

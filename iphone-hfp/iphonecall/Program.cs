@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Calls;
 
-const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | lines | audio-devices-json | unregister] [--device <name> | --device-id <id>] [--stay-on-phone]";
+const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | lines | phones | self-test | audio-devices-json | unregister] [--device <name> | --device-id <id>] [--stay-on-phone] [--follow-phone]";
 const string Help = "commands: d <number> dial | a answer | h hang up/reject | m mute on/off |\n" +
                     "          l audio on laptop | p audio on phone | s status | q quit";
 
@@ -21,16 +21,18 @@ if (!Terminal.HasPipes())
 string? deviceHint = null;
 string? deviceId = null;
 bool stayOnPhone = false;
+bool followPhone = false;
 var rest = new List<string>();
 for (int i = 0; i < args.Length; i++)
 {
     if (args[i] == "--device" && i + 1 < args.Length) deviceHint = args[++i];
     else if (args[i] == "--device-id" && i + 1 < args.Length) deviceId = args[++i];
     else if (args[i] == "--stay-on-phone") stayOnPhone = true;
+    else if (args[i] == "--follow-phone") followPhone = true;
     else rest.Add(args[i]);
 }
 string action = rest.Count > 0 ? rest[0].ToLowerInvariant() : "shell";
-if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "lines" or "audio-devices-json" or "unregister"))
+if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "lines" or "phones" or "self-test" or "audio-devices-json" or "unregister"))
 {
     Console.WriteLine(Usage);
     return action is "help" or "-h" or "--help" ? 0 : 1;
@@ -65,8 +67,21 @@ try
         await HandsFree.LinesAsync();
         return 0;
     }
+    if (action == "self-test") return PhoneSelection.SelfTest() == 0 ? 0 : 1;
 
     var info = await HandsFree.FindAsync(deviceHint, deviceId);
+    if (info == null && !string.IsNullOrEmpty(deviceId))
+    {
+        // A phone chosen in Pat's settings that has since been unpaired, such as one that was sold: use whichever phone is here.
+        Console.WriteLine("phone    : the phone chosen in Pat's settings isn't paired any more; choosing automatically");
+        deviceId = null;
+        info = await HandsFree.FindAsync(deviceHint, null);
+    }
+    if (action == "phones")
+    {
+        await HandsFree.PhonesAsync(info);
+        return 0;
+    }
     if (action == "audio-devices-json")
     {
         Console.WriteLine(System.Text.Json.JsonSerializer.Serialize(await BluetoothAudio.InventoryAsync(info)));
@@ -84,10 +99,13 @@ try
         return 0;
     }
 
-    var line = await HandsFree.ConnectAsync(info);
-    if (line == null) return 1;
+    var (line, phone) = await HandsFree.ConnectAnyAsync(info);
+    if (line == null || phone == null) return 1;
 
-    var session = new CallSession(line) { CloseAfterCalls = openedForCall, MoveToLaptop = !(openedForCall || stayOnPhone) };
+    // --follow-phone: for a shell that waits for calls for hours. It closes, so its owner can start a new one, when the
+    // phone in use disconnects, or when a phone chosen by --device-id comes back after this line fell back to another.
+    var watch = followPhone ? await PhoneWatch.CreateAsync(phone, string.IsNullOrEmpty(deviceId) ? null : info) : null;
+    var session = new CallSession(line) { CloseAfterCalls = openedForCall, MoveToLaptop = !(openedForCall || stayOnPhone), Watch = watch };
     if (openedForCall) Console.WriteLine("opened by Windows for a call; this window closes when the call ends");
     session.PrintStatus();
     if (action == "status") return 0;

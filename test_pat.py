@@ -371,12 +371,11 @@ class PickPhone(unittest.TestCase):
             json.dump({"phone_device": phone}, f)
         return UserProfile(path)
 
-    def test_the_connected_phone_is_saved_when_none_is_chosen_even_before_a_name(self):
+    def test_a_connected_phone_is_found_and_nothing_is_saved(self):
         profile = self.profile()
         self.assertEqual(pat.pick_phone(self.run_helper({"galaxy-id"}), profile), "Galaxy A13")
         from user_profile import UserProfile
-        saved = UserProfile(profile.path)
-        self.assertEqual((saved.phone_device, saved.values["phone_name"]), ("galaxy-id", "Galaxy A13"))
+        self.assertEqual(UserProfile(profile.path).phone_device, "")
 
     def test_the_chosen_phone_is_tried_first_and_kept(self):
         profile = self.profile("iphone-id")
@@ -387,3 +386,13 @@ class PickPhone(unittest.TestCase):
         profile = self.profile()
         self.assertIsNone(pat.pick_phone(self.run_helper(set()), profile))
         self.assertEqual(profile.phone_device, "")
+
+
+class FollowPhone(unittest.TestCase):
+    def test_only_a_long_waiting_line_follows_the_phone(self):
+        from user_profile import UserProfile
+        with mock.patch.object(pat, "UserProfile", return_value=mock.Mock(phone_device="")):
+            self.assertEqual(pat.phone_command(), ["iphonecall"])
+            self.assertEqual(pat.phone_command(stay_on_phone=True, follow_phone=True), ["iphonecall", "--stay-on-phone", "--follow-phone"])
+        with mock.patch.object(pat, "UserProfile", return_value=mock.Mock(phone_device="phone-id")):
+            self.assertEqual(pat.phone_command(follow_phone=True), ["iphonecall", "--device-id", "phone-id", "--follow-phone"])

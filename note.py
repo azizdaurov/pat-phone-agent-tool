@@ -682,7 +682,7 @@ def main():
 
     def make_line():
         import pat  # slow: loads the audio libraries, so the window opens first
-        return pat.PhoneLine(command=pat.phone_command(stay_on_phone=True), log_path=os.path.join(CALLS, "note-phone.log"))
+        return pat.PhoneLine(command=pat.phone_command(stay_on_phone=True, follow_phone=True), log_path=os.path.join(CALLS, "note-phone.log"))
 
     def desk_for(line):
         import pat

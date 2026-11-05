@@ -99,8 +99,10 @@ registers the phone tool, and puts your default speaker and microphone back on t
 3. **Connect your phone:** setup first checks Windows' Settings > Bluetooth & devices > Mobile devices > "Allow this PC to access
    your mobile devices", and opens that page if it's off: without it, Windows connects the phone but never makes the phone line
    Pat dials on. Then it opens Bluetooth settings and waits. Pair the phone if needed, then on it open Bluetooth settings and
-   connect to the laptop, allowing calls when asked. On Android, also tap the gear next to the laptop and turn on Calls. The
-   first phone that connects for calls is saved as yours; choose another in the note's settings. Tested on an iPhone and a
+   connect to the laptop, allowing calls when asked. On Android, also tap the gear next to the laptop and turn on Calls. Pat picks
+   the phone by itself: one that is connected to the laptop first, then the one chosen in the note's settings, then one
+   that already has a Windows phone line. So switching phones needs no setting. `iphonecall phones` shows each paired
+   phone, whether it is connected and has a line, and the order Pat would try them in. Tested on an iPhone and a
    Galaxy A13; other Android phones should work the same way, but makers handle Bluetooth calls differently.
 4. **Keep the Voicemeeter app closed.** Only its virtual speaker is used; if the app runs, it can pass the call to your speakers.
 5. **Disconnect Bluetooth headphones from the laptop** before calls. With the Redmi Buds connected, the call's audio stayed on the phone
@@ -131,7 +133,9 @@ If a call is killed, the laptop stays on the silent speaker until the next Pat s
 `contacts/` to the new laptop yourself, and `calls/note-settings.json` for the menu's settings.
 
 A phone talks hands-free to one laptop at a time. Before using a laptop, connect to it in the phone's Bluetooth settings.
-Windows keeps one phone line at a time, for the phone that connected last: to switch phones, connect the other one.
+If the phone the note is using disconnects, the note closes its line and keeps looking, and picks up whichever phone
+connects next, with no click. A chosen phone that comes back takes over again, and one that is no longer paired is ignored.
+If a phone asks you to forget the laptop and pair again, do that: its saved pairing no longer matches the laptop's.
 
 ## Using it
 

@@ -104,8 +104,8 @@ STALLS = {"en": ["One moment.", "Just a moment, please.", "One second.", "Sorry,
 
 
 def pick_phone(run=subprocess.run, profile=None):
-    """For setup: the paired phone with a working call line, saved as the owner's phone when none is chosen yet. Tries the
-    chosen phone first. Returns its name, or None while no phone is ready."""
+    """For setup: the name of a paired phone with a working call line, the chosen one first, or None while none is ready.
+    Nothing is saved: with no phone chosen, Pat uses whichever phone connected last."""
     profile = profile or UserProfile()
     listed = run(["iphonecall", "list-json"], capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30)
     try:
@@ -120,19 +120,21 @@ def pick_phone(run=subprocess.run, profile=None):
         except subprocess.TimeoutExpired:
             continue
         if "canDial=True" in status.stdout:
-            if phone["id"] != profile.phone_device:
-                profile.remember_phone(phone["id"], phone.get("name", ""))
             return phone.get("name") or "your phone"
     return None
 
 
-def phone_command(stay_on_phone=False):
+def phone_command(stay_on_phone=False, follow_phone=False):
+    """follow_phone: for a line kept open for hours, such as the note's. It closes when its phone disconnects or the chosen
+    phone comes back, and its owner starts a new one, which lands on whichever phone is here."""
     command = ["iphonecall"]
     selected = UserProfile().phone_device
     if selected:
         command += ["--device-id", selected]
     if stay_on_phone:
         command.append("--stay-on-phone")
+    if follow_phone:
+        command.append("--follow-phone")
     return command
 
 
@@ -1435,8 +1437,8 @@ def main():
     parser.add_argument("action", choices=["dial", "answer", "check", "prepare", "restore-audio", "fix-audio", "check-mic", "pick-phone"],
                         help="check tests the setup. prepare downloads the speech models. restore-audio puts back the default "
                              "speaker and microphone after a call that was killed. fix-audio moves them off any virtual device. "
-                             "check-mic records 3 seconds to see that your microphone sends sound. pick-phone finds a connected phone and "
-                             "saves it as yours if none is chosen. "
+                             "check-mic records 3 seconds to see that your microphone sends sound. pick-phone checks that a phone is connected "
+                             "for calls. "
                              "None of these makes a call")
     parser.add_argument("number", nargs="?", help="number to dial, in international format")
     parser.add_argument("--brief", help="what Claude should do on this call, in one sentence")

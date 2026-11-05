@@ -129,7 +129,7 @@ class ProfileDialog(QDialog):
         self.dates.setCurrentIndex(self.dates.findData(self.profile.date_format))
         form.addRow("Dates in reports", self.dates)
         self.phone = QComboBox()
-        self.phone.addItem("Automatic (only when one phone is paired)", "")
+        self.phone.addItem("Automatic (the phone connected last)", "")
         if self.profile.phone_device:
             self.phone.addItem(self.profile.values.get("phone_name") or "Selected phone", self.profile.phone_device)
             self.phone.setCurrentIndex(1)
@@ -173,7 +173,7 @@ class ProfileDialog(QDialog):
                 raise ValueError("unexpected phone list")
             selected = self.phone.currentData()
             self.phone.clear()
-            self.phone.addItem("Automatic (only when one phone is paired)", "")
+            self.phone.addItem("Automatic (the phone connected last)", "")
             for phone in choices:
                 self.phone.addItem(phone["name"], phone["id"])
             self.phone.setCurrentIndex(max(0, self.phone.findData(selected)))

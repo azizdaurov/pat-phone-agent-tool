@@ -111,11 +111,38 @@ function Install-VbCable {
     }
 }
 
-function Mobile-Access-Is-On {
+function Mobile-Access {
     # Settings > Bluetooth & devices > Mobile devices > 'Allow this PC to access your mobile devices'.
     # With it off, Windows connects the phone over Bluetooth but never makes the phone line Pat dials on.
+    # Windows doesn't document this value; it was checked to follow the switch both ways (1 on, 0 off).
+    # Returns 'on', 'off', or 'unknown' when Windows doesn't have the value.
     $mobility = Get-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Mobility' -ErrorAction SilentlyContinue
-    return ($mobility -and $mobility.CrossDeviceEnabled -eq 1)
+    if (-not $mobility -or $null -eq $mobility.CrossDeviceEnabled) { return 'unknown' }
+    if ($mobility.CrossDeviceEnabled -eq 1) { return 'on' }
+    return 'off'
+}
+
+function Wait-For-Mobile-Access {
+    $state = Mobile-Access
+    if ($state -eq 'on') { Write-Host "   'Allow this PC to access your mobile devices' is on."; return }
+    Start-Process 'ms-settings:mobile-devices'
+    if ($state -eq 'unknown') {
+        Write-Host "   Pat couldn't read 'Allow this PC to access your mobile devices'. Its settings page is open: make sure it's on."
+        return
+    }
+    # Required: without it Pat can't make or take a single call, so setup waits here rather than finish half-working.
+    Write-Host "   'Allow this PC to access your mobile devices' is off. Without it, Windows won't make a phone line, so Pat can't work."
+    Write-Host "   Its settings page is open: turn it on. Setup waits here until it's on (Ctrl+C stops setup)."
+    $waited = 0
+    while ((Mobile-Access) -ne 'on') {
+        Start-Sleep -Seconds 2
+        $waited += 2
+        if ($waited % 60 -eq 0) {
+            Write-Host "   Still off. Settings > Bluetooth & devices > Mobile devices > 'Allow this PC to access your mobile devices'."
+            Start-Process 'ms-settings:mobile-devices'
+        }
+    }
+    Write-Host "   It's on."
 }
 
 function Pick-Phone {
@@ -129,13 +156,10 @@ function Pick-Phone {
 function Wait-For-Phone {
     if ($Rehearse) {
         Would "check 'Allow this PC to access your mobile devices', and open its page if it is off"
-        Would 'open Bluetooth settings, wait for an iPhone or Android phone to connect, and save it as your phone'
+        Would 'open Bluetooth settings, wait for an iPhone or Android phone to connect'
         return $true
     }
-    if (-not (Mobile-Access-Is-On)) {
-        Start-Process 'ms-settings:mobile-devices'
-        Write-Host "   Mobile devices settings are open. Turn on 'Allow this PC to access your mobile devices'."
-    }
+    Wait-For-Mobile-Access
     if (Pick-Phone) { return $true }
     Start-Process 'ms-settings:bluetooth'
     Write-Host '   Bluetooth settings are open. Add your phone there if it is not paired, and accept on both.'

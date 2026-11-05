@@ -24,6 +24,9 @@ sealed class CallSession
     // or after a minute if no call ever shows up.
     public bool CloseAfterCalls { get; init; }
 
+    // With --follow-phone: closes the shell, while no call runs, once the phone it should be on has changed.
+    public PhoneWatch? Watch { get; init; }
+
     // Windows keeps a finished call in this "active" list for minutes, with status Ended.
     private IReadOnlyList<PhoneCall> ActiveCalls() =>
         _line.GetAllActivePhoneCalls().AllActivePhoneCalls?.Where(c => c.Status != PhoneCallStatus.Ended).ToList()
@@ -123,6 +126,11 @@ sealed class CallSession
                     await KeepAudioOnLaptopAsync(call);
 
                 if (CloseAfterCalls) CloseWhenIdle(calls.Count > 0);
+                if (calls.Count == 0 && Watch?.Reason() is string reason)
+                {
+                    Console.WriteLine($"\n-- {reason}; closing so the line can reconnect");
+                    Environment.Exit(3);
+                }
             }
             catch (COMException) { }
             try { await Task.Delay(500, token); } catch (TaskCanceledException) { }
