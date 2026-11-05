@@ -1177,7 +1177,8 @@ def check_audio_setup(audible=False):
         headsets = []
     for headset in headsets:
         problems.append(f"'{headset}' is connected. Disconnect it from the laptop, or the call's audio stays on the "
-                        "phone and the other person hears nothing (see README.md).")
+                        "phone and the other person hears nothing. To keep listening to the laptop on it, untick Handsfree "
+                        "Telephony in its Bluetooth Services instead (see README.md).")
     if find_output(CABLE_PLAY) is None or find_input(CABLE_HEAR) is None:
         problems.append(f"'{CABLE_PLAY}' or '{CABLE_HEAR}' not found. Install VB-CABLE (see README.md) and restart.")
     if audible:

@@ -17,6 +17,18 @@ $phoneWaitSeconds = 300
 $todo = New-Object System.Collections.ArrayList
 $needsRestart = $false
 
+# Everything this prints also goes to a file, so a setup that fails on someone else's laptop can be sent for help.
+# report.py adds the newest one to its bug report, with names and numbers taken out.
+$setupLog = Join-Path $root "setup-logs\setup-$(Get-Date -Format 'yyyyMMdd-HHmmss').txt"
+New-Item -ItemType Directory -Force (Split-Path $setupLog) | Out-Null
+try { Start-Transcript -Path $setupLog | Out-Null } catch { $setupLog = $null }
+trap {
+    Write-Host "`nSetup stopped: $_" -ForegroundColor Red
+    if ($setupLog) { Write-Host "Everything it printed is in $setupLog. Send that file if you need help." -ForegroundColor Yellow }
+    try { Stop-Transcript | Out-Null } catch { }
+    break
+}
+
 function Step($text) { Write-Host "`n== $text" -ForegroundColor Cyan }
 function Todo($text) { [void]$todo.Add($text); Write-Host "   Left for you: $text" -ForegroundColor Yellow }
 function Check($what) { if ($LASTEXITCODE -ne 0) { throw "$what failed." } }
@@ -184,7 +196,7 @@ function Ask-To-Restart {
     $again = "powershell -NoExit -ExecutionPolicy Bypass -File `"$PSCommandPath`""
     Set-ItemProperty 'HKCU:\Software\Microsoft\Windows\CurrentVersion\RunOnce' 'PatSetup' $again
     try { $answer = Read-Host 'The audio drivers need a restart. This carries on by itself afterwards. Restart now? [Y/n]' } catch { $answer = 'n' }
-    if ($answer -notmatch '^[Nn]') { Restart-Computer -Force; exit }
+    if ($answer -notmatch '^[Nn]') { try { Stop-Transcript | Out-Null } catch { }; Restart-Computer -Force; exit }
     Todo 'Restart the laptop. This setup carries on by itself afterwards.'
 }
 
@@ -329,4 +341,8 @@ if ($todo.Count) {
 } else {
     'All ready. Opening the sticky note: its icon is in the hidden icons, and its settings are on its right-click menu.'
     Start-Process "$venv\Scripts\pythonw.exe" -ArgumentList "`"$root\note.py`"" -WorkingDirectory $root
+}
+if ($setupLog) {
+    "Setup log: $setupLog"
+    try { Stop-Transcript | Out-Null } catch { }
 }

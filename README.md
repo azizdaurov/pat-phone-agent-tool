@@ -132,6 +132,9 @@ registers the phone tool, and puts your default speaker and microphone back on t
    on every test, even with the Realtek speakers as the default. Windows reported each move as done, and 14 tries over two
    calls changed nothing. Pat now refuses to dial while a Bluetooth headset is connected. Wired headphones and the
    laptop speakers don't trigger this check.
+   To keep listening to the laptop on Bluetooth headphones instead, turn off their calls feature: Control Panel > Devices
+   and Printers > right-click the headphones > Properties > Services, untick **Handsfree Telephony**. They then connect for
+   music only, and calls work with them connected. Close Phone Link too: while it's open, the headphones keep disconnecting.
 
 When it's all ready, setup opens the sticky note. To see what it would do, changing nothing, add `-Rehearse`. The Claude Code app must already
 be installed and logged in; setup checks.
@@ -496,6 +499,14 @@ It writes one text file in `reports\` (ignored by git) from the last 3 calls; `-
 name become `<name 1>` and so on. A name your phone shows for a caller, from its own contacts, becomes `<caller 1>`, even if Pat never saved it. What anyone said is replaced by a word count, and the brief and the AIs' notes to each other
 are left out. Timings, devices, versions and errors stay. Read it before you post it: a private word in an error message can
 still get through.
+
+The report also lists the laptop settings behind most setup problems: Developer Mode, "Allow this PC to access your mobile
+devices", whether the phone helper is installed, whether Phone Link is running, Bluetooth headsets with calls on, each paired
+phone, and whether Claude Code is logged in. Bluetooth addresses and the laptop's name are left out too.
+
+**If setup itself fails,** it says where its log is: every run writes `setup-logs\setup-<date and time>.txt` (ignored by git).
+Send that file. It isn't cleaned like a report, so read it first; it shows your Windows user name and the laptop's name.
+Once setup has made `.venv`, `report.py` includes the newest setup log, cleaned.
 
 ## Files
 

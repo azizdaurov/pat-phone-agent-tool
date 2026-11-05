@@ -106,12 +106,62 @@ class WholeReport(unittest.TestCase):
             f.write('{"status": "done", "reason": "goodbye", "seconds": 54, "summary": "Table booked for Alex"}')
         with open(os.path.join(folder, "phone-20261104-215938.log"), "w", encoding="utf-8") as f:
             f.write("21:59:38.783689 phone    : iPhone Aziz\n21:59:39.386270 -- Outgoing Рустам (+998901234567): Dialing\n")
-        with mock.patch.object(report, "CALLS", folder), mock.patch.object(report, "environment", return_value=["Python: 3.13"]):
-            text = report.build(3, Redactor(["Рустам", "Aziz"]))
+        logs = tempfile.mkdtemp()
+        with open(os.path.join(logs, "setup-20261105-170000.txt"), "w", encoding="utf-8") as f:
+            f.write("Username: LAPTOP7\\Aziz\n== Phone\n   Phone ready: iPhone Aziz\n")
+        settings = ["Developer Mode: on", "Paired phones:", "  iPhone Aziz   yes   yes"]
+        with mock.patch.object(report, "CALLS", folder), mock.patch.object(report, "SETUP_LOGS", logs), \
+                mock.patch.object(report, "environment", return_value=["Python: 3.13"]), mock.patch.object(report, "laptop_state", return_value=settings):
+            text = report.build(3, Redactor(["Рустам", "Aziz", "LAPTOP7"]))
         self.assertIn("Result: {\"status\": \"done\", \"reason\": \"goodbye\", \"seconds\": 54}", text)
-        self.assertIn("21:59:38.783689 phone    : iPhone <name 2>", text)
-        for private in ("998901234567", "+998", "Рустам", "Aziz", "Alex", "chicken", "Table booked"):
+        self.assertRegex(text, r"21:59:38\.783689 phone    : iPhone <name \d>")
+        self.assertIn("Developer Mode: on", text)
+        self.assertIn("===== Setup log setup-20261105-170000.txt", text)
+        for private in ("998901234567", "+998", "Рустам", "Aziz", "Alex", "chicken", "Table booked", "LAPTOP7"):
             self.assertNotIn(private, text)
+
+
+class LaptopSettings(unittest.TestCase):
+    """The read-only checks, with pretend answers: no registry, helper or Claude is asked."""
+
+    def run_with(self, answers, registry=lambda hive, path, name: 1):
+        def run(command, **_):
+            key = next((k for k in answers if k in " ".join(map(str, command))), None)
+            if key is None or isinstance(answers[key], Exception):
+                raise answers.get(key, OSError("not found"))
+            return mock.Mock(stdout=answers[key])
+        with mock.patch.object(report, "_claude_path", return_value="claude"):
+            return report.laptop_state(run=run, headsets=lambda: ["Headphones (Redmi Buds 6 Lite Hands-Free)"], registry=registry)
+
+    def test_each_setting_is_reported_and_the_claude_email_never_is(self):
+        lines = self.run_with({"Get-AppxPackage": "1.0.0.0", "tasklist": "PhoneExperienceHost.exe  4242 Console",
+                               "phones": "phone   connected\niPhone   yes", "auth": '{"loggedIn": true, "email": "someone@example.com"}'})
+        text = "\n".join(lines)
+        for expected in ("Developer Mode: on", "Allow this PC to access your mobile devices: on", "Phone helper: installed, version 1.0.0.0",
+                         "Phone Link running: yes", "Redmi Buds 6 Lite", "  iPhone   yes", "Claude Code: logged in"):
+            self.assertIn(expected, text)
+        self.assertNotIn("someone@example.com", text)
+
+    def test_a_check_that_cannot_tell_says_so_instead_of_failing(self):
+        lines = self.run_with({"Get-AppxPackage": "", "tasklist": OSError("no tasklist"), "auth": '{"loggedIn": false}'},
+                              registry=lambda hive, path, name: None)
+        text = "\n".join(lines)
+        for expected in ("Developer Mode: unknown", "Phone helper: not installed", "Phone Link running: unknown",
+                         "Paired phones: the phone helper didn't answer", "Claude Code: not logged in"):
+            self.assertIn(expected, text)
+
+    def test_bluetooth_addresses_are_hidden_in_every_form_and_other_ids_stay(self):
+        redact = Redactor()
+        for line in ("phone id Bluetooth#Bluetooth38:00:25:aa:bb:cc-30:d7:a1:a4:fc:0b", r"BTHENUM\{0000111e}_LOCALMFG&0002\7&1A&0&30D7A1A4FC0B_C00000000",
+                     "The remote adapter (30:d7:a1:a4:fc:0b) successfully paired", "address 30-D7-A1-A4-FC-0B"):
+            cleaned = redact.clean(line)
+            self.assertNotRegex(cleaned.lower(), r"30[:-]?d7[:-]?a1", line)
+            self.assertIn("<bluetooth address>", cleaned)
+        for kept in ("Call 20261104-205048-7b60f7.log", "Pat: 913e354"):
+            self.assertEqual(redact.clean(kept), kept)
+        audio_id = redact.clean("{0.0.0.00000000}.{355a6371-4236-4038-95bf-a1ad32d2649a}")
+        self.assertIn("a1ad32d2649a}", audio_id)  # its digit runs are the number rule's business, its end isn't an address
+        self.assertNotIn("<bluetooth address>", audio_id)
 
 
 if __name__ == "__main__":

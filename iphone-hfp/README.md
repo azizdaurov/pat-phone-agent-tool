@@ -64,9 +64,9 @@ device IDs for Pat's phone settings; listing never dials or changes audio routin
 the current **default** speaker and microphone (Settings > System > Sound). If you hear nothing, check
 which device is the default; it may be your headphones. Use headphones to stop the caller hearing an echo.
 
-**Extra call windows:** when a call starts, Windows also opens `iphonecall` in a window of its own (a side
-effect of the manifest entry that makes registration work). That window says "opened by Windows for a call"
-and closes by itself 3 seconds after the call ends.
+**Extra copy during calls:** when a call starts, Windows also starts a copy of `iphonecall` by itself (a side
+effect of the manifest entry that makes registration work). It has no window, since `iphonecall` is built without
+one, and it closes by itself 3 seconds after the call ends.
 
 ### When something goes wrong
 

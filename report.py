@@ -36,6 +36,14 @@ DIALING = re.compile(r"^(Dialing .*?\.) Claude's task: .*$")
 CALLER_IN_STATUS = re.compile(r"((?:-- |call {5}: )\w+ )(.+?)(: \w+, audio=)")
 CALLER_INCOMING = re.compile(r"^(\s*(?:\d\d:\d\d:\d\d\S* )?Incoming: )(.+)$")
 PACKAGES = ("numpy", "sounddevice", "PyAudioWPatch", "onnx-asr", "piper-tts", "pocket-tts", "PySide6", "mcp")
+SETUP_LOGS = os.path.join(HERE, "setup-logs")  # setup.ps1 writes one per run, so a failed setup can still be reported
+SETUP_LOG_LINES = 150
+# A Bluetooth address names one phone or headset. They can appear in Windows device ids, as in
+# "Bluetooth#Bluetooth38:00:25:aa:bb:cc-30:d7:a1:a4:fc:0b" or "BTHENUM\...\DEV_30D7A1A4FC0B".
+# Six hex pairs joined by colons or dashes, or 12 hex characters between the separators Windows device ids use
+# (& _ # \). The second form needs those separators, so the end of an audio device id such as "-a1ad32d2649a}" stays.
+BLUETOOTH_ADDRESS = re.compile(r"(?<![0-9a-f])(?:[0-9a-f]{2}[:-]){5}[0-9a-f]{2}(?![0-9a-f])"
+                               r"|(?<=[&_#\\])[0-9a-f]{12}(?=[&_#\\]|$)", re.IGNORECASE)
 
 
 class Redactor:
@@ -87,6 +95,8 @@ class Redactor:
     def clean(self, text, numbers=True):
         if self.home:
             text = re.sub(re.escape(self.home), "%USERPROFILE%", text, flags=re.I)
+        if BLUETOOTH_ADDRESS is not None:  # before numbers, whose rule would take the address's digits apart
+            text = BLUETOOTH_ADDRESS.sub("<bluetooth address>", text)
         text = CALLER_IN_STATUS.sub(self._hide_caller, text)
         text = CALLER_INCOMING.sub(self._hide_caller, text)
         if numbers:
@@ -143,6 +153,7 @@ def private_names():
     except Exception:
         pass
     names.append(os.environ.get("USERNAME", ""))
+    names.append(os.environ.get("COMPUTERNAME", ""))  # the laptop's name: setup's log and phone prompts show it
     return names
 
 
@@ -187,6 +198,71 @@ def environment():
     return lines
 
 
+def _registry(hive, path, name):
+    try:
+        import winreg
+        with winreg.OpenKey(getattr(winreg, hive), path) as key:
+            return winreg.QueryValueEx(key, name)[0]
+    except (OSError, ImportError):
+        return None
+
+
+def _on_off(value):
+    return "on" if value == 1 else "off" if value is not None else "unknown"
+
+
+def laptop_state(run=subprocess.run, headsets=None, registry=_registry):
+    """The Windows settings and helpers behind every setup problem so far. Reads only. A check that can't tell says unknown."""
+    def ask(command, seconds=30):
+        try:
+            done = run(command, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=seconds)
+            return done.stdout.strip()
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+    lines = [
+        "Developer Mode: " + _on_off(registry("HKEY_LOCAL_MACHINE", r"SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock",
+                                              "AllowDevelopmentWithoutDevLicense")),
+        "Allow this PC to access your mobile devices: " + _on_off(registry("HKEY_CURRENT_USER", r"Software\Microsoft\Windows\CurrentVersion\Mobility",
+                                                                           "CrossDeviceEnabled")),
+    ]
+    version = ask(["powershell", "-NoProfile", "-Command", "(Get-AppxPackage OasisTeam.PatPhone).Version"])
+    lines.append("Phone helper: " + ("unknown" if version is None else f"installed, version {version}" if version else "not installed"))
+    tasks = ask(["tasklist", "/FI", "IMAGENAME eq PhoneExperienceHost.exe", "/NH"])
+    lines.append("Phone Link running: " + ("unknown" if tasks is None else "yes" if "PhoneExperienceHost" in tasks else "no"))
+    try:
+        found = (headsets or _connected_headsets)()
+        lines.append(f"Bluetooth headsets with calls on: {', '.join(found) if found else 'none'}")
+    except Exception as error:
+        lines.append(f"Bluetooth headsets with calls on: unknown ({type(error).__name__})")
+    phones = ask(["iphonecall", "phones"], 60)
+    lines += ["Paired phones:", *[f"  {line}" for line in phones.splitlines()]] if phones else ["Paired phones: the phone helper didn't answer"]
+    claude = _claude_path()
+    status = ask([claude, "auth", "status"]) if claude else None
+    # Only whether it's logged in: the full answer has the account's email address.
+    lines.append("Claude Code: " + ("not found" if not claude else "unknown" if status is None else
+                                    "logged in" if re.search(r'"loggedIn":\s*true', status) else "not logged in"))
+    return lines
+
+
+def _connected_headsets():
+    import pat
+    return pat.connected_headsets()
+
+
+def _claude_path():
+    sys.path.insert(0, os.path.join(HERE, "voice-loop"))
+    try:
+        from voice_loop import find_claude
+        return find_claude()
+    except (ImportError, SystemExit):  # find_claude exits when there's no claude.exe
+        return None
+
+
+def newest_setup_log():
+    logs = sorted(glob.glob(os.path.join(SETUP_LOGS, "setup-*.txt")), key=os.path.getmtime)
+    return logs[-1] if logs else None
+
+
 def result_line(path):
     try:
         with open(path, encoding="utf-8") as f:
@@ -199,7 +275,11 @@ def result_line(path):
 
 def build(calls=3, redactor=None):
     redactor = redactor or Redactor(private_names(), os.path.expanduser("~"))
-    sections = [("About this laptop", environment(), False)]  # version numbers, not phone numbers
+    sections = [("About this laptop", environment(), False),  # version numbers, not phone numbers
+                ("Laptop settings", laptop_state(), True)]
+    setup_log = newest_setup_log()
+    if setup_log:
+        sections.append((f"Setup log {os.path.basename(setup_log)} (last {SETUP_LOG_LINES} lines)", read_lines(setup_log, SETUP_LOG_LINES), True))
     call_logs = set(newest("[0-9]*-[0-9]*-*.log", calls) + newest("answer-*.log", calls))
     for path in sorted(call_logs, key=os.path.getmtime)[-calls:]:
         body = without_conversation(read_lines(path))

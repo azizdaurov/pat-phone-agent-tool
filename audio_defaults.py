@@ -234,7 +234,8 @@ def headset_problem(headsets):
     names = [re.sub(r"^[^(]*\((.*?)(?: Hands-Free[^)]*)?\)$", r"\1", name) for name in headsets]
     them = "it" if len(names) == 1 else "them"
     return (f"{' and '.join(names)} {'is' if len(names) == 1 else 'are'} connected to the laptop, so the call can't come here "
-            f"and is on your phone. Disconnect {them} to take calls on the laptop.")
+            f"and is on your phone. Disconnect {them} to take calls on the laptop. To keep listening to the laptop on {them}, "
+            "untick Handsfree Telephony in its Bluetooth Services instead.")
 
 
 def chosen_devices(folder, system=None):

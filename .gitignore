@@ -5,6 +5,7 @@ __pycache__/
 calls/
 contacts/
 reports/
+setup-logs/
 
 # Machine-specific
 .mcp.json
