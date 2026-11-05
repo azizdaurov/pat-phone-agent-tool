@@ -136,6 +136,14 @@ static class HandsFree
         Console.WriteLine($"connect  : {await StepAsync(async () => (connected = await device.ConnectAsync()).ToString())}");
         if (!connected)
         {
+            // Windows still has a working line for this phone but won't connect us: another app took the phone's call link
+            // and keeps it, even after that app quits. Seen 5 Nov 2026, when Phone Link was woken in the background for a call.
+            if (await HasLineAsync(store, device.DeviceId))
+            {
+                Console.WriteLine($"held     : {HeldByAnotherApp}. Windows has this phone's call line, but another app holds it, usually Phone Link.");
+                Console.WriteLine("Close Phone Link and stop it running in the background, then remove the phone in Bluetooth settings and pair it again.");
+                return null;
+            }
             Console.WriteLine("Not connected. On your phone, open Bluetooth settings, connect to this PC, and allow calls when prompted, then retry.");
             return null;
         }
@@ -145,6 +153,25 @@ static class HandsFree
         if (line == null) Console.WriteLine("Connected, but Windows did not create a phone line for this phone. Turn on Settings > " +
                                             "Bluetooth & devices > Mobile devices > 'Allow this PC to access your mobile devices', then retry.");
         return line;
+    }
+
+    // Pat's PhoneLine.TAKEN looks for this word.
+    public const string HeldByAnotherApp = "HeldByAnotherApp";
+
+    // Whether Windows has a phone line for this phone right now. Reads only, and doesn't wait for one to appear.
+    private static async Task<bool> HasLineAsync(PhoneCallStore store, string transportDeviceId)
+    {
+        var (ids, _) = ListLineIds(store, 5);
+        foreach (var id in ids)
+        {
+            try
+            {
+                var line = await Timed(PhoneLine.FromIdAsync(id).AsTask(), 10, "phone line lookup");
+                if (string.Equals(line.TransportDeviceId, transportDeviceId, StringComparison.OrdinalIgnoreCase)) return true;
+            }
+            catch (Exception) { }
+        }
+        return false;
     }
 
     // Windows creates the PhoneLine shortly after the link comes up: try the default line, then watch.

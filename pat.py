@@ -148,8 +148,10 @@ class PhoneLine:
     READY = "commands:"
     END_GRACE_SECONDS = 5  # a call that comes back within this long never ended
     # Windows lets one app at a time use the phone for calls. Whichever has it keeps it: with Pat's note open, Phone
-    # Link can't dial (seen 5 Nov 2026), and while Phone Link has it, Windows refuses Pat with this word (31 Oct).
-    TAKEN = "DeniedBySystem"
+    # Link can't dial (seen 5 Nov 2026), and while Phone Link has it, Windows refuses Pat with one of these words:
+    # DeniedBySystem when Pat asks for access (31 Oct), or HeldByAnotherApp, iphonecall's word for a phone whose line
+    # Windows still has while it refuses to connect Pat (5 Nov, after Windows woke Phone Link for a call).
+    TAKEN = ("DeniedBySystem", "HeldByAnotherApp")
     TAKEN_MESSAGE = ("Phone Link has your phone. Close Phone Link, then re-pair the phone: remove it in Bluetooth settings and pair it "
                      "again. Pat and Phone Link can't use the phone at the same time.")
 
@@ -223,7 +225,7 @@ class PhoneLine:
         self.events.put(("Closed", "", ""))
 
     def taken_by_another_app(self):
-        return any(self.TAKEN in line for line in self.started)
+        return any(word in line for line in self.started for word in self.TAKEN)
 
     def wait_ready(self, seconds=60):
         """True once the shell is up. On failure, iphonecall's own lines say which step failed."""

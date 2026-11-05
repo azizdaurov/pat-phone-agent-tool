@@ -105,7 +105,9 @@ laptops: the phone helper is built for x64 only.
 **Close Phone Link, and re-pair the phone.** Windows lets only one app at a time use the phone for calls, and whichever has
 it keeps it. With Pat open, Phone Link can't dial; while Phone Link has the phone, Windows refuses Pat and the note says
 "Phone Link has your phone". Close Phone Link, turn off its start with Windows, then remove the phone in Bluetooth settings
-and pair it again.
+and pair it again. Also stop Phone Link from running in the background: Settings > Apps > Installed apps > Phone Link >
+Advanced options, set "Let this app run in background" to **Never**, then click **Terminate**. Otherwise Windows can wake it
+for an incoming call, and it takes the phone the next time Pat's note lets go of it.
 
 On any such laptop, including a second one for the same phone, after cloning:
 

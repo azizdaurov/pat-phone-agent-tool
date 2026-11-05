@@ -76,6 +76,7 @@ The startup lines show which step failed:
 |---|---|
 | `access : DeniedBySystem` | Another app holds the phone, usually Phone Link. Keep mobile-device access **On** (step 2), close Phone Link, then remove the phone in Bluetooth settings and pair it again. |
 | `register : registered=False` | Windows ignored the registration. Check the manifest; see "Things that matter". |
+| `held : HeldByAnotherApp` | Windows has the phone's call line, but another app took it and keeps it, usually Phone Link, even after it quits. Close Phone Link and stop it running in the background, then remove the phone in Bluetooth settings and pair it again. |
 | `connect : False` | The iPhone isn't connected. Tap **your laptop's name** in the iPhone's Bluetooth settings and retry. |
 | `Access denied by Windows` | You ran `pkg\iphonecall.exe` directly. Run `iphonecall` (the installed package). |
 | `stuck: ... did not answer` | A Windows call service hung. Quit, then run again. |
@@ -145,6 +146,11 @@ It targets .NET 10 (long-term support, to November 2028) with the Windows 11 SDK
    keeps it. While Phone Link holds it, `RequestAccessAsync()` returns `DeniedBySystem`; with Pat's note holding it, Phone
    Link can't dial. The fix is to close Phone Link, then remove the phone in Bluetooth settings and pair it again. Pat shows
    "Phone Link has your phone" when the helper is refused this way.
+   Windows can also refuse more quietly: `RequestAccessAsync()` says `Allowed` and `ConnectAsync()` returns false, while
+   Windows still lists a working line for the phone. Phone Link took the phone's call link and kept it, even after it quit.
+   This happened after Windows woke Phone Link in the background for an incoming call, and Phone Link took the link
+   when Pat's note briefly let go of it. `HandsFree.ConnectAsync` reports it as `held : HeldByAnotherApp`. The fix is
+   the same, and stopping Phone Link from running in the background keeps Windows from waking it again.
    No Microsoft unlock token is needed on Windows 11 (build 22000 and later).
 6. **Ignore `AudioRoutingStatus`.** It reports `CannotRouteToLocalDevice` even when the laptop voice works.
 7. **Re-pairing the iPhone** drops the registration. The next `iphonecall` run registers again by itself.

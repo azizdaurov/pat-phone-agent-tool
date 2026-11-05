@@ -37,6 +37,30 @@ class Endings(DeskCase):
         self.assertEqual([call.args[0] for call in problems.call_args_list],
                          ["Phone Link has your phone. Close Phone Link, then re-pair the phone in Bluetooth settings.", "Your phone isn't connected."])
 
+    def test_when_another_app_holds_the_phone_line_the_note_says_phone_link_has_it(self):
+        # Windows allows access and has the phone's line, but refuses to connect Pat (seen 5 Nov 2026).
+        import note
+        import pat
+        class FinishedTest(Exception):
+            pass
+        held = types.SimpleNamespace(started=["phone    : iPhone", "access   : Allowed", "register : registered=True", "connect  : False",
+                                              "held     : HeldByAnotherApp. Windows has this phone's call line, but another app holds it, usually Phone Link."],
+                                     wait_ready=lambda: False, close=lambda: None, TAKEN=pat.PhoneLine.TAKEN)
+        held.taken_by_another_app = lambda: pat.PhoneLine.taken_by_another_app(held)
+        problems = mock.Mock()
+        with mock.patch.object(note.time, "sleep"):
+            with self.assertRaises(FinishedTest):
+                note.watch_line(mock.Mock(side_effect=[held, FinishedTest()]), lambda _: None, problems)
+        self.assertEqual([call.args[0] for call in problems.call_args_list],
+                         ["Phone Link has your phone. Close Phone Link, then re-pair the phone in Bluetooth settings."])
+
+    def test_a_phone_that_is_simply_not_connected_is_not_blamed_on_phone_link(self):
+        import pat
+        away = types.SimpleNamespace(started=["phone    : iPhone", "access   : Allowed", "register : registered=True", "connect  : False",
+                                              "Not connected. On your phone, open Bluetooth settings, connect to this PC, and allow calls when prompted, then retry."],
+                                     TAKEN=pat.PhoneLine.TAKEN)
+        self.assertFalse(pat.PhoneLine.taken_by_another_app(away))
+
     def test_remote_hangup_cannot_be_undone_by_the_old_live_publisher(self):
         self.ring()
         self.desk.answer_ai()
