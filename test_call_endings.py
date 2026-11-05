@@ -35,7 +35,7 @@ class Endings(DeskCase):
             with self.assertRaises(FinishedTest):
                 note.watch_line(mock.Mock(side_effect=[refused, absent, FinishedTest()]), lambda _: None, problems)
         self.assertEqual([call.args[0] for call in problems.call_args_list],
-                         ["Phone Link has your phone. Close Phone Link, then re-pair the phone in Bluetooth settings.", "Your phone isn't connected."])
+                         ["Phone Link has your phone. Close it, forget the pairing on both laptop and phone, then pair again.", "Your phone isn't connected."])
 
     def test_remote_hangup_cannot_be_undone_by_the_old_live_publisher(self):
         self.ring()

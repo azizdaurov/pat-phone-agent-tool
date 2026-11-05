@@ -116,9 +116,11 @@ class Brain:
         ]
         if self.model == "claude-haiku-5-5":
             args += ["--effort", "low"]
+        # No window of its own: started from a windowless program such as Pat's note, claude.exe would open a terminal.
         self.proc = subprocess.Popen(
             args, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
             env=env, cwd=self.workdir, text=True, encoding="utf-8", errors="replace", bufsize=1,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
         )
         self.lines = queue.Queue()
         threading.Thread(target=self._read, args=(self.proc.stdout, self.lines), daemon=True).start()

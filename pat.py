@@ -150,8 +150,9 @@ class PhoneLine:
     # Windows lets one app at a time use the phone for calls. Whichever has it keeps it: with Pat's note open, Phone
     # Link can't dial (seen 5 Nov 2026), and while Phone Link has it, Windows refuses Pat with this word (31 Oct).
     TAKEN = "DeniedBySystem"
-    TAKEN_MESSAGE = ("Phone Link has your phone. Close Phone Link, then re-pair the phone: remove it in Bluetooth settings and pair it "
-                     "again. Pat and Phone Link can't use the phone at the same time.")
+    TAKEN_MESSAGE = ("Phone Link has your phone. Close Phone Link, then re-pair on both devices: remove the phone in the laptop's "
+                     "Bluetooth settings, forget the laptop in the phone's Bluetooth settings, and pair them again. "
+                     "Pat and Phone Link can't use the phone at the same time.")
 
     def __init__(self, command=None, log_path=None, end_grace=END_GRACE_SECONDS):
         self.proc = subprocess.Popen(list(command) if command is not None else phone_command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -1201,9 +1202,12 @@ def open_cable(rate):
 def only_one_copy():
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateMutexW.restype = ctypes.c_void_p
-    kernel32.CreateMutexW(None, False, "Local\\PatSingleCopy")
-    if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS
+    handle = kernel32.CreateMutexW(None, False, "Local\\PatSingleCopy")
+    error = ctypes.get_last_error()
+    if error == 183:  # ERROR_ALREADY_EXISTS
         sys.exit("Pat is already on a call in another window.")
+    if not handle and error == 5:  # ERROR_ACCESS_DENIED: the other copy was started as administrator
+        sys.exit("Pat is already on a call in a window started as administrator.")
 
 
 def load_speech(language, voice):

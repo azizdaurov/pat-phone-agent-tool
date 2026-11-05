@@ -127,6 +127,20 @@ class SetupGate(ProfileCase):
             with mock.patch.object(note.threading, "Thread", side_effect=AssertionError("watcher must not start")):
                 note.main()
 
+    def test_a_copy_started_as_administrator_stops_a_second_one_and_says_why(self):
+        """Windows answers "access denied", not "already exists", when that copy owns the marker: two notes would both hold the phone."""
+        import note_window
+        import pat
+        windows = mock.Mock()
+        windows.CreateMutexW.return_value = None
+        with mock.patch.object(note_window.ctypes, "WinDLL", return_value=windows), mock.patch.object(note_window.ctypes, "get_last_error", return_value=5), \
+                mock.patch.object(note_window, "tell_about_admin_copy") as told, mock.patch.object(note_window, "_copy_mutex", None):
+            self.assertFalse(note_window.claim_single_copy())
+            told.assert_called_once()
+            with self.assertRaises(SystemExit) as error:
+                pat.only_one_copy()
+        self.assertIn("administrator", str(error.exception))
+
     def test_name_and_current_terms_are_both_required(self):
         self.assertFalse(self.profile.ready)
         self.profile.save(name="Maya", time_zone="UTC")

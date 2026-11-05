@@ -347,6 +347,18 @@ class AnsweringWithAI(DeskCase):
         self.assertEqual(state["screen"], "ringing")
         self.assertIn("Redmi", state["notice"])
 
+    def test_the_claude_kept_ready_while_it_rang_ends_quietly_when_nobody_asked_for_ai(self):
+        """Its exit after Me, or after the ringing stops, isn't a failure, so its reason never shows."""
+        self.ring()
+        with open(self.desk.result_file, "w", encoding="utf-8") as f:
+            json.dump({"status": "no_answer", "reason": "the sticky note took this call, or it stopped ringing"}, f)
+        self.calls[0].finished = 0
+        self.assertEqual(self.desk.state()["notice"], "")
+
+    def test_a_number_the_phone_sends_as_the_name_shows_as_unknown_caller(self):
+        self.ring("+998 90-000-00-08 (+998900000008)")
+        self.assertEqual((self.desk.state()["name"], self.desk.state()["number"]), ("", "+998900000008"))
+
     def test_call_over_goes_back_to_idle_without_waiting_for_the_line(self):
         self.ring()
         self.desk.answer_ai()

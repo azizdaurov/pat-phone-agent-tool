@@ -74,6 +74,8 @@ class PrivateNumbers:
     def display_name(self, caller):
         """Display metadata only. A saved name or caller ID does not verify who is speaking."""
         supplied_name, number = split_caller(caller)
+        if not re.search(r"[^\W\d_]", supplied_name):  # with no contact, the phone sends the number itself as the name
+            supplied_name = ""
         return self.name_for(number) or supplied_name
 
     def label_for(self, number, allow_unresolved=False):

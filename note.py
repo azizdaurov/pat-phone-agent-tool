@@ -522,9 +522,12 @@ class Desk:
         call = self.ready_call
         if call is None or call.poll() is None:
             return
+        asked = self.chosen_ai or self.ai_requested
         self.ready_call = None
         self.prepare_requested = False
         self.ai_requested = False
+        if not asked:  # only the Claude kept ready while it rang, ending because Me was chosen or the ringing stopped
+            return
         reason = "Claude couldn't start."
         try:
             with open(self.result_file, encoding="utf-8") as f:
@@ -613,7 +616,7 @@ def watch_line(make_line, desk_box, on_problem):
         if not line.wait_ready():
             line.close()
             taken = getattr(line, "taken_by_another_app", lambda: False)()
-            on_problem("Phone Link has your phone. Close Phone Link, then re-pair the phone in Bluetooth settings." if taken else "Your phone isn't connected.")
+            on_problem("Phone Link has your phone. Close it, forget the pairing on both laptop and phone, then pair again." if taken else "Your phone isn't connected.")
             time.sleep(RETRY_SECONDS)
             continue
         on_problem("")

@@ -176,7 +176,8 @@ function Wait-For-Phone {
     # Windows lets one app at a time use the phone for calls; whichever has it keeps it. Closing it is the owner's choice.
     if (Get-Process PhoneExperienceHost -ErrorAction SilentlyContinue) {
         Write-Host '   Phone Link is open. Close it and turn off its start with Windows: only one app can use the phone for calls.' -ForegroundColor Yellow
-        Write-Host '   If it had your phone, also remove the phone in Bluetooth settings and pair it again.' -ForegroundColor Yellow
+        Write-Host '   If it had your phone, also re-pair on both devices: remove the phone on the laptop, forget the laptop on the phone,' -ForegroundColor Yellow
+        Write-Host '   and pair them again.' -ForegroundColor Yellow
     }
     if (Pick-Phone) { return $true }
     Start-Process 'ms-settings:bluetooth'
@@ -204,6 +205,14 @@ Step 'Windows'
 $build = [Environment]::OSVersion.Version.Build
 if ($build -lt 22000) { throw "Pat needs Windows 11; this is build $build." }
 "Windows build $build"
+# Run as administrator, setup still works, but everything per-user (Python, the Claude login, the phone tool, the
+# mobile-devices switch) lands in the account that opened the window. Another account's password puts it in the wrong one.
+$isAdmin = ([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+if ($isAdmin) {
+    Write-Host "   This window runs as administrator, as $env:USERNAME. That's fine if this is the account that will use Pat." -ForegroundColor Yellow
+    Write-Host '   If you typed another account''s password to open it, close it and run setup in a normal window instead:' -ForegroundColor Yellow
+    Write-Host '   setup asks for administrator itself where it needs it.' -ForegroundColor Yellow
+}
 
 Step "Python $pythonVersion"
 if ($Rehearse) {
@@ -247,9 +256,11 @@ Step 'Developer Mode'
 if (Developer-Mode-Is-On) {
     'Already on.'
 } else {
-    'iphonecall needs it. Windows will ask you to approve.'
+    if ($isAdmin) { 'iphonecall needs it. This window already runs as administrator, so it is turned on without asking.' }
+    else { 'iphonecall needs it. Windows will ask you to approve.' }
     $key = 'HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock'
     [void](As-Admin 'reg.exe' "add `"$key`" /t REG_DWORD /f /v AllowDevelopmentWithoutDevLicense /d 1")
+    if (Developer-Mode-Is-On) { 'It is on now.' }
 }
 
 Step 'iphonecall'
@@ -286,6 +297,12 @@ if ($Rehearse) {
 }
 
 Step 'Audio drivers'
+if (-not (Has-Driver 'VB-Audio Virtual Cable') -or -not ((Has-Driver 'Voicemeeter') -or (Has-Driver 'CABLE-A') -or (Has-Driver 'Boom Audio'))) {
+    # Windows often makes a newly added audio device the default, and both of Pat's are silent. Setup moves the defaults
+    # back right after installing, but a call or video already running on this laptop can go quiet until then.
+    Write-Host '   Installing audio drivers. Your sound can cut out for a moment, and a call on this laptop may go quiet' -ForegroundColor Yellow
+    Write-Host '   until setup puts your speaker and microphone back, right after.' -ForegroundColor Yellow
+}
 if (Has-Driver 'VB-Audio Virtual Cable') {
     'VB-CABLE is installed.'
 } else {
@@ -306,9 +323,8 @@ if ((Has-Driver 'Voicemeeter') -or (Has-Driver 'CABLE-A') -or (Has-Driver 'Boom 
     }
     $needsRestart = $true
 }
-if ($needsRestart) {
-    Ask-To-Restart
-} elseif ($Rehearse) {
+# Straight after the drivers too, not only after the restart: until then the new silent devices can be the defaults.
+if ($Rehearse) {
     Would 'put the default speaker and microphone back on the real ones'
 } else {
     Step 'Default speaker and microphone'
@@ -316,6 +332,7 @@ if ($needsRestart) {
     try { & $python pat.py fix-audio } finally { Pop-Location }
     $global:LASTEXITCODE = 0
 }
+if ($needsRestart) { Ask-To-Restart }
 
 if ($Rehearse) {
     Would 'record 3 seconds from the microphone, to check it sends sound when you take over a call'
@@ -345,6 +362,10 @@ if ($todo.Count) {
     $todo | ForEach-Object { "  - $_" }
 } elseif ($Rehearse) {
     Would 'open the sticky note'
+} elseif ($isAdmin) {
+    # Opened from here it would run as administrator too, and a second, normal copy couldn't tell it was there.
+    'All ready. This window runs as administrator, so open Pat yourself from a normal PowerShell window in this folder:'
+    "   .venv\Scripts\pythonw.exe note.py"
 } else {
     'All ready. Opening the sticky note: its icon is in the hidden icons, and its settings are on its right-click menu.'
     Start-Process "$venv\Scripts\pythonw.exe" -ArgumentList "`"$root\note.py`"" -WorkingDirectory $root

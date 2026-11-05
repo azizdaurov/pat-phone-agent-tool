@@ -26,7 +26,8 @@ display labels, so renaming a phone does not make it a headset.
 2. **Turn on mobile-device access:** Settings > Bluetooth & devices > Mobile devices >
    "Allow this PC to access your mobile devices" = **On**. Without it, Windows connects the phone but never creates its phone line.
    **Close Phone Link** and turn off its start with Windows: only one app at a time can use the phone for calls. If Phone Link
-   had the phone, also remove the phone in Bluetooth settings and pair it again.
+   had the phone, also re-pair on both devices: remove the phone in the laptop's Bluetooth settings, forget the laptop
+   in the phone's Bluetooth settings, and pair them again.
 3. **Turn on Developer Mode:** Settings > System > Advanced > For developers.
 4. **Build and install:**
    ```powershell
@@ -74,7 +75,7 @@ The startup lines show which step failed:
 
 | You see | Meaning / fix |
 |---|---|
-| `access : DeniedBySystem` | Another app holds the phone, usually Phone Link. Keep mobile-device access **On** (step 2), close Phone Link, then remove the phone in Bluetooth settings and pair it again. |
+| `access : DeniedBySystem` | Another app holds the phone, usually Phone Link. Keep mobile-device access **On** (step 2), close Phone Link, then remove the phone on the laptop, forget the laptop on the phone, and pair them again. |
 | `register : registered=False` | Windows ignored the registration. Check the manifest; see "Things that matter". |
 | `connect : False` | The iPhone isn't connected. Tap **your laptop's name** in the iPhone's Bluetooth settings and retry. |
 | `Access denied by Windows` | You ran `pkg\iphonecall.exe` directly. Run `iphonecall` (the installed package). |
@@ -143,7 +144,7 @@ It targets .NET 10 (long-term support, to November 2028) with the Windows 11 SDK
    classes that ordinary audio APIs (WASAPI/NAudio) can't see, so an app can't route the audio itself.
 5. **Only one app can use the phone for calls, so close Phone Link and re-pair the phone.** Whichever app has the phone
    keeps it. While Phone Link holds it, `RequestAccessAsync()` returns `DeniedBySystem`; with Pat's note holding it, Phone
-   Link can't dial. The fix is to close Phone Link, then remove the phone in Bluetooth settings and pair it again. Pat shows
+   Link can't dial. The fix is to close Phone Link, then remove the phone on the laptop, forget the laptop on the phone, and pair them again. Pat shows
    "Phone Link has your phone" when the helper is refused this way.
    No Microsoft unlock token is needed on Windows 11 (build 22000 and later).
 6. **Ignore `AudioRoutingStatus`.** It reports `CannotRouteToLocalDevice` even when the laptop voice works.

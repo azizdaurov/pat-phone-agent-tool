@@ -51,14 +51,27 @@ def claim_single_copy():
     kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
     kernel32.CreateMutexW.restype = ctypes.c_void_p
     handle = kernel32.CreateMutexW(None, False, f"Local\\{COPY_NAME}")
-    if ctypes.get_last_error() == 183:  # ERROR_ALREADY_EXISTS
+    error = ctypes.get_last_error()
+    if error == 183:  # ERROR_ALREADY_EXISTS
         QApplication.instance() or QApplication([])
         socket = QLocalSocket()
         socket.connectToServer(COPY_NAME)
         socket.waitForConnected(1000)
         return False
+    if not handle and error == 5:  # ERROR_ACCESS_DENIED: a copy started as administrator owns it, and can't be asked to show itself
+        QApplication.instance() or QApplication([])
+        tell_about_admin_copy()
+        return False
     _copy_mutex = handle
     return True
+
+
+def tell_about_admin_copy():
+    """Two notes would both hold the phone, and one of them would say it isn't connected."""
+    from PySide6.QtWidgets import QMessageBox
+    QMessageBox.information(None, "Pat is already open",
+                            "Pat is already running as administrator, probably opened by setup. Right-click its icon "
+                            "in the hidden icons and choose Quit, then open Pat again normally.")
 
 
 def nearest_side(window_left, window_width, screen_left, screen_width):
