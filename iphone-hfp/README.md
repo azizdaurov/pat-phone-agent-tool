@@ -1,7 +1,9 @@
-# iPhone calls from the Windows terminal
+# Pat phone helper for Windows
 
 Dial and answer calls on the iPhone (its SIM, its number) from this laptop's terminal, with the
 voice on the laptop. No Phone Link needed.
+
+The `iphonecall` helper also supports Android; calls have been tested on a Galaxy A13.
 
 | Tool | What it does | Voice |
 |---|---|---|
@@ -16,13 +18,15 @@ Both talk to the iPhone over Bluetooth hands-free. Use one at a time: only one p
 
 `iphonecall audio-devices-json --device-id <id>` reads the selected phone's identity and audio-endpoint metadata without
 connecting or placing a call. Pat uses it to distinguish the selected phone from other hands-free devices. Names are
-display labels, so renaming a phone does not make it a headset. Android call support still requires a real-device test.
+display labels, so renaming a phone does not make it a headset.
 
 ### Before the first run (once)
 
-1. **Pair the iPhone** with this laptop (Settings > Bluetooth & devices). The laptop shows up on the iPhone as **XITS**.
-2. **Turn off Phone Link's access:** Settings > Bluetooth & devices > Mobile devices >
-   "Allow this PC to access your mobile devices" = **Off**. While Phone Link holds the iPhone, Windows refuses this app.
+1. **Pair the iPhone** with this laptop (Settings > Bluetooth & devices). On the iPhone, choose **your laptop's name**.
+2. **Turn on mobile-device access:** Settings > Bluetooth & devices > Mobile devices >
+   "Allow this PC to access your mobile devices" = **On**. Without it, Windows connects the phone but never creates its phone line.
+   **Close Phone Link** and turn off its start with Windows: only one app at a time can use the phone for calls. If Phone Link
+   had the phone, also remove the phone in Bluetooth settings and pair it again.
 3. **Turn on Developer Mode:** Settings > System > Advanced > For developers.
 4. **Build and install:**
    ```powershell
@@ -49,8 +53,9 @@ iphonecall
 
 Other forms: `iphonecall dial +COUNTRY_CODE_NUMBER`, `iphonecall status`, `iphonecall list`,
 `iphonecall unregister`, and `--device <name>` or `--device-id <id>` to pick a paired phone.
-Without a selection, exactly one paired hands-free phone must exist. Its name does not need to contain "iPhone".
-Several matches produce an error rather than picking the first phone. `iphonecall list-json` returns names and stable
+Without a selection, the helper uses Windows' default phone line to find a phone when several are paired,
+then tries connected phones first. If no default line matches, choose a phone explicitly.
+Its name does not need to contain "iPhone". `iphonecall list-json` returns names and stable
 device IDs for Pat's phone settings; listing never dials or changes audio routing.
 
 **No terminal by itself:** it has no console, so the window Windows starts for each call stays out of sight. Running `iphonecall` by hand opens a terminal for it.
@@ -61,7 +66,7 @@ which device is the default; it may be your headphones. Use headphones to stop t
 
 **Extra call windows:** when a call starts, Windows also opens `iphonecall` in a window of its own (a side
 effect of the manifest entry that makes registration work). That window says "opened by Windows for a call"
-and closes by itself 3 seconds after the call ends. This auto-close hasn't been confirmed on a real call yet.
+and closes by itself 3 seconds after the call ends.
 
 ### When something goes wrong
 
@@ -69,9 +74,9 @@ The startup lines show which step failed:
 
 | You see | Meaning / fix |
 |---|---|
-| `access : DeniedBySystem` | Phone Link is holding the phone. Do step 2 above and close Phone Link. |
-| `register : registered=False` | Windows ignored the registration. Usually the manifest or Phone Link; see "Things that matter". |
-| `connect : False` | The iPhone isn't connected. Tap **XITS** in the iPhone's Bluetooth settings and retry. |
+| `access : DeniedBySystem` | Another app holds the phone, usually Phone Link. Keep mobile-device access **On** (step 2), close Phone Link, then remove the phone in Bluetooth settings and pair it again. |
+| `register : registered=False` | Windows ignored the registration. Check the manifest; see "Things that matter". |
+| `connect : False` | The iPhone isn't connected. Tap **your laptop's name** in the iPhone's Bluetooth settings and retry. |
 | `Access denied by Windows` | You ran `pkg\iphonecall.exe` directly. Run `iphonecall` (the installed package). |
 | `stuck: ... did not answer` | A Windows call service hung. Quit, then run again. |
 | `'iphonecall' is not recognized` | Not installed, or the package was removed: run `build.ps1`. |
@@ -90,7 +95,7 @@ python hfp_call.py shell     # d <number>, a, h, r (redial), s, v <0-15>, raw AT
 python hfp_call.py status
 ```
 
-If it fails with error 10051 or 10060, the iPhone isn't accepting the laptop: tap **XITS** on the iPhone.
+If it fails with error 10051 or 10060, the iPhone isn't accepting the laptop: tap **your laptop's name** on the iPhone.
 The iPhone's hands-free service is on Bluetooth channel 8 (`--channel 8` skips the service lookup).
 Give the phone address with `--addr`, or set `IPHONE_BT_ADDR`.
 
@@ -129,15 +134,18 @@ It targets .NET 10 (long-term support, to November 2028) with the Windows 11 SDK
 2. **The manifest entries are load-bearing.** Without `<uap13:Extension Category="windows.phoneCallActivation"/>`
    (plus the `bluetooth` and `radios` device capabilities), `RegisterApp()` silently does nothing and
    `IsRegistered()` stays false. These entries were copied from the manifests of Phone Link and Sefirah, which both
-   work. `microphone` was declared when the laptop voice was verified; it may not be needed, but that's untested.
+   work. `microphone` is declared too, for the laptop voice.
 3. **Open the call store before connecting.** `PhoneCallManager.RequestStoreAsync()` never returns if it's first
    called after `PhoneLineTransportDevice.ConnectAsync()` in the same process. `HandsFree.ConnectAsync` opens it first.
 4. **Windows plays the call audio, but only after the switch.** A call starts with `audio=RemoteDevice` and is
    silent everywhere. `PhoneCall.ChangeAudioDeviceAsync(LocalDevice)` makes Windows play it on the default
    devices. `CallSession` does this for every new call. The iPhone's call-audio endpoints use private device
    classes that ordinary audio APIs (WASAPI/NAudio) can't see, so an app can't route the audio itself.
-5. **Phone Link gets in the way.** While Phone Link holds the iPhone, `RequestAccessAsync()` returns
-   `DeniedBySystem`. No Microsoft unlock token is needed on Windows 11 (build 22000 and later).
+5. **Only one app can use the phone for calls, so close Phone Link and re-pair the phone.** Whichever app has the phone
+   keeps it. While Phone Link holds it, `RequestAccessAsync()` returns `DeniedBySystem`; with Pat's note holding it, Phone
+   Link can't dial. The fix is to close Phone Link, then remove the phone in Bluetooth settings and pair it again. Pat shows
+   "Phone Link has your phone" when the helper is refused this way.
+   No Microsoft unlock token is needed on Windows 11 (build 22000 and later).
 6. **Ignore `AudioRoutingStatus`.** It reports `CannotRouteToLocalDevice` even when the laptop voice works.
 7. **Re-pairing the iPhone** drops the registration. The next `iphonecall` run registers again by itself.
 8. **`phoneCallActivation` launches the app.** Windows starts `pkg\iphonecall.exe` with no arguments when a
@@ -153,7 +161,7 @@ It targets .NET 10 (long-term support, to November 2028) with the Windows 11 SDK
     did, and the call stayed `audio=RemoteDevice`, with no sound reaching the laptop. Trust the call's `AudioDevice`, not
     the result. In tests on 2026-11-02 this happened whenever Bluetooth headphones were connected to the laptop, even when
     they weren't the default speaker. Without them the first try worked. `CallSession` retries every 2 s, but 14 retries
-    over two calls with headphones connected didn't help: the fix is to disconnect them. Why they block it is unknown.
+    over two calls with headphones connected didn't help: the fix is to disconnect them.
 
 ### References
 

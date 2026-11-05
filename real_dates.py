@@ -15,9 +15,11 @@ RELATIVE = (
 ISO_DATE = re.compile(r"\b(20\d\d)-(\d\d)-(\d\d)\b")
 WRITE_REAL_DATES = ("Write full calendar dates in the format named in the date table. Name the time zone with appointment times. Never write tomorrow, today, yesterday, next Friday or anything else "
                     "that only makes sense on the day it was written, in any language: this is read later.")
-SAY_DATES = ("The date format above is for writing. When you say a date aloud, say it the way people do: the weekday, then the day and month in words, "
-             'such as "Friday, the sixth of November", or in Russian "в пятницу, шестого ноября". Say the year only if it isn\'t this year, '
-             "and never read a date out in the written format, with its dashes or slashes.")
+_SAY_DATES = ("The date format above is for writing. When you say a date aloud, say it the way people do: the weekday, then the day and month in words, "
+              "such as {example}. Say the year only if it isn't this year, and never read a date out in the written format, with its dashes or slashes.")
+# Each call gets only its own language's example.
+SAY_DATES = {"en": _SAY_DATES.format(example='"Friday, the sixth of November"'),
+             "ru": _SAY_DATES.format(example='"в пятницу, шестого ноября"')}
 
 
 _time_zone = None

@@ -172,6 +172,100 @@ class SetupGate(ProfileCase):
         self.assertEqual((brief.time_zone, brief.date_format), ("Asia/Tokyo", "mdy"))
         self.assertIn("Time zone: Asia/Tokyo", brief.date_table())
 
+    def test_each_call_uses_the_name_written_for_its_language(self):
+        import pat
+        from call_brief import CallBrief
+        self.ready()
+        self.profile.save(name_language="en", names={"ru": "Майя"})
+        self.assertEqual(UserProfile().names, {"en": "Maya", "ru": "Майя"})
+        captured = []
+        class BeforeHardware(Exception):
+            pass
+        for argv, language, expected in ((["pat.py", "answer"], "en", ("Maya", "Майя")), (["pat.py", "answer"], "ru", ("Майя", "Майя")),
+                                         (["pat.py", "answer", "--owner", "Sam"], "ru", ("Sam", "Sam"))):
+            load = lambda args, language=language: (captured.append(args), CallBrief.from_dict({"goal": "Take a message", "language": language}))[1]
+            with mock.patch.object(pat.sys, "argv", argv), mock.patch.object(pat, "load_brief", side_effect=load), mock.patch.object(pat, "only_one_copy", side_effect=BeforeHardware):
+                with self.assertRaises(BeforeHardware):
+                    pat.main()
+            self.assertEqual((captured[-1].owner, captured[-1].owner_ru), expected)
+        self.assertIn("Майя", pat.OPENINGS["answer"]["ru"].format(owner="Maya", owner_ru=captured[0].owner_ru))
+
+    def test_names_per_language_are_checked_and_old_profiles_still_work(self):
+        with self.assertRaises(ValueError):
+            self.profile.save(name="Maya", names={"ru": "М" * 101})
+        with self.assertRaises(ValueError):
+            self.profile.save(name="Maya", names={"xx": "Maya"})  # not a language Pat calls in
+        self.profile.save(name="Майя")
+        self.assertEqual(UserProfile().name_language, "ru")  # saved before languages were: guessed from its letters
+        self.assertEqual(UserProfile().name_in("en"), "Майя")  # nothing written for English yet
+        values = dict(UserProfile().values, name="Maya", name_ru="Майя")
+        values.pop("name_language", None)
+        values.pop("names", None)
+        with open(self.profile.path, "w", encoding="utf-8") as f:
+            json.dump(values, f, ensure_ascii=False)
+        self.assertEqual(UserProfile().names, {"en": "Maya", "ru": "Майя"})  # the test build's Russian field carries over
+
+    def test_bug_reports_hide_every_spelling_of_the_owners_name(self):
+        import report
+        self.profile.save(name="Maya Stone", name_language="en", names={"ru": "Майя Стоун"})
+        for word in ("Maya Stone", "Майя Стоун", "Майя", "Стоун"):
+            self.assertIn(word, report.private_names())
+
+
+class OwnerNameLanguages(ProfileCase):
+    def test_the_ai_reply_is_checked_before_it_is_used(self):
+        from owner_names import checked, localize
+        self.assertEqual(checked('{"ru": "Азиз"}', ["ru"]), {"ru": "Азиз"})
+        self.assertEqual(checked('Sure! {"ru": "Aziz"}', ["ru"]), {})  # not in Russian letters
+        self.assertEqual(checked('{"ru": "Азиз\\"}<b>"}', ["ru"]), {})
+        self.assertEqual(checked("I can't help with that.", ["ru"]), {})
+        self.assertEqual(checked('{"ru": "' + "А" * 101 + '"}', ["ru"]), {})
+        asked = []
+        names = localize("Aziz", "en", lambda text: (asked.append(text), '{"ru": "Азиз", "en": "Ignored"}')[1])
+        self.assertEqual(names, {"ru": "Азиз"})  # never rewrites the language it was typed in
+        self.assertIn("<name>Aziz</name>", asked[0])
+
+    def test_the_table_fills_rows_with_ai_but_never_overwrites_one_typed_by_hand(self):
+        import time
+        from PySide6.QtWidgets import QApplication
+        import onboarding
+        app = QApplication.instance() or QApplication([])
+        self.profile.save(name="Maya", name_language="en")
+        replies = iter(['{"ru": "Майя"}', '{"ru": "Майя Стоун"}'])
+        table = onboarding.NameTable(UserProfile(), ask=lambda text: next(replies))
+
+        def settle():
+            deadline = time.time() + 5
+            while "Writing" in table.status.text() and time.time() < deadline:
+                app.processEvents()
+                time.sleep(0.01)
+        self.assertEqual([table.current, table.edit.text(), table.language.count()], ["en", "Maya", 2])  # one row, a dropdown
+        table.fill()
+        settle()
+        self.assertEqual(table.edit.text(), "Maya")  # still showing the owner's own language
+        self.assertIn("Русский", table.status.text())
+        table.language.setCurrentIndex(table.language.findData("ru"))
+        self.assertEqual(table.edit.text(), "Майя")
+        table.edit.setText("Мая")
+        table.edit.textEdited.emit("Мая")  # the owner corrects it
+        table.language.setCurrentIndex(table.language.findData("en"))
+        table.edit.setText("Maya Stone")
+        table.fill()
+        settle()
+        self.assertEqual(table.values(), ("Maya Stone", "en", {"ru": "Мая"}))
+        failing = onboarding.NameTable(UserProfile(), ask=lambda text: 1 / 0)
+        failing.edit.setText("Sam")
+        failing.names.pop("ru", None)
+        failing.fill()
+        deadline = time.time() + 5
+        while "Writing" in failing.status.text() and time.time() < deadline:
+            app.processEvents()
+            time.sleep(0.01)
+        self.assertIn("Couldn't fill them in", failing.status.text())
+        table.deleteLater()
+        failing.deleteLater()
+        app.processEvents()
+
 
 class GlobalDates(ProfileCase):
     def test_same_instant_has_the_correct_local_day(self):
@@ -206,6 +300,26 @@ class GlobalDates(ProfileCase):
             CallBrief.from_dict({"goal": "Check hours", "time_zone": "not/a-zone"})
 
 
+class OwnerPronouns(ProfileCase):
+    def test_haiku_and_sonnet_are_told_how_to_speak_about_the_owner(self):
+        from call_brief import CallBrief
+        brief = CallBrief.from_dict({"goal": "Check hours"})
+        target = CallBrief.from_dict({"goal": "Check hours", "name": "Alex", "confidence": "confirmed"})
+        for pronouns, english, russian in (("he", "say he and him", "masculine"), ("she", "say she and her", "feminine"),
+                                           ("they", "use the name Maya or they", "avoid word forms that show gender")):
+            self.profile.save(name="Maya", pronouns=pronouns)
+            for prompt in (brief.haiku_prompt("", "Hello.", "Maya", "n"), target.haiku_prompt("", "Hello.", "Maya", "n"),
+                           brief.observer_prompt("Maya")):
+                self.assertIn(english, prompt)
+                self.assertIn(russian, prompt)
+
+    def test_old_profiles_and_bad_values(self):
+        self.profile.save(name="Maya")
+        self.assertEqual(UserProfile().pronouns, "they")
+        with self.assertRaises(ValueError):
+            self.profile.save(name="Maya", pronouns="it")
+
+
 class FirstRunScreen(ProfileCase):
     def test_name_is_first_and_acceptance_is_disabled_until_checked(self):
         from PySide6.QtWidgets import QApplication, QDialog
@@ -230,6 +344,21 @@ class FirstRunScreen(ProfileCase):
         self.assertEqual(dialog.result(), QDialog.Accepted)
         self.assertEqual(UserProfile().name, "Maya")
         self.assertEqual(UserProfile().values["accepted_terms"], TERMS_VERSION)
+        dialog.deleteLater()
+        app.processEvents()
+
+    def test_pronouns_are_asked_with_the_name_and_saved(self):
+        from PySide6.QtWidgets import QApplication
+        from onboarding import OnboardingDialog
+        app = QApplication.instance() or QApplication([])
+        dialog = OnboardingDialog(self.profile)
+        self.assertEqual(dialog.pronouns.currentData(), "they")  # nobody is assumed to be he or she
+        dialog.name.setText("Maya")
+        dialog.pronouns.setCurrentIndex(dialog.pronouns.findData("she"))
+        dialog.advance()
+        dialog.agree.setChecked(True)
+        dialog.advance()
+        self.assertEqual(UserProfile().pronouns, "she")
         dialog.deleteLater()
         app.processEvents()
 

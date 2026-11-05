@@ -222,7 +222,7 @@ def shell(hfp):
 
 
 def main():
-    p = argparse.ArgumentParser(description="Control iPhone calls over Bluetooth HFP.")
+    p = argparse.ArgumentParser(description="Control calls on an iPhone over Bluetooth HFP.")
     p.add_argument("--addr", default=IPHONE_ADDR, required=not IPHONE_ADDR, help="iPhone Bluetooth address, or set IPHONE_BT_ADDR")
     p.add_argument("--channel", type=int, help="RFCOMM channel (skips the SDP lookup)")
     sub = p.add_subparsers(dest="action", required=True)

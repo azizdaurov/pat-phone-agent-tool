@@ -23,13 +23,33 @@ class Numbers(unittest.TestCase):
             self.assertEqual(self.redact.clean(line), line)
 
     def test_a_call_file_keeps_its_date_and_time_but_not_the_number(self):
-        self.assertEqual(self.redact.clean(r"Transcript: C:\Users\Aziz\calls\20261104-215947-998907432299.txt"),
+        self.assertEqual(self.redact.clean(r"Transcript: C:\Users\Aziz\calls\20261104-215947-12025550143.txt"),  # 555-01xx: reserved for fiction
                          r"Transcript: %USERPROFILE%\calls\20261104-215947-<number 1>.txt")
         self.assertEqual(self.redact.clean("Call 20261104-205048-7b60f7.log"), "Call 20261104-205048-7b60f7.log")
 
     def test_names_are_hidden_whatever_their_case_but_not_inside_other_words(self):
         self.assertEqual(self.redact.clean("phone : iPhone AZIZ; Incoming Рустам"), "phone : iPhone <name 2>; Incoming <name 1>")
         self.assertEqual(self.redact.clean("Azizbek"), "Azizbek")
+
+    def test_a_name_the_phone_shows_for_a_caller_is_hidden_even_if_pat_never_saved_it(self):
+        redact = Redactor(["Aziz"])
+        lines = ["21:59:39.386270 -- Incoming Dr Zelinsky Clinic (+14155550101): Incoming, audio=RemoteDevice, muted=False",
+                 "call     : Incoming Dr Zelinsky Clinic (+14155550101): Talking, audio=LocalDevice, muted=False",
+                 "Incoming: Dr Zelinsky Clinic (+14155550101)",
+                 "21:59:40.1 -- Outgoing Мама: Dialing, audio=RemoteDevice, muted=False"]
+        self.assertEqual([redact.clean(line) for line in lines], [
+            "21:59:39.386270 -- Incoming <caller 1> (<number 1>): Incoming, audio=RemoteDevice, muted=False",
+            "call     : Incoming <caller 1> (<number 1>): Talking, audio=LocalDevice, muted=False",
+            "Incoming: <caller 1> (<number 1>)",
+            "21:59:40.1 -- Outgoing <caller 2>: Dialing, audio=RemoteDevice, muted=False"])
+
+    def test_a_saved_contact_calling_keeps_its_name_stand_in_and_other_lines_stay(self):
+        self.assertEqual(self.redact.clean("-- Incoming Рустам (+998901234567): Talking, audio=LocalDevice, muted=False"),
+                         "-- Incoming <name 1> (<number 1>): Talking, audio=LocalDevice, muted=False")
+        for line in ("-- call ended (0 active)", "-- audio -> laptop, try 1: Succeeded", "Incoming: <number 1>",
+                     "-- Incoming +998901234567: Incoming, audio=RemoteDevice, muted=False"):
+            cleaned = self.redact.clean(line)
+            self.assertNotIn("<caller", cleaned, line)
 
     def test_versions_can_be_kept(self):
         self.assertEqual(self.redact.clean("Windows: Windows-10-10.0.26200-SP0", numbers=False), "Windows: Windows-10-10.0.26200-SP0")

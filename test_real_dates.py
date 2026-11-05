@@ -97,9 +97,18 @@ class WhereTheyAreKept(unittest.TestCase):
     def test_only_haiku_is_told_how_to_say_dates(self):
         brief = CallBrief.from_dict({"goal": "Book a table.", "need_from_them": ["Is it free?"]})
         target = CallBrief.from_dict({"goal": "Book a table.", "name": "Alex", "confidence": "confirmed"})
-        for prompt in (brief.haiku_prompt("Speak.", "Hello.", "Aziz", "n"), target.haiku_prompt("Speak.", "Hello.", "Aziz", "n"), target.task_message("Aziz")):
-            self.assertIn(SAY_DATES, prompt)
-        self.assertNotIn(SAY_DATES, brief.observer_prompt("Aziz"))
+        for prompt in (brief.haiku_prompt("Speak.", "Hello.", "Aziz", "n"), target.haiku_prompt("Speak.", "Hello.", "Aziz", "n")):
+            self.assertIn(SAY_DATES["en"], prompt)
+            self.assertNotIn("шестого ноября", prompt)  # only the call's own language
+        self.assertNotIn(SAY_DATES["en"], brief.observer_prompt("Aziz"))
+
+    def test_the_date_table_is_sent_once_on_calls_that_check_who_answered(self):
+        target = CallBrief.from_dict({"goal": "Book a table.", "name": "Alex", "confidence": "confirmed", "language": "ru"})
+        self.assertIn(SAY_DATES["ru"], target.haiku_prompt("Speak.", "Hello.", "Aziz", "n"))
+        self.assertNotIn("Friday, the sixth", target.haiku_prompt("Speak.", "Hello.", "Aziz", "n"))
+        task = target.task_message("Aziz")
+        self.assertNotIn(SAY_DATES["ru"], task)
+        self.assertIn("including the date table", task)
 
 
 from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule

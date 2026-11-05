@@ -333,7 +333,9 @@ class Rehearsal(unittest.TestCase):
         tail = np.zeros(MIC_RATE * 20, dtype=np.float32)
         frames = framed(np.concatenate((silence, load_sample(), tail)), realtime=True)
         transcript = pat.Transcript(tempfile.mkdtemp())
-        call = pat.Conversation(FakeLine(), frames, ear, mouth, brain, transcript, opening, max_seconds=40)
+        # The recording lasts 25 s, so the limit must be shorter or only Haiku hanging up by itself could end the call.
+        # Claude's first reply comes about 7-8 s in; at 12 s it was too close.
+        call = pat.Conversation(FakeLine(), frames, ear, mouth, brain, transcript, opening, max_seconds=15)
         reason = call.run()
         brain.close()
         with open(transcript.path, encoding="utf-8") as f:

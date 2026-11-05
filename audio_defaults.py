@@ -44,21 +44,91 @@ def _release(pointer):
     WINFUNCTYPE(ctypes.c_ulong, c_void_p)(table[2])(pointer)
 
 
+class PropVariant(ctypes.Structure):
+    """Just enough of PROPVARIANT to read a text value: its type, three reserved words, then the value."""
+    _fields_ = [("vt", ctypes.c_ushort), ("reserved", ctypes.c_ushort * 3), ("text", c_wchar_p), ("padding", c_void_p)]
+
+
+VT_LPWSTR = 31
+STGM_READ = 0
+DEVICE_FRIENDLY_NAME = "{a45c254e-df1c-4efd-8020-67d146a850e0}"  # with property number 14: "Speakers (Boom Audio)"
+
+
 class WindowsAudio:
     def endpoints(self, kind):
-        """{name: id} of the working devices, with names as sounddevice shows them: "Speakers (Boom Audio)"."""
+        """{name: id} of the working devices, with names as sounddevice shows them: "Speakers (Boom Audio)".
+
+        Asks Windows' audio API, as Sound settings does. A device it can't describe is left out rather than hiding
+        every other device, and if the API itself fails, Windows' registry copy of the same list is read instead."""
+        try:
+            found = self._endpoints_from_api(kind)
+        except OSError:
+            found = {}
+        return found or self._endpoints_from_registry(kind)
+
+    def _endpoints_from_api(self, kind):
+        enumerator = _create("BCDE0395-E52F-467C-8E3D-C4579291692E", "A95664D2-9614-4F35-A746-DE8DB63617E6")
+        found = {}
+        try:
+            collection = c_void_p()
+            _method(enumerator, 3, c_int, ctypes.c_ulong, POINTER(c_void_p))(enumerator, kind, ACTIVE, byref(collection))
+            try:
+                count = ctypes.c_uint()
+                _method(collection, 3, POINTER(ctypes.c_uint))(collection, byref(count))
+                for index in range(count.value):
+                    try:
+                        name, device_id = self._describe(collection, index)
+                    except OSError:
+                        continue  # one device Windows can't describe must not cost every other one
+                    if name and device_id:
+                        found[name] = device_id
+            finally:
+                _release(collection)
+        finally:
+            _release(enumerator)
+        return found
+
+    def _describe(self, collection, index):
+        device = c_void_p()
+        _method(collection, 4, ctypes.c_uint, POINTER(c_void_p))(collection, index, byref(device))
+        try:
+            text = c_wchar_p()
+            _method(device, 5, POINTER(c_wchar_p))(device, byref(text))
+            device_id = text.value
+            ctypes.windll.ole32.CoTaskMemFree(text)
+            store = c_void_p()
+            _method(device, 4, ctypes.c_ulong, POINTER(c_void_p))(device, STGM_READ, byref(store))
+            try:
+                key = ctypes.create_string_buffer(uuid.UUID(DEVICE_FRIENDLY_NAME).bytes_le + (14).to_bytes(4, "little"))
+                value = PropVariant()
+                _method(store, 5, c_void_p, POINTER(PropVariant))(store, ctypes.addressof(key), byref(value))
+                name = value.text if value.vt == VT_LPWSTR else None
+                ctypes.windll.ole32.PropVariantClear(byref(value))
+            finally:
+                _release(store)
+            return name, device_id
+        finally:
+            _release(device)
+
+    def _endpoints_from_registry(self, kind):
         flow = "Render" if kind == RENDER else "Capture"
         found = {}
         with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, rf"{ENDPOINTS_KEY}\{flow}") as devices:
             for number in range(winreg.QueryInfoKey(devices)[0]):
-                guid = winreg.EnumKey(devices, number)
-                with winreg.OpenKey(devices, guid) as device:
-                    if winreg.QueryValueEx(device, "DeviceState")[0] != ACTIVE:
-                        continue
-                    with winreg.OpenKey(device, "Properties") as properties:
-                        friendly = winreg.QueryValueEx(properties, FRIENDLY_NAME)[0]
-                        adapter = winreg.QueryValueEx(properties, ADAPTER_NAME)[0]
-                found[f"{friendly} ({adapter})"] = f"{{0.0.{kind}.00000000}}.{guid}"
+                try:
+                    guid = winreg.EnumKey(devices, number)
+                    with winreg.OpenKey(devices, guid) as device:
+                        if winreg.QueryValueEx(device, "DeviceState")[0] != ACTIVE:
+                            continue
+                        with winreg.OpenKey(device, "Properties") as properties:
+                            friendly = winreg.QueryValueEx(properties, FRIENDLY_NAME)[0]
+                            try:
+                                adapter = winreg.QueryValueEx(properties, ADAPTER_NAME)[0]
+                            except OSError:
+                                adapter = ""
+                except OSError:
+                    continue  # a device with missing or unreadable details is skipped, not fatal
+                found[f"{friendly} ({adapter})" if adapter else friendly] = f"{{0.0.{kind}.00000000}}.{guid}"
         return found
 
     def defaults(self, kind):
@@ -142,6 +212,19 @@ class CallDevices:
         except FileNotFoundError:
             pass
         return problems
+
+
+def mixer_running(listed=None):
+    """True while a Voicemeeter app runs (Voicemeeter, Banana or Potato). Then its virtual devices carry real sound,
+    so a default on one of them was probably chosen on purpose, and Pat leaves it alone."""
+    if listed is None:
+        import subprocess
+        try:
+            listed = subprocess.run(["tasklist", "/FO", "CSV", "/NH"], capture_output=True, text=True, errors="replace", timeout=10,
+                                    creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0)).stdout
+        except (OSError, subprocess.TimeoutExpired):
+            return True  # can't tell, so don't touch anything
+    return any(line.strip('"').lower().startswith("voicemeeter") for line in listed.splitlines())
 
 
 def headset_problem(headsets):

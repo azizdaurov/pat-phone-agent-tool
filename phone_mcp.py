@@ -156,7 +156,7 @@ def place_call(
     done_when: Annotated[str, Field(description="When to say goodbye. Defaults to having everything in need_from_them, or their being unable to help.")] = "",
     if_stuck: Annotated[str, Field(description="What to do if it can't make progress. Defaults to thanking them and finishing.")] = "",
     language: Annotated[Literal["ru", "en"], Field(description="Language of the call. English is the default; Russian is also supported.")] = "en",
-    voice: Annotated[Literal["", "peter_yearsley", "alba", "bill_boerst", "michael", "anna", "charles"], Field(description="English calls only. peter_yearsley (British), alba (Indian accent), bill_boerst (office man), michael (buttery), anna (female), charles (oily, the default). Leave empty to use the voice the owner chose in his settings, unless the person asks for another.")] = "",
+    voice: Annotated[Literal["", "peter_yearsley", "alba", "bill_boerst", "michael", "anna", "charles"], Field(description="English calls only. peter_yearsley (British), alba (Indian accent), bill_boerst (office man), michael (buttery), anna (female), charles (oily, the default). Leave empty to use the voice chosen in the owner's settings, unless the person asks for another.")] = "",
     save_audio: Annotated[bool, Field(description="Keep the other person's voice in a recording, to diagnose problems. Only if the person you work for asked, and the other person has agreed.")] = False,
     max_minutes: Annotated[float, Field(description=f"Hang up after this long, at most {MAX_MINUTES}.", gt=0)] = 5,
     summary_style: Annotated[Literal["", "haiku", "sonnet", "cicero"], Field(description="Only if the person ended their request with --haiku, --sonnet or --cicero: adds that poem under the call's summary.")] = "",
@@ -197,7 +197,7 @@ def end_call(call_id: str) -> dict:
 
 @mcp.tool()
 def take_over(call_id: str) -> dict:
-    """Put the owner on a running call himself, on the laptop's speaker and microphone. Claude says it's passing them over, then stops talking. Use only when the owner asks. The owner can also press F9 at any time."""
+    """Put the owner on a running call, on the laptop's speaker and microphone. Claude says it's passing them over, then stops talking. Use only when the owner asks. The owner can also press F9 at any time."""
     proc = running.get(call_id)
     if proc is None or proc.poll() is not None:
         return {"status": "not running"}

@@ -1,6 +1,6 @@
 """Push-to-talk voice chat with Claude Haiku 4.5 on your Claude plan, in English or Russian.
 
-English uses Moonshine and Pocket TTS. Russian uses onnx-asr (GigaAM) and Piper, voice irina or ruslan.
+English uses Parakeet and Pocket TTS. Russian uses GigaAM and Piper, voice irina or ruslan. Both recognizers run through onnx-asr.
 Hold the talk key, speak, release. Hold it again to stop a reply. Ctrl+C quits.
 Run from this folder: .venv/Scripts/python.exe voice_loop.py --lang ru --voice ruslan
 """
@@ -30,7 +30,8 @@ import sounddevice as sd
 MODEL = "claude-haiku-4-5"
 FALLBACK_MODEL = "claude-haiku-5-5"
 SYSTEM_PROMPTS = {
-    "en": "You are a voice assistant. Reply in one or two short spoken sentences. No lists, no markdown.",
+    "en": "You are a voice assistant. Reply in one or two short spoken sentences. No lists, no markdown - "
+    "your answer will be read aloud.",
     "ru": "Ты голосовой ассистент. Отвечай по-русски одним-двумя короткими предложениями, в каждом не больше "
           "двенадцати слов: твой ответ будут читать вслух. Без списков и разметки. Числа, сокращения и "
           "иностранные названия пиши словами кириллицей.",
@@ -38,10 +39,10 @@ SYSTEM_PROMPTS = {
 ERROR_PHRASES = {"en": "Sorry, I could not reach Claude.", "ru": "Извините, не могу связаться с Клодом."}
 TTS_LANGUAGE = "english_18m_2026-10"
 TTS_VOICE = "alba"
-STT_ARCH = "SMALL_STREAMING"
+EN_STT_MODEL = "nemo-parakeet-tdt-0.6b-v2"
 RU_VOICES = {"irina": "ru_RU-irina-medium", "ruslan": "ru_RU-ruslan-medium"}
 RU_TTS_VOICE = "irina"
-RU_STT_MODEL = "gigaam-v3-ctc"
+RU_STT_MODEL = "gigaam-v3-rnnt"  # same as Pat's
 KEYS = {"rctrl": 0xA3, "lctrl": 0xA2, "f8": 0x77, "f9": 0x78, "f10": 0x79}
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -329,50 +330,8 @@ class Mic:
         raise NotImplementedError
 
 
-class Ear(Mic):
-    """English: Moonshine transcribes while you talk, so little is left to do at release."""
-
-    def __init__(self, arch=STT_ARCH, mic=True):
-        from moonshine_voice.download import get_model_for_language
-        from moonshine_voice.transcriber import ModelArch, Transcriber
-        path, resolved = get_model_for_language("en", ModelArch[arch])
-        self.transcriber = Transcriber(str(path), resolved)
-        self.blocks = None
-        self.stream = None
-        self.worker = None
-        super().__init__(mic)
-
-    def prepare(self):
-        self.stream = self.transcriber.create_stream(0.5)
-        self.stream.start()
-        self.blocks = queue.Queue()
-        self.worker = threading.Thread(target=self._feed, daemon=True)
-        self.worker.start()
-
-    def take(self, block):
-        self.blocks.put(block)
-
-    def _feed(self):
-        while True:
-            block = self.blocks.get()
-            if block is None:
-                return
-            self.stream.add_audio(block, self.rate)
-
-    def end(self, tail=TAIL_SECONDS):
-        if tail:
-            time.sleep(tail)
-        self.recording = False
-        self.blocks.put(None)
-        self.worker.join()
-        transcript = self.stream.stop()
-        self.stream.close()
-        lines = transcript.lines if transcript else []
-        return " ".join(line.text.strip() for line in lines if line.text.strip())
-
-
 class BatchEar(Mic):
-    """For onnx-asr models, which don't stream: it transcribes everything at release."""
+    """onnx-asr models (Parakeet, GigaAM) don't stream: it transcribes everything at release."""
 
     def __init__(self, model=RU_STT_MODEL, mic=True):
         import onnx_asr
@@ -465,7 +424,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--lang", choices=sorted(SYSTEM_PROMPTS), default="en", help="language you speak and hear")
     parser.add_argument("--key", choices=sorted(KEYS), default="rctrl", help="talk key to hold")
-    parser.add_argument("--voice", default=None, help="Russian: irina or ruslan. English: a Pocket TTS voice name")
+    parser.add_argument("--voice", default=None, help="English: a Pocket TTS voice name. Russian: irina or ruslan")
     parser.add_argument("--tts", default=TTS_LANGUAGE, help="Pocket TTS model (English only)")
     parser.add_argument("--stt", default=None, help="speech-to-text model name")
     args = parser.parse_args()
@@ -479,7 +438,7 @@ def main():
         ear = BatchEar(args.stt or RU_STT_MODEL)
     else:
         mouth = Mouth(PocketVoice(args.tts, args.voice or TTS_VOICE))
-        ear = Ear(args.stt or STT_ARCH)
+        ear = BatchEar(args.stt or EN_STT_MODEL)
     print("Starting Claude...", flush=True)
     brain = Brain(args.lang)
     brain.warm_up()

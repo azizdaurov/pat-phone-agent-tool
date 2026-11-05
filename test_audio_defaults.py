@@ -166,6 +166,38 @@ class RealWindows(unittest.TestCase):
                 if device_id:
                     self.assertIn(device_id, listed)
 
+    def test_names_match_what_the_audio_library_lists(self):
+        import sounddevice as sd
+        wasapi = {d["name"] for d in sd.query_devices() if "WASAPI" in sd.query_hostapis(d["hostapi"])["name"]}
+        for kind in (RENDER, CAPTURE):
+            for name in WindowsAudio().endpoints(kind):
+                self.assertIn(name, wasapi)
+
+
+class OtherLaptops(unittest.TestCase):
+    """Devices this laptop doesn't have: one Windows can't describe must not hide the rest."""
+
+    def test_a_device_that_cannot_be_described_is_skipped(self):
+        audio = WindowsAudio()
+        real = audio._describe
+        calls = []
+
+        def flaky(collection, index):
+            calls.append(index)
+            if index == 0:
+                raise OSError("pretend: this device has no name")
+            return real(collection, index)
+        with mock.patch.object(audio, "_describe", side_effect=flaky):
+            found = audio._endpoints_from_api(RENDER)
+        self.assertGreater(len(calls), 1, "needs at least two speakers on this laptop")
+        self.assertEqual(len(found), len(audio._endpoints_from_api(RENDER)) - 1)
+
+    def test_if_the_audio_api_fails_the_registry_list_is_used(self):
+        audio = WindowsAudio()
+        with mock.patch.object(audio, "_endpoints_from_api", side_effect=OSError("pretend")), \
+                mock.patch.object(audio, "_endpoints_from_registry", return_value={"Speakers (Pretend)": "id"}):
+            self.assertEqual(audio.endpoints(RENDER), {"Speakers (Pretend)": "id"})
+
 
 if __name__ == "__main__":
     unittest.main()

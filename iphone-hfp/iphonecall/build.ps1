@@ -6,7 +6,7 @@
 param([switch]$Reinstall)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
-$packageName = 'AzizDaurov.iPhoneCall'
+$packageName = 'OasisTeam.PatPhone'
 
 $devMode = (Get-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -ErrorAction SilentlyContinue).AllowDevelopmentWithoutDevLicense
 if ($devMode -ne 1) { throw 'Developer Mode is off. Turn it on: Settings > System > Advanced > For developers.' }
@@ -19,6 +19,12 @@ if ($LASTEXITCODE -ne 0) { throw 'Build failed.' }
 
 $stamp = "$root\obj\installed-manifest.sha256"
 $hash = (Get-FileHash "$root\AppxManifest.xml" -Algorithm SHA256).Hash
+# Remove the old package first so its iphonecall.exe alias cannot conflict with the new one.
+$legacyPackage = Get-AppxPackage 'AzizDaurov.iPhoneCall'
+if ($legacyPackage) {
+    $legacyPackage | Remove-AppxPackage
+    'Removed the old phone helper package.'
+}
 $installed = Get-AppxPackage $packageName
 $current = $installed -and (Test-Path $stamp) -and ((Get-Content $stamp) -eq $hash)
 if ($current -and -not $Reinstall) {

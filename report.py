@@ -1,4 +1,4 @@
-"""A bug report you can post in public: Pat's recent logs with phone numbers, names and what was said taken out.
+"""A bug report you can post in public: Pat's recent logs with phone numbers, names, callers' names and what was said taken out.
 
   .venv\\Scripts\\python.exe report.py            the last 3 calls
   .venv\\Scripts\\python.exe report.py --calls 10
@@ -16,7 +16,7 @@ import re
 import subprocess
 import sys
 
-from private_numbers import BOOK_NAME, DATE_FIRST, NUMBER_LIKE
+from private_numbers import BOOK_NAME, DATE_FIRST, NUMBER_LIKE, split_caller
 from phone_memory import FOLDER as CONTACTS
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -30,6 +30,11 @@ PRIVATE_PAT_LINES = re.compile(r"^((?:\d\d:\d\d:\d\d )?(?:Pat|Cicero): )(task|Ha
 SAFE_BRIEF_FIELDS = re.compile(r"^(language|confidence|time_zone|date_format): \S+$")
 NEXT_ENTRY = re.compile(r"^(?:\d\d:\d\d:\d\d )?(?:(?:Pat|Cicero|Claude|Them|Status): |\[|Connected\.|Call over|No conversation)")
 DIALING = re.compile(r"^(Dialing .*?\.) Claude's task: .*$")
+# Where a caller's name can appear: the phone shows names from its own contacts, which Pat's contacts may not have.
+# iphonecall writes "-- Incoming Name (+number): Talking, audio=..." and "call     : Incoming Name (+number): ...";
+# pat.py writes "Incoming: Name (+number)".
+CALLER_IN_STATUS = re.compile(r"((?:-- |call {5}: )\w+ )(.+?)(: \w+, audio=)")
+CALLER_INCOMING = re.compile(r"^(\s*(?:\d\d:\d\d:\d\d\S* )?Incoming: )(.+)$")
 PACKAGES = ("numpy", "sounddevice", "PyAudioWPatch", "onnx-asr", "piper-tts", "pocket-tts", "PySide6", "mcp")
 
 
@@ -39,11 +44,27 @@ class Redactor:
 
     def __init__(self, names=(), home=None):
         self.numbers = {}
+        self.callers = {}
         self.names = sorted({name.strip() for name in names if name and len(name.strip()) >= 3}, key=len, reverse=True)
+        self.known = {name.casefold() for name in self.names}
         self.home = home
 
     def number(self, digits):
         return self.numbers.setdefault(digits, f"<number {len(self.numbers) + 1}>")
+
+    def caller(self, name):
+        return self.callers.setdefault(name.casefold(), f"<caller {len(self.callers) + 1}>")
+
+    def _hide_caller(self, match):
+        """The name part of a caller label. A saved contact's name is left for the name stand-ins, so it keeps its <name N>."""
+        who = match.group(2)
+        name, number = split_caller(who)
+        if not name and re.search(r"[^\W\d_]", who) and not re.search(r"\d", who):
+            name, number = who.strip(), ""  # a name with no number
+        if not name or name.casefold() in self.known:
+            return match.group(0)
+        hidden = f"{self.caller(name)} ({number})" if number else self.caller(name)
+        return match.group(1) + hidden + (match.group(3) if match.re is CALLER_IN_STATUS else "")
 
     def _swap(self, match):
         found = match.group(0)
@@ -66,6 +87,8 @@ class Redactor:
     def clean(self, text, numbers=True):
         if self.home:
             text = re.sub(re.escape(self.home), "%USERPROFILE%", text, flags=re.I)
+        text = CALLER_IN_STATUS.sub(self._hide_caller, text)
+        text = CALLER_INCOMING.sub(self._hide_caller, text)
         if numbers:
             text = NUMBER_LIKE.sub(self._swap, text)
         for index, name in enumerate(self.names, 1):
@@ -114,7 +137,9 @@ def private_names():
     try:
         from user_profile import UserProfile
         profile = UserProfile()
-        names += [profile.name, profile.phone_device, *profile.name.split()]
+        for spelling in {profile.name, *profile.names.values()}:  # every language's spelling of the owner's name
+            names += [spelling, *spelling.split()]
+        names.append(profile.phone_device)
     except Exception:
         pass
     names.append(os.environ.get("USERNAME", ""))

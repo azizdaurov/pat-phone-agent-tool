@@ -157,7 +157,7 @@ def terminate_call_process(process):
 class Desk:
     """Everything the note knows and does, apart from drawing it. `line` is the note's own PhoneLine."""
 
-    def __init__(self, line, start_call, devices=None, always=None, settings=None, folder=CALLS, real_devices=None, headsets=None, make_level=CallLevel, cancel_seconds=CANCEL_SECONDS, private=None, eggs=None, speech_ready=lambda: True):
+    def __init__(self, line, start_call, devices=None, always=None, settings=None, folder=CALLS, real_devices=None, headsets=None, make_level=CallLevel, cancel_seconds=CANCEL_SECONDS, private=None, eggs=None, speech_ready=lambda: True, tidy_defaults=None):
         self.line = line
         self.private = private or PrivateNumbers()
         self.eggs = eggs or EasterEggs(os.path.dirname(self.private.book_path), folder)
@@ -168,6 +168,7 @@ class Desk:
         self.prepare_requested = False
         self.ai_requested = False
         self.devices = devices or CallDevices(folder)
+        self.tidy_defaults = tidy_defaults  # after a call on the laptop: moves a silent virtual default to the real device
         self.always = always or CallRules()
         self.settings = settings or NoteSettings(folder)
         self.folder = folder
@@ -223,8 +224,8 @@ class Desk:
 
     def _ring(self, who):
         self.finished_session = None
-        self.name, self.number = split_caller(who)
-        self.name = self.name or self.private.name_for(self.number)
+        self.number = split_caller(who)[1]
+        self.name = self.private.display_name(who)  # Pat's contacts first, like the call itself; the phone's own name otherwise
         self.notice = ""
         self._set_panel(None)
         take_commands(self.folder)  # from a call that was killed
@@ -246,7 +247,7 @@ class Desk:
 
     def _back_to_idle(self):
         self._stop_level()
-        self.devices.restore()
+        self._restore_devices()
         live = read_live(self.folder) or {}
         if live:
             self.finished_session = self._session_key(live)
@@ -259,6 +260,22 @@ class Desk:
         self.ai_requested = False
         if self.notice == "Ending call…":
             self.notice = ""
+
+    def _restore_devices(self):
+        """Puts back the defaults the note switched for a call on the laptop, then, as after Claude's calls, moves any that
+        was a silent virtual device to the real one. Off the lock's thread, since asking Windows takes a moment."""
+        path = getattr(self.devices, "path", None)
+        switched = bool(path) and os.path.exists(path)
+        self.devices.restore()
+        if switched and self.tidy_defaults:
+            threading.Thread(target=self._tidy_defaults, daemon=True).start()
+
+    def _tidy_defaults(self):
+        try:
+            for change in self.tidy_defaults():
+                print(f"Audio: {change}", flush=True)
+        except Exception as error:  # never worth breaking the note over
+            print(f"[couldn't check the default audio devices: {error}]", flush=True)
 
     @staticmethod
     def _session_key(live):
@@ -352,7 +369,7 @@ class Desk:
             else:
                 self.line.to_phone()
                 self._stop_level()
-                self.devices.restore()
+                self._restore_devices()
 
     def _back_if_headset(self, move):
         """With a Bluetooth headset on the laptop, Windows says the call moved here while its sound stays on the phone.
@@ -367,7 +384,7 @@ class Desk:
             self.route = "iphone"
             self.line.to_phone()
             self._stop_level()
-            self.devices.restore()
+            self._restore_devices()
             self.notice = blocked
 
     def _use_real_devices(self):
@@ -476,7 +493,7 @@ class Desk:
             self._stop_level()
             self._cancel_ready_call()
             if self.screen == "me":
-                self.devices.restore()
+                self._restore_devices()
         self.line.close()
 
     def _run_agent(self, text, style=""):
@@ -595,7 +612,8 @@ def watch_line(make_line, desk_box, on_problem):
         desk = desk_box(line)
         if not line.wait_ready():
             line.close()
-            on_problem("Your phone isn't connected.")
+            taken = getattr(line, "taken_by_another_app", lambda: False)()
+            on_problem("Phone Link has your phone. Close Phone Link, then re-pair the phone in Bluetooth settings." if taken else "Your phone isn't connected.")
             time.sleep(RETRY_SECONDS)
             continue
         on_problem("")
@@ -692,7 +710,7 @@ def main():
             return (pat.sd.query_devices(speaker)["name"] if speaker is not None else None,
                     pat.sd.query_devices(microphone)["name"] if microphone is not None else None)
 
-        late.desk = Desk(line, start_call, always=rules, settings=settings, private=private, real_devices=real_names, headsets=pat.connected_headsets, speech_ready=speech.is_ready)
+        late.desk = Desk(line, start_call, always=rules, settings=settings, private=private, real_devices=real_names, headsets=pat.connected_headsets, speech_ready=speech.is_ready, tidy_defaults=pat.real_defaults)
         return late.desk
 
     def on_problem(text):

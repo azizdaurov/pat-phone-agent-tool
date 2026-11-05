@@ -2,12 +2,124 @@
 import json
 from zoneinfo import available_timezones
 
-from PySide6.QtCore import QLocale, QProcess, QTimer
+import threading
+
+from PySide6.QtCore import QLocale, QObject, QProcess, QTimer, Signal
 from PySide6.QtWidgets import (QApplication, QCheckBox, QComboBox, QDialog, QDialogButtonBox,
-                              QFormLayout, QLabel, QLineEdit, QPushButton,
+                              QFormLayout, QHBoxLayout, QLabel, QLineEdit, QPushButton,
                               QStackedWidget, QTextEdit, QVBoxLayout, QWidget)
 
-from user_profile import DATE_FORMATS, TERMS_TEXT, UserProfile
+from languages import LANGUAGES
+from owner_names import ask_haiku, localize
+from user_profile import DATE_FORMATS, PRONOUNS, TERMS_TEXT, UserProfile
+
+PRONOUNS_QUESTION = "How should Pat refer to you on calls?"
+FILL_DELAY_MS = 1200  # after the last key in the first row, so a name being typed isn't sent letter by letter
+
+
+class _Filled(QObject):
+    done = Signal(int, object)
+
+
+class NameTable(QWidget):
+    """The owner's name per language, in one row: a language dropdown on the left, that language's name on the right.
+    It opens on the language the name is typed in, the system's. Typing the name there has AI write it for the other
+    languages, which the dropdown then shows; a language whose name the owner types themselves is never overwritten."""
+
+    def __init__(self, profile, ask=None, parent=None):
+        super().__init__(parent)
+        self.ask = ask or ask_haiku
+        self.source = profile.name_language
+        self.order = [self.source] + [code for code in LANGUAGES if code != self.source]
+        self.names = dict(profile.names)
+        self.by_hand = set()
+        self.request = 0
+        column = QVBoxLayout(self)
+        column.setContentsMargins(0, 0, 0, 0)
+        row = QHBoxLayout()
+        self.language = QComboBox()
+        self.language.setObjectName("owner-name-language")
+        for code in self.order:
+            self.language.addItem(LANGUAGES[code]["native"] + (" (your language)" if code == self.source else ""), code)
+        self.edit = QLineEdit(self.names.get(self.source, ""))
+        self.edit.setObjectName("owner-name")
+        self.edit.setMaxLength(100)
+        self.edit.setPlaceholderText("Your name")
+        row.addWidget(self.language)
+        row.addWidget(self.edit, 1)
+        column.addLayout(row)
+        self.status = QLabel("")
+        self.status.setWordWrap(True)
+        column.addWidget(self.status)
+        self.language.currentIndexChanged.connect(self._show_language)
+        self.edit.textChanged.connect(lambda text: self.names.__setitem__(self.current, text.strip()))
+        self.edit.textEdited.connect(self._typed)
+        self.edit.editingFinished.connect(lambda: self.timer.isActive() and (self.timer.stop(), self.fill()))
+        self.timer = QTimer(self, singleShot=True, interval=FILL_DELAY_MS)
+        self.timer.timeout.connect(self.fill)
+        self._filled = _Filled(self)
+        self._filled.done.connect(self._show_filled)
+
+    @property
+    def current(self):
+        return self.language.currentData()
+
+    def default_name(self):
+        return self.names.get(self.source, "")
+
+    def _typed(self, _text):
+        if self.current == self.source:
+            self.timer.start()
+        else:
+            self.by_hand.add(self.current)
+
+    def _show_language(self):
+        self.edit.setText(self.names.get(self.current, ""))
+        self.edit.setPlaceholderText("Your name" if self.current == self.source else "Filled in when you type your name in your language")
+
+    def fill(self):
+        name = self.default_name()
+        targets = [code for code in self.order[1:] if code not in self.by_hand]
+        if not name or not targets:
+            return
+        self.request += 1
+        number = self.request
+        self.status.setText("Writing your name in the other languages…")
+
+        def work():
+            try:
+                names = localize(name, self.source, self.ask, targets)
+            except Exception:  # no login, no network or a timeout: the rows stay as they are
+                names = None
+            self._filled.done.emit(number, names)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _show_filled(self, number, names):
+        if number != self.request:  # the name changed again since this was asked
+            return
+        if not names:
+            self.status.setText("Couldn't fill them in. Type them yourself, or calls will use your name as written.")
+            return
+        filled = [code for code in names if code not in self.by_hand]
+        for code in filled:
+            self.names[code] = names[code]
+            if code == self.current:
+                self.edit.setText(names[code])
+        titles = ", ".join(LANGUAGES[code]["native"] for code in filled)
+        self.status.setText(f"Filled in by AI: {titles}. Pick it in the list to check or change it." if filled else "")
+
+    def values(self):
+        """(name, its language, {other language: name}) to save."""
+        return self.default_name(), self.source, {code: self.names[code] for code in self.order[1:] if self.names.get(code)}
+
+
+def pronoun_choice(current):
+    box = QComboBox()
+    box.setObjectName("owner-pronouns")
+    for value, title in PRONOUNS.items():
+        box.addItem(title, value)
+    box.setCurrentIndex(max(0, box.findData(current)))
+    return box
 
 STYLE = """
 QDialog { background: #E6D6B8; color: #3B2A1A; font-family: Georgia; }
@@ -31,12 +143,13 @@ class OnboardingDialog(QDialog):
         name_page = QWidget()
         name_layout = QVBoxLayout(name_page)
         name_layout.addWidget(QLabel("What should Pat call you?"))
-        self.name = QLineEdit(profile.name)
-        self.name.setObjectName("owner-name")
-        self.name.setPlaceholderText("Your name")
-        self.name.setMaxLength(100)
-        name_layout.addWidget(self.name)
-        name_layout.addWidget(QLabel("Pat will use this name when introducing your assistant."))
+        self.names = NameTable(profile)
+        self.name = self.names.edit
+        name_layout.addWidget(self.names)
+        name_layout.addWidget(QLabel("Pat will use this name when introducing your assistant, written for the call's language."))
+        name_layout.addWidget(QLabel(PRONOUNS_QUESTION))
+        self.pronouns = pronoun_choice(profile.pronouns)
+        name_layout.addWidget(self.pronouns)
         name_layout.addStretch()
         self.pages.addWidget(name_page)
         terms_page = QWidget()
@@ -65,10 +178,10 @@ class OnboardingDialog(QDialog):
         self.refresh()
 
     def refresh(self):
-        self.next.setEnabled(bool(self.name.text().strip()) if self.pages.currentIndex() == 0 else self.agree.isChecked())
+        self.next.setEnabled(bool(self.names.default_name()) if self.pages.currentIndex() == 0 else self.agree.isChecked())
 
     def advance(self):
-        if not self.name.text().strip():
+        if not self.names.default_name():
             return
         if self.pages.currentIndex() == 0:
             self.pages.setCurrentIndex(1)
@@ -78,10 +191,11 @@ class OnboardingDialog(QDialog):
         self.accept()
 
     def accept(self):
-        if self.pages.currentIndex() != 1 or not self.agree.isChecked() or not self.name.text().strip():
+        if self.pages.currentIndex() != 1 or not self.agree.isChecked() or not self.names.default_name():
             return
         try:
-            self.profile.save(name=self.name.text())
+            name, language, others = self.names.values()
+            self.profile.save(name=name, name_language=language, names=others, pronouns=self.pronouns.currentData())
             self.profile.accept_terms()
         except (ValueError, OSError) as error:
             self.problem.setText(str(error))
@@ -104,12 +218,14 @@ class ProfileDialog(QDialog):
         self.profile = UserProfile()
         self.setWindowTitle("Pat settings")
         self.setStyleSheet(STYLE)
-        self.resize(500, 400)
+        self.resize(560, 420)
         layout = QVBoxLayout(self)
         form = QFormLayout()
-        self.name = QLineEdit(self.profile.name)
-        self.name.setMaxLength(100)
-        form.addRow("Your name", self.name)
+        self.names = NameTable(self.profile)
+        self.name = self.names.edit
+        form.addRow("Your name", self.names)
+        self.pronouns = pronoun_choice(self.profile.pronouns)
+        form.addRow("Pat refers to you as", self.pronouns)
         self.country = QComboBox()
         self.country.addItem("Use full international numbers (+country code)", "")
         from phonenumbers import SUPPORTED_REGIONS
@@ -183,7 +299,8 @@ class ProfileDialog(QDialog):
 
     def save(self):
         try:
-            self.profile.save(name=self.name.text(), country=self.country.currentData(), time_zone=self.zone.currentText(),
+            name, language, others = self.names.values()
+            self.profile.save(name=name, name_language=language, names=others, pronouns=self.pronouns.currentData(), country=self.country.currentData(), time_zone=self.zone.currentText(),
                               date_format=self.dates.currentData(), phone_device=self.phone.currentData(), phone_name=self.phone.currentText())
         except (ValueError, KeyError, OSError) as error:
             self.problem.setText(str(error))

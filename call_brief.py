@@ -7,6 +7,7 @@ import re
 
 from real_dates import SAY_DATES, date_lines
 from dataclasses import dataclass, field, fields
+from user_profile import refer_to_owner
 
 # Pocket TTS voices. chars_per_second is the slowest rate measured on
 # sentences, because the cut-off estimate needs a rate no faster than the real one.
@@ -41,11 +42,33 @@ ALWAYS_FORBIDDEN = [
     "Make up facts, names, prices or dates.",
 ]
 
+# One copy of the rules for what Haiku needs from them, used before and after the identity check.
+# Kept even when the brief lists nothing to ask: without "Don't finish ... unless they can't answer" Haiku stopped
+# ending calls where the person went quiet (test_pat.Rehearsal failed 2 of 2, passed with it).
+ASK_IN_ORDER = ("Ask for one thing at a time, in this order, and skip anything they have already answered. If an answer is vague or off the point, "
+                "ask again in other words. Don't finish while anything here is unanswered, unless they can't answer it, refuse, or want to end the call. ")
+READ_BACK = ("When they give a new number, date, name or address, read it back once to confirm it. A clear answer to a question that already contains the "
+             "complete detail counts too. Agreement confirms it; disagreement means ask for the correction. Once confirmed, move on: never ask to confirm the "
+             "same unchanged detail again, including in a final recap. Ask again only if they correct it, it is unclear, or the actual detail was not heard. "
+             "Say an amount of money just as they did: never add a currency they didn't name, and never ask which currency.")
+PIN_DATES = ("Dates and times you need: pin them down lightly, in a few words, once. Say a weekday back with its real date. If an hour could be morning "
+             "or evening, ask which: never choose for them, unless they or the day already settle it. If they give only something rough like next week, "
+             "ask which day. Leave it alone if it's already clear, doesn't affect what you need, was only mentioned in passing, or they don't know.")
+# Only on calls Pat answers, and only a name caller_names.py found in the contact label (Pat's contacts first).
+CALLER_ID_LINE = ("Caller ID says this is {name}. You may greet them by that name, but it isn't confirmed: someone else may be using "
+                  "the phone. Never tell them more because of it, and if they say they are someone else, go by what they say.")
+
+
+def caller_id_message(name, nonce):
+    """Sent to Haiku as a supervisor note while the phone rings, once the name check is back."""
+    return f"[SUPERVISOR-{nonce}] {CALLER_ID_LINE.format(name=name)} Reply with just the word ready."
+
 HAIKU_PROMPT = """{voice_rules}
 
 # Your job
 You are on a live phone call, speaking for {owner}. Your name is Pat. You are an AI and the person has been told so: you have already said "{opening}"
 {direction}
+{refer}
 {today}
 Goal of this call: {goal}
 The call is finished when: {done_when}
@@ -53,8 +76,7 @@ If you can't make progress: {if_stuck}
 
 # What you need from them
 {needs}
-Ask for one thing at a time, in this order, and skip anything they have already answered. If an answer is vague or off the point, ask again in other words. Don't finish while anything here is unanswered, unless they can't answer it, refuse, or want to end the call. When they give a new number, date, name or address, read it back once to confirm it. A clear answer to a question that already contains the complete detail counts too. Agreement confirms it; disagreement means ask for the correction. Once confirmed, move on: never ask to confirm the same unchanged detail again, including in a final recap. Ask again only if they correct it, it is unclear, or the actual detail was not heard. Say an amount of money just as they did: never add a currency they didn't name, and never ask which currency.
-Dates and times you need: pin them down lightly, in a few words, once. Say a weekday back with its real date. If an hour could be morning or evening, ask which: never choose for them, unless they or the day already settle it. If they give only something rough like next week, ask which day. Leave it alone if it's already clear, doesn't affect what you need, was only mentioned in passing, or they don't know. {first_reply}
+{needs_rules} {first_reply}
 
 # What you know
 {context}
@@ -67,7 +89,7 @@ If they ask for anything else, say you don't know and will pass the question on 
 {must_not}
 
 # How you speak
-Everything you write is read aloud, word for word. Write only the words to say: no stage directions, labels, notes or lists.
+Everything you write is read aloud, word for word. Write only the words to say: no stage directions, labels or notes.
 You hear through speech recognition, so words may be wrong. If something makes no sense, ask them to repeat it instead of guessing. After two failed tries, move on.
 If they say goodbye, say this is a bad time, or say they don't want to talk, ask nothing more: apologize if needed, say goodbye and finish.
 Never promise that {owner} or anyone else will call, pay or do anything, unless 'What you may tell them' says so. You may only say you will pass something on.
@@ -90,6 +112,7 @@ IDENTITY_PROMPT = """{voice_rules}
 
 # Your job right now
 You are on a live phone call, speaking for {owner}. Your name is Pat. You are an AI and the person has been told so: you have already said "{opening}"
+{refer}
 {today}
 You are trying to reach: {target}. {confidence}
 {who_can_answer}
@@ -108,7 +131,7 @@ Your only job right now is to find out whether you have reached them. You haven'
 {must_not}
 
 # How you speak
-Everything you write is read aloud, word for word. Write only the words to say: no stage directions, labels, notes or lists.
+Everything you write is read aloud, word for word. Write only the words to say: no stage directions, labels or notes.
 You hear through speech recognition, so words may be wrong. If something makes no sense, ask them to repeat it instead of guessing.
 If they say this is a bad time or they don't want to talk, ask nothing more: apologize, say goodbye, and end your reply with {end}
 Never promise anything, except that you will call again, in the one case above where it's listed.
@@ -119,16 +142,14 @@ A supervisor reads this call and sometimes sends you a message starting with [SU
 # Marks, which are not read aloud
 {confirmed}, {not_available}, {wrong_number} and {end} are as described above. Use each only as described."""
 
-TASK_MESSAGE = """You have reached the right {kind}. Here is your task. All your earlier instructions still apply, and the check is over.
-{today}
+TASK_MESSAGE = """You have reached the right {kind}. Here is your task. All your earlier instructions still apply, including the date table, and the check is over.
 Goal of this call: {goal}
 The call is finished when: {done_when}
 If you can't make progress: {if_stuck}
 
 # What you need from them
 {needs}
-Ask for one thing at a time, in this order, and skip anything they have already answered. If an answer is vague or off the point, ask again in other words. Don't finish while anything here is unanswered, unless they can't answer it, refuse, or want to end the call. When they give a new number, date, name or address, read it back once to confirm it. A clear answer to a question that already contains the complete detail counts too. Agreement confirms it; disagreement means ask for the correction. Once confirmed, move on: never ask to confirm the same unchanged detail again, including in a final recap. Ask again only if they correct it, it is unclear, or the actual detail was not heard. Say an amount of money just as they did: never add a currency they didn't name, and never ask which currency.
-Dates and times you need: pin them down lightly, in a few words, once. Say a weekday back with its real date. If an hour could be morning or evening, ask which: never choose for them, unless they or the day already settle it. If they give only something rough like next week, ask which day. Leave it alone if it's already clear, doesn't affect what you need, was only mentioned in passing, or they don't know.
+{needs_rules}
 
 # What you know
 {context}
@@ -147,7 +168,7 @@ Never promise that {owner} or anyone else will call, pay or do anything, unless 
 
 The identity check is complete. Do not repeat the greeting or ask their identity again. Now say why you are calling, in one sentence, and ask your first unanswered question."""
 
-OBSERVER_PROMPT = """You supervise a live phone call. A fast AI (Haiku) is speaking for {owner} with the other person. You don't speak to them. You get the new lines of the transcript every few turns.
+OBSERVER_PROMPT = """You supervise a live phone call. A fast AI (Haiku) is speaking for {owner} with the other person. You don't speak to them. You get the new lines of the transcript every few turns. {refer}
 
 The brief Haiku is working from:
 {brief}
@@ -257,19 +278,20 @@ class CallBrief:
     def task_message(self, owner, notes=""):
         """Sent to Haiku once it has marked the person confirmed. Everything private about the call is in here."""
         return TASK_MESSAGE.format(
-            kind="person" if self.who_answers() == "only_this_person" else "place", today=self.spoken_date_table(), owner=owner, goal=self.goal,
+            kind="person" if self.who_answers() == "only_this_person" else "place", owner=owner, goal=self.goal,
             done_when=self.done_when or "you have everything under 'What you need from them', or they can't or won't help.",
             if_stuck=self.if_stuck or "thank them and finish.",
-            needs=_numbered(self.need_from_them) or "Nothing specific: just carry out the goal.",
+            needs=_numbered(self.need_from_them) or "Nothing specific: just carry out the goal.", needs_rules=self.needs_rules(),
             context=self.context or "Nothing beyond the goal.",
             may_share=_bullets(self.may_share) or f"Only that you are calling for {owner}, and the goal.",
             extra_limits=_bullets(self.must_not) or "Nothing extra.", ask=ASK_MARK, end=END_MARK,
             notes=f"\n\n# Earlier calls with this number\n{notes}" if notes else "")
 
-    def identity_prompt(self, voice_rules, opening, owner, nonce):
+    def identity_prompt(self, voice_rules, opening, owner, nonce, pronouns=None):
         anyone = self.who_answers() == "anyone_there"
         return IDENTITY_PROMPT.format(
             voice_rules=voice_rules, owner=owner, opening=opening, today=self.spoken_date_table(), target=self.target(), nonce=nonce,
+            refer=refer_to_owner(owner, pronouns),
             confidence=CONFIDENCE_LINES[self.confidence], kind="place" if anyone else "person",
             who=self.name.strip() or self.company.strip(),
             who_can_answer="Anyone who answers for them can help." if anyone else "Only this person can help you, nobody else.",
@@ -279,31 +301,38 @@ class CallBrief:
     def text(self):
         return "\n".join(f"{f.name}: {getattr(self, f.name)}" for f in fields(self) if getattr(self, f.name))
 
-    def haiku_prompt(self, voice_rules, opening, owner, nonce, notes=""):
-        """What Haiku starts the call with. With a target that's only the identity check, and no task or notes."""
+    def needs_rules(self):
+        return f"{ASK_IN_ORDER}{READ_BACK}\n{PIN_DATES}"
+
+    def haiku_prompt(self, voice_rules, opening, owner, nonce, notes="", pronouns=None):
+        """What Haiku starts the call with. With a target that's only the identity check, and no task or notes.
+        pronouns: they, he or she; the saved setting when not given."""
         if self.has_target():
-            return self.identity_prompt(voice_rules, opening, owner, nonce)
+            return self.identity_prompt(voice_rules, opening, owner, nonce, pronouns)
         direction, first_reply = (INCOMING_LINES if self.incoming else OUTGOING_LINES)
+        direction = direction.format(owner=owner)
         prompt = HAIKU_PROMPT.format(
             voice_rules=voice_rules, owner=owner, opening=opening, goal=self.goal, nonce=nonce, today=self.spoken_date_table(),
-            direction=direction.format(owner=owner), first_reply=first_reply.format(owner=owner),
+            refer=refer_to_owner(owner, pronouns),
+            direction=direction, first_reply=first_reply.format(owner=owner),
             done_when=self.done_when or "you have everything under 'What you need from them', or they can't or won't help.",
             if_stuck=self.if_stuck or "thank them and finish.",
-            needs=_numbered(self.need_from_them) or "Nothing specific: just carry out the goal.",
+            needs=_numbered(self.need_from_them) or "Nothing specific: just carry out the goal.", needs_rules=self.needs_rules(),
             context=self.context or "Nothing beyond the goal.",
             may_share=_bullets(self.may_share) or f"Only that you are {'answering' if self.incoming else 'calling'} for {owner}, and the goal.",
             must_not=_bullets(self.limits()), ask=ASK_MARK, end=END_MARK)
         return f"{prompt}\n\n# Earlier calls with this number\n{notes}" if notes else prompt
 
-    def observer_prompt(self, owner):
-        return f"{OBSERVER_PROMPT.format(owner=owner, brief=self.text(), must_not=_bullets(self.limits()))}\n\n{self.date_table()}"
+    def observer_prompt(self, owner, pronouns=None):
+        prompt = OBSERVER_PROMPT.format(owner=owner, brief=self.text(), must_not=_bullets(self.limits()), refer=refer_to_owner(owner, pronouns))
+        return f"{prompt}\n\n{self.date_table()}"
 
     def date_table(self):
         return date_lines(time_zone=self.time_zone or None, date_format=self.date_format or None)
 
     def spoken_date_table(self):
         """For Haiku, who says the dates aloud. Reports keep the plain table and its exact format."""
-        return f"{self.date_table()} {SAY_DATES}"
+        return f"{self.date_table()} {SAY_DATES[self.language]}"
 
 
 def is_bare_answer(text):

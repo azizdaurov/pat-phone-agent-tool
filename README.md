@@ -6,7 +6,14 @@ and answers aloud. This repository has everything it needs:
 - [`voice-loop`](voice-loop): speech recognition, Claude and speech. Pat imports `voice_loop.py`.
 - [`iphonecall`](iphone-hfp/README.md): the call itself. Pat runs it and drives its shell over pipes.
 
-**Status: two real test calls so far, both rough.** See "Not proven yet".
+**Status: tested on real calls with an iPhone and a Galaxy A13.** See "Tested on real calls".
+
+## To do
+
+1. **Sync the phone's contacts with Pat's.** For a caller, the phone sends the name from its own contacts, which can differ from
+   the name in Pat's contacts. Until the two are synced, Pat's contacts win everywhere: on the note, on the call and in what Haiku is told.
+2. **Give the name-check prompt a "What you may tell them" section.** On calls that first check who answered, a never-share rule
+   already points at that section, but the prompt doesn't have it yet.
 
 ## Legal notice
 
@@ -26,7 +33,8 @@ The speech models, voices and audio drivers that Pat downloads or installs each 
 
 ## First run and personal settings
 
-Pat first asks what it should call you. It then shows a Terms of Use window. The checkbox starts unchecked and
+Pat first asks what it should call you, and how it should refer to you on calls: they/them (the default), he/him or she/her.
+In Russian, which has no neutral pronoun, they/them means Pat uses your name instead. It then shows a Terms of Use window. The checkbox starts unchecked and
 **Agree and open Pat** stays disabled until you check it. Cancel closes setup before any phone watcher or call starts.
 The note, command-line calling and MCP phone tools require this setup. Hanging up or taking over an existing call stays available.
 
@@ -36,13 +44,17 @@ Your name and acceptance record are saved locally in `contacts/user-profile.json
 
 Right-click the tray icon and choose **Your name, region and phone...** to change:
 
-- Your name, used by outgoing and incoming AI calls. There is no default owner name.
+- Your name, used by outgoing and incoming AI calls. There is no default owner name. It's one row: a language
+  dropdown on the left, your name for that language on the right. It opens on your Windows language (English if Pat can't
+  call in it). Type your name there and AI writes it for the other languages; pick one in the dropdown to check or change it.
+  A spelling you type yourself is never overwritten. Each call uses its own language's spelling, or your name as typed.
+- How Pat refers to you on calls: they/them, he/him or she/her.
 - The country for local numbers. With none selected, enter full international numbers beginning with `+` and the country code.
 - Your IANA time zone and the date format for reports. ISO `YYYY-MM-DD` is the default; `DD-MM-YYYY` and `MM/DD/YYYY` are available.
 - Which paired phone to use. **Find paired phones** lists device names and saves the selected device's ID, so renaming it does not break selection.
 
-Automatic phone selection works only when one hands-free phone is paired, regardless of its name. With several phones,
-choose one explicitly rather than letting Pat guess. After updating this version, rebuild the phone helper with `setup.ps1`.
+With several phones paired, Pat tries a connected phone first; see "Setup" for the full order.
+After updating this version, rebuild the phone helper with `setup.ps1`.
 
 ## Speech stays ready while Pat is open
 
@@ -76,7 +88,10 @@ Other person <-- Windows reads the default mic = CABLE Output <-- CABLE Input <-
 
 Pat makes a **silent speaker** the default just before each call: a virtual speaker with no sound in the room, which it can
 still record. Your real microphone isn't in the call either. So you hear nothing and they hear only Claude, until you take over.
-When the call ends, every default goes back to what it was.
+When the call ends, every default goes back to what it was. If one of them was a virtual device, which plays and records nothing
+while Voicemeeter is closed, Pat moves it to your real speaker or microphone, so Zoom, Teams and WhatsApp keep working.
+This also happens after a call you take on the laptop from the note. While the Voicemeeter app is running, Pat leaves every default alone,
+because then its devices carry sound and were probably chosen on purpose.
 
 ## Setup
 
@@ -84,7 +99,15 @@ The phone helper identifies the selected phone by Windows device identity, inclu
 devices exposed by Windows. Android calling is experimental: pairing alone does not confirm a working call line
 or call audio. Choose the phone in Pat's settings and verify an agreed test call before relying on it.
 
-On any Windows 11 laptop, including a second one for the same phone, after cloning:
+Pat needs Windows 11 on an Intel or AMD (x64) processor. It doesn't run on a Mac or on Windows on ARM, such as Snapdragon
+laptops: the phone helper is built for x64 only.
+
+**Close Phone Link, and re-pair the phone.** Windows lets only one app at a time use the phone for calls, and whichever has
+it keeps it. With Pat open, Phone Link can't dial; while Phone Link has the phone, Windows refuses Pat and the note says
+"Phone Link has your phone". Close Phone Link, turn off its start with Windows, then remove the phone in Bluetooth settings
+and pair it again.
+
+On any such laptop, including a second one for the same phone, after cloning:
 
 ```powershell
 powershell -ExecutionPolicy Bypass -File setup.ps1
@@ -156,8 +179,8 @@ default to English. Use `--lang ru` or `language="ru"` for Russian; saved deskto
 | Ctrl+C | hang up and quit |
 
 English calls use Pocket TTS. Choose a voice with `--voice`, or an agent can with `voice`: `peter_yearsley` (British),
-`alba` (Indian accent), `bill_boerst` (office man), `michael` (buttery), `anna` (female) or `charles` (oily, the default). Compare
-them on the [voice audition page](https://claude.ai/artifact/MLBwxThbP2g62TCN82gk5n).
+`alba` (Indian accent), `bill_boerst` (office man), `michael` (buttery), `anna` (female) or `charles` (oily, the default). To compare
+them, run `.venv\Scripts\python.exe evals\english_voice_samples.py`, then play the WAV files in `evals/results/english_voice_samples/`.
 
 Other options: `--audible` to hear the call on your real speaker, `--voice irina|ruslan`, `--lang en`, `--max-minutes` (default 5), `--owner`, `--owner-ru`.
 Each call's text and timings are saved in `calls/` (ignored by git). Audio is saved only with `--save-audio`, which
@@ -173,6 +196,11 @@ A small window that stays on top, watches the phone line, and decides who takes 
 
 To try the window with a pretend phone, so nothing
 rings or dials: `.venv\Scripts\python.exe evals\note_demo.py`.
+
+The caller's name comes from Pat's contacts, or else from the phone. While it rings, a separate AI check reads that
+label and keeps only a first name and surname clearly in it: "Rustam work" gives Rustam, while "Restaurant", "Mom" or
+"Idiot" give nothing. Every word it keeps must be in the label. Pat may then greet the caller by that name, but shares
+nothing more because of it, since caller ID doesn't prove who is speaking. Each label is checked once and saved in `contacts/caller-names.json`.
 
 | Screen | What's on it |
 |---|---|
@@ -409,6 +437,7 @@ Every attempt goes in an `## Attempts` list that Pat writes itself, keeping the 
 
 Russian uses GigaAM v3 RNN-T and English uses Parakeet TDT v2, both on the CPU through onnx-asr. They transcribe when the person stops
 talking, in about 0.2 s for a short turn. Parakeet needs about 1.1 GB of memory, GigaAM about 0.4 GB.
+A small speech detector, Silero VAD, decides when the person starts and stops talking; it comes with onnx-asr.
 
 Word errors on the same 60 clips per language, compared with the models Pat used before (full run of 200 clips in brackets):
 
@@ -422,25 +451,18 @@ Word errors on the same 60 clips per language, compared with the models Pat used
 The Russian clips are real phone calls (Open STT), the English ones are conference calls (Earnings22), and the background voices
 were mixed in by the test. Loading Parakeet adds about 6 s before an English call dials. On seven real English turns from one of our calls, Parakeet was no better than Moonshine and sometimes repeated words, so
 the gain may be smaller on a real call. Whisper turbo tied Parakeet on English but took 8.5 s per turn. Saved calls have nothing above 4 kHz.
+## Tested on real calls
 
-The scripts are `evals/stt_*.py`. They need `soundfile`, `scipy` and a `stt-test-data` folder beside this one, and aren't part of the setup.
+Dozens of calls in November 2026, using an iPhone and a Galaxy A13. Transcripts in `calls/*.txt` contain caller turns and replies;
+matching `calls/phone-*.log` files show `Talking` and `audio=LocalDevice`. These calls show both audio paths working:
 
-## Not proven yet
+- The call's audio reaches the loopback recording.
+- Claude's replies go back through VB-CABLE, with `CABLE Output` as the call's microphone.
+- The new recognizers helped in English and Russian live tests.
+- Caller echo has not cut Claude off in the live tests.
+- Terminal `h` and `p` worked during live calls.
 
-Tested without a call: `python -m unittest test_pat` (phone control against a fake `iphonecall`, turn detection, and a
-full turn with real speech models and real Haiku), plus recording the real speaker through loopback, including across
-silence. Also confirmed: the real `iphonecall` runs under Pat's pipes with its package identity, up to `connect`.
-
-What only a real call can show, in the order to check:
-
-1. **Does the call's audio reach the loopback recording?** The existing notes only say that Windows plays it on the default speaker.
-2. **Does Windows read CABLE Output as the call's microphone?** Probably, but neither the default-device choice nor which of the two "default" kinds it uses has been tested.
-3. **Does `Talking` mean the person has picked up?** If it comes earlier, the opening line plays to a ringing line.
-4. **Do the new recognizers help on real calls?** See "How Pat hears": they were chosen on recorded calls, and neither has been on a live call yet.
-5. **Does the other person's echo interrupt Claude?** Any speech detected cuts Claude off. `START_FRAMES` is the setting to raise.
-6. **Do `h` and `p` work during a live call?**
-
-Make the first test call to a second phone of your own, or to someone who knows it's a test.
+Make your first test call to a second phone of your own, or to someone who knows it's a test.
 
 ## Known limits
 
@@ -448,7 +470,7 @@ Make the first test call to a second phone of your own, or to someone who knows 
 - If the other person interrupts, Pat estimates what they heard from the audio played, minus `CUT_MARGIN_SECONDS`, and
   rounds down to a full word, so it errs early: Claude may repeat a few words but shouldn't skip any. The transcript gets a
   `(cut off, heard only: ...)` line, and Haiku is told before its next reply. Earlier lines in the transcript stay as
-  written, so Sonnet and the notes rely on that line to know what went unheard. The phone network's delay hasn't been measured.
+  written, so Sonnet and the notes rely on that line to know what went unheard.
   If a complete detail was heard and only a short confirmation tag was cut off, a clear answer counts and Pat moves on.
   If the read-back itself was not heard in full, a bare yes/no cannot confirm it; Pat repeats the missing part.
 - Silence during the task: after 8 s with nobody talking, Claude checks they're still there, at most twice in a row. Speech that
@@ -471,7 +493,7 @@ Make a report instead:
 
 It writes one text file in `reports\` (ignored by git) from the last 3 calls; `--calls 10` takes more. Numbers become
 `<number 1>`, `<number 2>` and so on, the same number always the same one, and saved contacts, your name and your Windows user
-name become `<name 1>` and so on. What anyone said is replaced by a word count, and the brief and the AIs' notes to each other
+name become `<name 1>` and so on. A name your phone shows for a caller, from its own contacts, becomes `<caller 1>`, even if Pat never saved it. What anyone said is replaced by a word count, and the brief and the AIs' notes to each other
 are left out. Timings, devices, versions and errors stay. Read it before you post it: a private word in an error message can
 still get through.
 

@@ -101,6 +101,19 @@ class Brief(unittest.TestCase):
         brief.incoming = False
         self.assertIn("say why you are calling", brief.haiku_prompt("VOICE", "OPENING", "Aziz", "n0nce"))
 
+    def test_the_asking_rules_are_one_copy_in_both_prompts(self):
+        target = CallBrief.from_dict({"goal": "GOAL", "need_from_them": ["NEED"], "name": "Alex", "confidence": "confirmed"})
+        for text in (CallBrief.from_dict({"goal": "GOAL"}).haiku_prompt("VOICE", "OPENING", "Aziz", "n0nce"), target.task_message("Aziz")):
+            self.assertIn(target.needs_rules(), text)  # kept with nothing to ask too: it tells Haiku when it may finish
+
+    def test_a_caller_name_reaches_haiku_as_a_supervisor_note_and_only_when_found(self):
+        asked = []
+        brain = types.SimpleNamespace(ask=lambda text: (asked.append(text), iter(["ready"]))[1])
+        pat.tell_caller_name(brain, "", "n0nce")
+        self.assertEqual(asked, [])  # "Idiot", "Restaurant": no name, so nothing is said about it
+        pat.tell_caller_name(brain, "Рустам", "n0nce")
+        self.assertTrue(asked[0].startswith("[SUPERVISOR-n0nce] Caller ID says this is Рустам. You may greet them by that name, but it isn't confirmed"))
+
     def test_observer_sees_the_brief_and_limits(self):
         prompt = CallBrief.from_dict({"goal": "GOAL", "must_not": ["FORBID"]}).observer_prompt("Aziz")
         for part in ("GOAL", "FORBID", "Claim to be human", '"action"'):
@@ -512,11 +525,14 @@ class IdentityBrief(unittest.TestCase):
             self.assertIn(part, prompt)
         self.assertNotIn("{", prompt)
 
-    def test_task_message_holds_the_task_notes_and_date(self):
-        message = CallBrief.from_dict(TARGET_BRIEF).task_message("Aziz", "SECRETNOTES")
-        for part in ("SECRETGOAL", "SECRETNEED", "SECRETCONTEXT", "SECRETSHARE", "SECRETLIMIT", "SECRETNOTES", "Today is ", "[ASK]"):
+    def test_task_message_holds_the_task_and_notes_and_the_date_stays_in_the_first_prompt(self):
+        brief = CallBrief.from_dict(TARGET_BRIEF)
+        message = brief.task_message("Aziz", "SECRETNOTES")
+        for part in ("SECRETGOAL", "SECRETNEED", "SECRETCONTEXT", "SECRETSHARE", "SECRETLIMIT", "SECRETNOTES", "[ASK]"):
             self.assertIn(part, message)
         self.assertNotIn("{", message)
+        self.assertNotIn("Today is ", message)
+        self.assertIn("Today is ", brief.haiku_prompt("VOICE", "OPENING", "Aziz", "n0nce"))
 
     def test_marks_survive_the_splitter(self):
         pieces = pat.Splitter(30).feed("До свидания. [WRONGNUMBER] [NOTHERE] [CONFIRMED] [END] ") + pat.Splitter(30).flush()

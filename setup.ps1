@@ -156,10 +156,16 @@ function Pick-Phone {
 function Wait-For-Phone {
     if ($Rehearse) {
         Would "check 'Allow this PC to access your mobile devices', and open its page if it is off"
+        Would 'ask you to close Phone Link if it is open'
         Would 'open Bluetooth settings, wait for an iPhone or Android phone to connect'
         return $true
     }
     Wait-For-Mobile-Access
+    # Windows lets one app at a time use the phone for calls; whichever has it keeps it. Closing it is the owner's choice.
+    if (Get-Process PhoneExperienceHost -ErrorAction SilentlyContinue) {
+        Write-Host '   Phone Link is open. Close it and turn off its start with Windows: only one app can use the phone for calls.' -ForegroundColor Yellow
+        Write-Host '   If it had your phone, also remove the phone in Bluetooth settings and pair it again.' -ForegroundColor Yellow
+    }
     if (Pick-Phone) { return $true }
     Start-Process 'ms-settings:bluetooth'
     Write-Host '   Bluetooth settings are open. Add your phone there if it is not paired, and accept on both.'

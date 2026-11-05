@@ -70,6 +70,58 @@ class PretendDevices:
         return []
 
 
+class SavingDevices(PretendDevices):
+    """Like Windows: switching saves a file, and restoring removes it."""
+
+    def __init__(self, folder):
+        super().__init__()
+        self.path = os.path.join(folder, "audio-defaults.json")
+
+    def use(self, speaker=None, mic=None):
+        super().use(speaker, mic)
+        open(self.path, "w").close()
+
+    def restore(self):
+        if os.path.exists(self.path):
+            os.remove(self.path)
+        return super().restore()
+
+
+class TidyingDefaults(unittest.TestCase):
+    """After a call the owner took on the laptop, a silent virtual default is moved to the real device, as after Claude's calls."""
+
+    def make(self):
+        folder = tempfile.mkdtemp()
+        self.tidied = threading.Event()
+        self.devices = SavingDevices(folder)
+        self.line = PretendLine()
+        return note.Desk(self.line, lambda f: PretendCall(), devices=self.devices, always=note.CallRules(os.path.join(folder, "a.json")),
+                         folder=folder, real_devices=lambda: ("Speakers", "Microphone"), make_level=PretendLevel, cancel_seconds=0.01,
+                         private=PrivateNumbers(folder), tidy_defaults=lambda: (self.tidied.set(), [])[1])
+
+    def test_a_call_on_the_laptop_is_tidied_after(self):
+        desk = self.make()
+        desk.on_event(("Incoming", "+998900000001", "Incoming"))
+        desk.answer_me("laptop")
+        desk.on_event(("Ended", "", ""))
+        self.assertTrue(self.tidied.wait(2))
+
+    def test_nothing_is_touched_when_the_note_switched_nothing(self):
+        desk = self.make()
+        desk.on_event(("Incoming", "+998900000001", "Incoming"))
+        desk.answer_me("iphone")
+        desk.on_event(("Ended", "", ""))
+        self.assertFalse(self.tidied.wait(0.3))
+
+
+class Mixer(unittest.TestCase):
+    def test_voicemeeter_running_means_its_devices_are_in_use(self):
+        from audio_defaults import mixer_running
+        self.assertTrue(mixer_running('"voicemeeterpro.exe","123","Console","1","20,000 K"'))
+        self.assertTrue(mixer_running('"Voicemeeter8x64.exe","9","Console","1","1 K"'))
+        self.assertFalse(mixer_running('"python.exe","1","Console","1","1 K"\n"zoom.exe","2","Console","1","1 K"'))
+
+
 class PretendLevel:
     closed = False
 
@@ -188,6 +240,12 @@ class Ringing(DeskCase):
         self.desk.private.add_contact("Рустам", "+998 90 000 00 09")
         self.ring("+998900000009")
         self.assertEqual(self.desk.state()["name"], "Рустам")
+
+    def test_pats_contact_name_wins_over_the_name_the_phone_sends(self):
+        """Phone contacts aren't synced with Pat's, so the note shows the name the call itself uses."""
+        self.desk.private.add_contact("Рустам", "+998 90 000 00 09")
+        self.ring("Rustam work (+998900000009)")
+        self.assertEqual(self.desk.state()["name"], "Рустам")  # without a contact, the phone's name shows (test above)
 
     def test_typed_number_reaches_the_agent_as_a_placeholder_and_the_note_shows_it_back(self):
         sent = []

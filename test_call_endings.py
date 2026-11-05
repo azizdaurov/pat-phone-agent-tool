@@ -20,6 +20,23 @@ class Endings(DeskCase):
             with self.assertRaises(FinishedTest):
                 note.watch_line(mock.Mock(side_effect=[line, FinishedTest()]), lambda _: desk, problems)
         self.assertEqual(desk.on_event.call_count, 2)
+
+    def test_when_phone_link_has_the_phone_the_note_says_to_close_it(self):
+        import note
+        import pat
+        class FinishedTest(Exception):
+            pass
+        refused = types.SimpleNamespace(started=["phone    : iPhone", "access   : DeniedBySystem"], wait_ready=lambda: False, close=lambda: None,
+                                        TAKEN=pat.PhoneLine.TAKEN)
+        refused.taken_by_another_app = lambda: pat.PhoneLine.taken_by_another_app(refused)
+        absent = types.SimpleNamespace(wait_ready=lambda: False, close=lambda: None)  # a pretend line without the check
+        problems = mock.Mock()
+        with mock.patch.object(note.time, "sleep"):
+            with self.assertRaises(FinishedTest):
+                note.watch_line(mock.Mock(side_effect=[refused, absent, FinishedTest()]), lambda _: None, problems)
+        self.assertEqual([call.args[0] for call in problems.call_args_list],
+                         ["Phone Link has your phone. Close Phone Link, then re-pair the phone in Bluetooth settings.", "Your phone isn't connected."])
+
     def test_remote_hangup_cannot_be_undone_by_the_old_live_publisher(self):
         self.ring()
         self.desk.answer_ai()

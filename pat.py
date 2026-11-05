@@ -28,7 +28,9 @@ import numpy as np
 import sounddevice as sd
 
 from audio_defaults import CallDevices, chosen_devices, headset_problem, repair_defaults
-from call_brief import ASK_MARK, DEFAULT_ENGLISH_VOICE, END_MARK, ENGLISH_VOICES, HEARD_NOTHING, REACHED_MARKS, CallBrief, is_bare_answer
+from call_brief import (ASK_MARK, DEFAULT_ENGLISH_VOICE, END_MARK, ENGLISH_VOICES, HEARD_NOTHING, REACHED_MARKS, CallBrief,
+                        caller_id_message, is_bare_answer)
+from caller_names import CallerNames
 from easter_eggs import EasterEggs, POEM_PROMPTS, WATSON, write_poem
 from live_call import LiveCall, SoundMeter, final_note, write_last_call
 from live_notes import INCOMING_LABELS, LiveNotes, NOTES_PROMPT
@@ -46,7 +48,7 @@ sys.path.insert(0, os.path.join(HERE, "voice-loop"))
 from voice_loop import (BatchEar, Brain, MIC_RATE, Mouth, PiperVoice, PocketVoice, RU_TTS_VOICE,  # noqa: E402
                         SYSTEM_PROMPTS, Splitter, TTS_LANGUAGE, TTS_VOICE)
 
-# The fewest word errors on phone audio that still answer in about 0.2 s on a CPU; evals/stt_*.py has the comparison.
+# The fewest word errors on phone audio that still answer in about 0.2 s on a CPU.
 RU_STT_MODEL = "gigaam-v3-rnnt"
 EN_STT_MODEL = "nemo-parakeet-tdt-0.6b-v2"
 
@@ -145,6 +147,11 @@ class PhoneLine:
     CALL_ENDED = re.compile(r"-- call ended \((\d+) active\)")
     READY = "commands:"
     END_GRACE_SECONDS = 5  # a call that comes back within this long never ended
+    # Windows lets one app at a time use the phone for calls. Whichever has it keeps it: with Pat's note open, Phone
+    # Link can't dial (seen 5 Nov 2026), and while Phone Link has it, Windows refuses Pat with this word (31 Oct).
+    TAKEN = "DeniedBySystem"
+    TAKEN_MESSAGE = ("Phone Link has your phone. Close Phone Link, then re-pair the phone: remove it in Bluetooth settings and pair it "
+                     "again. Pat and Phone Link can't use the phone at the same time.")
 
     def __init__(self, command=None, log_path=None, end_grace=END_GRACE_SECONDS):
         self.proc = subprocess.Popen(list(command) if command is not None else phone_command(), stdin=subprocess.PIPE, stdout=subprocess.PIPE,
@@ -214,6 +221,9 @@ class PhoneLine:
         self.ended.set()
         self.ringing.clear()
         self.events.put(("Closed", "", ""))
+
+    def taken_by_another_app(self):
+        return any(self.TAKEN in line for line in self.started)
 
     def wait_ready(self, seconds=60):
         """True once the shell is up. On failure, iphonecall's own lines say which step failed."""
@@ -1059,12 +1069,17 @@ def pick_real_device(devices):
     return None
 
 
-def fix_audio_defaults():
-    """For setup: after the drivers go in, everything goes back to the real speaker and microphone."""
+def real_defaults():
+    """Moves any default (everyday, media or calls) that points at a virtual device to the real speaker and microphone.
+    A virtual default is silent while Voicemeeter is closed, so Zoom or WhatsApp would neither hear nor be heard.
+    With Voicemeeter running, they carry sound and were probably chosen on purpose, so nothing changes.
+    Returns what changed. Real defaults are left alone."""
+    from audio_defaults import mixer_running
+    if mixer_running():
+        return []
     speaker, microphone = real_devices()
     names = [sd.query_devices(device)["name"] if device is not None else None for device in (speaker, microphone)]
-    changed = repair_defaults(*names, is_virtual_device)
-    print(*changed, sep="\n") if changed else print("Default speaker and microphone are already the real ones.")
+    return repair_defaults(*names, is_virtual_device)
 
 
 def preferred_device(devices, chosen):
@@ -1254,6 +1269,13 @@ def load_brief(args):
                                      "company": args.company, "confidence": args.confidence if (args.name or args.company) else ""})
     brief.incoming = args.action == "answer"
     return brief
+
+
+def tell_caller_name(brain, name, nonce):
+    """A name caller_names.py found in the caller's label, so Haiku can greet them by it. Nothing when there's none."""
+    if name:
+        for _ in brain.ask(caller_id_message(name, nonce)):
+            pass
 
 
 def start_brain(args, brief, opening, nonce, notes):
@@ -1471,8 +1493,11 @@ def main():
             write_result(args, **refusal)
             sys.exit(refusal["reason"])
         profile = UserProfile()
+        owner_names = profile.names if args.owner in (None, profile.name) else {}  # a different --owner has no saved spellings
+        if args.owner_ru:
+            owner_names = {**owner_names, "ru": args.owner_ru}
         args.owner = args.owner or profile.name
-        args.owner_ru = args.owner_ru or args.owner
+        args.owner_ru = owner_names.get("ru") or args.owner
         if args.action == "dial":
             try:
                 args.number = international_number(args.number)
@@ -1481,6 +1506,7 @@ def main():
                 parser.error(str(error))
         try:
             brief = load_brief(args)
+            args.owner = owner_names.get(brief.language) or args.owner  # the name as this call's language writes it
             configure_dates(args.time_zone or brief.time_zone or None, args.date_format or brief.date_format or None)
             from real_dates import preferences
             brief.time_zone, brief.date_format = preferences()
@@ -1498,8 +1524,9 @@ def main():
     if args.action == "restore-audio":
         print("Default speaker and microphone are back as they were.")
         return
-    if args.action == "fix-audio":
-        fix_audio_defaults()
+    if args.action == "fix-audio":  # setup runs this after the drivers go in
+        changed = real_defaults()
+        print("\n".join(changed) if changed else "Default speaker and microphone are already the real ones.")
         return
     if args.action == "pick-phone":
         name = pick_phone()
@@ -1552,7 +1579,8 @@ def main():
     line = PhoneLine(log_path=phone_log)
     if not line.wait_ready():
         print("\n".join(line.started))
-        write_result(args, status="failed", reason="iphonecall did not start: " + " | ".join(line.started))
+        taken = f"{PhoneLine.TAKEN_MESSAGE} " if line.taken_by_another_app() else ""
+        write_result(args, status="failed", reason=f"{taken}iphonecall did not start: " + " | ".join(line.started))
         live.close()
         if brain:
             brain.close()
@@ -1590,8 +1618,11 @@ def main():
                 # Only now is the number known, so Claude starts with the right notes while it rings.
                 key = number_key(incoming[1])
                 notes, known = load_notes(key, args)
+                caller_id = display_book.display_name(incoming[1])
+                spoken_name = CallerNames().start(caller_id)  # checked while Claude starts; never the number
                 brain = start_brain(args, brief, opening, nonce, known)
-                live.update(stage="ringing", number=incoming[1], name=display_book.display_name(incoming[1]))
+                live.update(stage="ringing", number=incoming[1], name=caller_id)
+                tell_caller_name(brain, spoken_name(), nonce)
                 if args.wait_for_go and not wait_for_go(go, cancelled, line):
                     left_ringing = True
                     reason = "the sticky note took this call, or it stopped ringing"
@@ -1689,8 +1720,14 @@ def main():
             line.hang_up()
             time.sleep(1)
         line.close()
+        switched = os.path.exists(devices.path)  # only a call Pat switched the defaults for
         for problem in devices.restore():
             print(f"Setup: {problem}")
+        try:  # what was there before can itself be virtual, such as Voicemeeter as the device for calls
+            for change in real_defaults() if switched else []:
+                print(f"Audio: {change}")
+        except (OSError, LookupError, sd.PortAudioError) as error:
+            print(f"[couldn't check the default audio devices: {error}]", flush=True)
         if not handed_over:
             live.update(stage="wrapping")
         if live_notes:
@@ -1711,7 +1748,7 @@ def main():
         if notes and transcript:
             notes_report = remember_call(notes, transcript, args.owner, brief, reached)
         elif notes:
-            notes.add_attempt(datetime.datetime.now().strftime("%Y-%m-%d %H:%M"), reason)
+            notes.add_attempt(current_time().isoformat(timespec="minutes"), reason)  # same zone and form as remember_call's
             notes.save()
         eggs = EasterEggs()
         flair = eggs.flair() if seconds else []

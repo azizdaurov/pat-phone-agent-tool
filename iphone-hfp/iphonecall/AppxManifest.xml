@@ -13,11 +13,11 @@
   xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
   IgnorableNamespaces="uap uap3 uap13 desktop desktop4 rescap">
 
-  <Identity Name="AzizDaurov.iPhoneCall" Publisher="CN=AzizDaurov" Version="1.0.0.0" ProcessorArchitecture="x64" />
+  <Identity Name="OasisTeam.PatPhone" Publisher="CN=OasisTeam" Version="1.0.0.0" ProcessorArchitecture="x64" />
 
   <Properties>
-    <DisplayName>iPhone Call</DisplayName>
-    <PublisherDisplayName>Aziz Daurov</PublisherDisplayName>
+    <DisplayName>Pat phone helper</DisplayName>
+    <PublisherDisplayName>Oasis Team</PublisherDisplayName>
     <Logo>Assets\StoreLogo.png</Logo>
   </Properties>
 
@@ -32,7 +32,7 @@
   <Applications>
     <Application Id="iPhoneCall" Executable="iphonecall.exe" EntryPoint="Windows.FullTrustApplication"
                  desktop4:Subsystem="console" desktop4:SupportsMultipleInstances="true">
-      <uap:VisualElements DisplayName="iPhone Call" Description="Dial and answer iPhone calls from the terminal"
+      <uap:VisualElements DisplayName="Pat phone helper" Description="Phone calls for Pat, the Phone Agent Tool"
                           BackgroundColor="transparent" AppListEntry="none"
                           Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png" />
       <Extensions>

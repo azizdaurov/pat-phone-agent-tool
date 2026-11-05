@@ -1,4 +1,4 @@
-// iphonecall: dial and answer iPhone calls from the terminal through Windows' own hands-free
+// iphonecall: dial and answer phone calls from the terminal through Windows' own hands-free
 // calling (the PhoneLine APIs Phone Link uses), with the call voice on the laptop.
 // Setup, usage and development notes: ..\README.md
 using System.Runtime.InteropServices;
