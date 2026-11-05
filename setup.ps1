@@ -216,11 +216,18 @@ if ($Rehearse) {
             $base = Find-Python
             if (-not $base) { throw "Python $pythonVersion was installed, but this window can't find it. Close it, open a new one, and run this again." }
         }
-        $command, $options = $base
+        # Split into the program and a LIST of its options. "$command, $options = $base" made $options a plain string
+        # ('-3.13'), and PowerShell 5 splatting a string dropped the rest of the line, so py opened Python's >>> prompt
+        # and setup waited there forever on laptops without Python.
+        $command = @($base)[0]
+        $options = @(@($base) | Select-Object -Skip 1)
         & $command @options -m venv $venv
         Check 'Creating the Python environment'
+        if (-not (Test-Path $python)) { throw "Python didn't create the environment in $venv." }
     }
-    & $python -m pip install --disable-pip-version-check --quiet -r "$root\requirements.txt"
+    # About 1.6 GB the first time. Its progress shows, so a long download doesn't look like a stuck setup.
+    Write-Host '   Installing Pat''s Python packages: about 1.6 GB the first time, often 10-30 minutes. Leave this window open.'
+    & $python -m pip install --disable-pip-version-check -r "$root\requirements.txt"
     Check 'Installing Python packages'
     & $python --version
 }
