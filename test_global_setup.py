@@ -335,6 +335,41 @@ class OwnerPronouns(ProfileCase):
 
 
 class FirstRunScreen(ProfileCase):
+    def test_enter_moves_to_terms_instead_of_closing_the_window(self):
+        from PySide6.QtCore import Qt
+        from PySide6.QtTest import QTest
+        from PySide6.QtWidgets import QApplication
+        from onboarding import OnboardingDialog
+        app = QApplication.instance() or QApplication([])
+        dialog = OnboardingDialog(self.profile)
+        dialog.name.setText("Maya")
+        dialog.show()
+        dialog.name.setFocus()
+        app.processEvents()
+        QTest.keyClick(dialog.name, Qt.Key_Return)
+        self.assertEqual(dialog.pages.currentIndex(), 1)
+        self.assertFalse(UserProfile().ready)
+        dialog.reject()
+        dialog.deleteLater()
+        app.processEvents()
+
+    def test_back_keeps_the_name_but_does_not_accept_the_terms(self):
+        from PySide6.QtWidgets import QApplication
+        from onboarding import OnboardingDialog
+        app = QApplication.instance() or QApplication([])
+        dialog = OnboardingDialog(self.profile)
+        dialog.name.setText("Maya")
+        dialog.advance()
+        dialog.go_back()
+        self.assertEqual(dialog.pages.currentIndex(), 0)
+        self.assertEqual(dialog.name.text(), "Maya")
+        dialog.advance()
+        self.assertFalse(dialog.next.isEnabled())
+        dialog.reject()
+        self.assertFalse(UserProfile().ready)
+        dialog.deleteLater()
+        app.processEvents()
+
     def test_name_is_first_and_acceptance_is_disabled_until_checked(self):
         from PySide6.QtWidgets import QApplication, QDialog
         from onboarding import OnboardingDialog
@@ -385,5 +420,44 @@ class FirstRunScreen(ProfileCase):
         dialog.advance()
         dialog.reject()
         self.assertFalse(UserProfile().ready)
+        dialog.deleteLater()
+        app.processEvents()
+
+
+class ProfileScreen(ProfileCase):
+    def test_sections_resize_the_window_and_changes_are_saved(self):
+        from PySide6.QtWidgets import QApplication
+        from onboarding import ProfileDialog
+        app = QApplication.instance() or QApplication([])
+        self.ready(country="UZ")
+        with mock.patch("onboarding.UserProfile", return_value=self.profile):
+            dialog = ProfileDialog()
+        dialog.show()
+        app.processEvents()
+        dialog.fit_contents()
+        sections = (dialog.name_section, dialog.region_section, dialog.phone_section)
+        self.assertEqual([s.opened for s in sections], [True, False, False])
+        dialog.region_section.set_open(True)  # one open at a time, so the window fits a laptop screen
+        self.assertEqual([s.opened for s in sections], [False, True, False])
+        dialog.region_section.set_open(False)
+        app.processEvents()
+        dialog.fit_contents()
+        small = dialog.height()
+        dialog.phone_section.set_open(True)
+        app.processEvents()
+        dialog.fit_contents()
+        self.assertGreater(dialog.height(), small)
+        self.assertEqual([s.opened for s in sections], [False, False, True])
+        dialog.name.setText("Maya Stone")
+        dialog.pronouns.setCurrentIndex(dialog.pronouns.findData("she"))
+        dialog.country.setCurrentIndex(dialog.country.findData("GB"))
+        dialog.zone.setCurrentText("Europe/London")
+        dialog.dates.setCurrentIndex(dialog.dates.findData("dmy"))
+        dialog.phone.addItem("My phone", "test-phone-id")
+        dialog.phone.setCurrentIndex(1)
+        dialog.save()
+        saved = UserProfile()
+        self.assertEqual((saved.name, saved.pronouns, saved.country, saved.time_zone, saved.date_format, saved.phone_device),
+                         ("Maya Stone", "she", "GB", "Europe/London", "dmy", "test-phone-id"))
         dialog.deleteLater()
         app.processEvents()

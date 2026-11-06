@@ -676,6 +676,72 @@ class TrayHelpers(unittest.TestCase):
         bridge.remove("Alex", "+998 90 000 00 01")
         self.assertEqual(json.loads(bridge.rows()), [])
 
+    def test_editing_a_contact_moves_its_answer_rule_to_the_new_number(self):
+        folder = tempfile.mkdtemp()
+        private = PrivateNumbers(folder)
+        rules = note.CallRules(os.path.join(folder, "rules.json"))
+        bridge = note_window.ContactsBridge(private, rules)
+        bridge.add("Alex", "+998900000001")
+        rules.set("+998900000001", "ai")
+        self.assertEqual(bridge.update("Alex", "+998900000001", "Alex Morgan", "+998900000002", "me"), "")
+        self.assertEqual(private.contacts(), {"Alex Morgan": "+998900000002"})
+        self.assertIsNone(rules.rule("+998900000001"))
+        self.assertEqual(rules.rule("+998900000002"), "me")
+
+    def test_a_failed_edit_does_not_replace_another_contact_or_change_a_rule(self):
+        folder = tempfile.mkdtemp()
+        private = PrivateNumbers(folder)
+        rules = note.CallRules(os.path.join(folder, "rules.json"))
+        bridge = note_window.ContactsBridge(private, rules)
+        bridge.add("Alex", "+998900000001")
+        bridge.add("Maya", "+998900000002")
+        rules.set("+998900000001", "ai")
+        before = private.contacts()
+        self.assertIn("already", bridge.update("Alex", "+998900000001", "maya", "+998900000003", "me"))
+        self.assertTrue(bridge.update("Alex", "+998900000001", "Alex", "112", "me"))
+        self.assertEqual(private.contacts(), before)
+        self.assertEqual(rules.rule("+998900000001"), "ai")
+
+    def test_an_alias_keeps_the_old_number_rule_when_another_contact_moves(self):
+        folder = tempfile.mkdtemp()
+        private = PrivateNumbers(folder)
+        rules = note.CallRules(os.path.join(folder, "rules.json"))
+        bridge = note_window.ContactsBridge(private, rules)
+        bridge.add("Alex", "+998900000001")
+        bridge.add("Same phone", "+998900000001")
+        rules.set("+998900000001", "ai")
+        self.assertEqual(bridge.update("Alex", "+998900000001", "Alex", "+998900000002", "me"), "")
+        self.assertEqual(rules.rule("+998900000001"), "ai")
+        self.assertEqual(rules.rule("+998900000002"), "me")
+
+    def test_naming_an_unnamed_rule_does_not_remove_a_contact_called_no_name(self):
+        folder = tempfile.mkdtemp()
+        private = PrivateNumbers(folder)
+        rules = note.CallRules(os.path.join(folder, "rules.json"))
+        bridge = note_window.ContactsBridge(private, rules)
+        bridge.add("No name", "+998900000001")
+        rules.set("+998900000002", "ai")
+        self.assertEqual(bridge.update("No name", "+998900000002", "Alex", "+998900000002", "me"), "")
+        self.assertEqual(private.contacts(), {"No name": "+998900000001", "Alex": "+998900000002"})
+
+    def test_unnamed_rule_can_be_edited_without_a_home_country(self):
+        from user_profile import UserProfile
+        owner = UserProfile()
+        previous = owner.country
+        self.addCleanup(lambda: owner.save(country=previous))
+        owner.save(country="")
+        folder = tempfile.mkdtemp()
+        private = PrivateNumbers(folder)
+        rules = note.CallRules(os.path.join(folder, "rules.json"))
+        bridge = note_window.ContactsBridge(private, rules)
+        rules.set("+442079460001", "ai")
+        row = json.loads(bridge.rows())[0]
+        self.assertEqual(row["number"], "+442079460001")
+        self.assertFalse(row["named"])
+        self.assertEqual(bridge.update(row["name"], row["number"], "Alex", "+442079460002", "me"), "")
+        self.assertIsNone(rules.rule("+442079460001"))
+        self.assertEqual(rules.rule("+442079460002"), "me")
+
 
 class AfterACall(DeskCase):
     LONG = "Alex confirmed the meeting at 11:00 at the tower, and asked for a suit. " * 3

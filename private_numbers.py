@@ -71,6 +71,23 @@ class PrivateNumbers:
         key = number_key(number)
         return next((name for name, theirs in self.contacts().items() if key and number_key(theirs) == key), "")
 
+    def edit_contact(self, old_name, old_number, name, number):
+        """Rename and change a contact in one file write, without replacing somebody else."""
+        name = name.strip()
+        if not name:
+            raise ValueError("Give them a name.")
+        number = international_number(number)
+        book = self.contacts()
+        matches = old_name in book and number_key(book[old_name]) == number_key(old_number)
+        if not matches and old_name != "No name":
+            raise ValueError("This contact changed. Close the editor and open it again.")
+        remaining = {key: value for key, value in book.items() if not (matches and key == old_name)}
+        if any(key.casefold() == name.casefold() for key in remaining):
+            raise ValueError("There is already a contact with that name.")
+        remaining[name] = number
+        self._save(self.book_path, remaining)
+        return number
+
     def display_name(self, caller):
         """Display metadata only. A saved name or caller ID does not verify who is speaking."""
         supplied_name, number = split_caller(caller)

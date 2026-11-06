@@ -7,6 +7,7 @@ import threading
 
 from call_brief import ENGLISH_VOICES
 from phone_memory import number_key
+from phone_numbers import unambiguous_legacy_keys
 from PySide6.QtCore import QEasingCurve, QObject, QPoint, QPropertyAnimation, QSize, Qt, QTimer, QUrl, Slot
 from PySide6.QtGui import QAction, QActionGroup, QColor, QCursor, QIcon
 from PySide6.QtNetwork import QLocalServer, QLocalSocket
@@ -36,7 +37,7 @@ ZOOMS = (0.8, 0.9, 1.0, 1.1, 1.25, 1.5, 1.75, 2.0)
 LANGUAGES = (("English", "en"), ("Russian", "ru"))
 FOR_UNKNOWN = (("Show the note's options", "ask"), ("Always AI", "ai"), ("Always me", "me"))
 RUSSIAN_VOICES = (("Irina (female)", "irina"), ("Ruslan (male)", "ruslan"))
-CONTACTS_SIZE = (470, 560)
+CONTACTS_SIZE = (484, 530)  # 460 × 500 paper, plus room for its shadow
 SHOWN_ON_REQUEST_MS = 3000  # asked for by hand, the prompt bar stays out this long before it can slide away
 COPY_NAME = os.environ.get("PAT_NOTE_COPY", "PatNote")  # tests set their own, so they can run beside a real note
 _copy_mutex = None
@@ -101,10 +102,10 @@ def next_zoom(zoom, step):
 def contact_rows(private, rules, eggs=None):
     """Everyone the contact list shows: contacts, then numbers with a rule but no name, such as from Always AI on a ringing call."""
     book = private.contacts()
-    rows = [{"name": name, "number": number, "rule": rules.rule(number) or "ask"}
+    rows = [{"name": name, "number": number, "rule": rules.rule(number) or "ask", "named": True}
             for name, number in sorted(book.items(), key=lambda item: item[0].casefold())]
     named = {number_key(number) for number in book.values()}
-    rows += [{"name": "No name", "number": key, "rule": rule} for key, rule in rules.rules.items() if key not in named]
+    rows += [{"name": "No name", "number": "+" + key, "rule": rule, "named": False} for key, rule in rules.rules.items() if key not in named]
     octo = eggs.octo_contact() if eggs else None
     return rows + [octo] if octo else rows
 
@@ -223,11 +224,22 @@ class Bridge(QObject):
 class ContactsBridge(QObject):
     """What the contact list can call."""
 
-    def __init__(self, private, rules, eggs=None):
+    def __init__(self, private, rules, eggs=None, window=None):
         super().__init__()
         self.private = private
         self.rules = rules
         self.eggs = eggs
+        self.window = window
+
+    @Slot()
+    def close_window(self):
+        if self.window:
+            self.window.hide()
+
+    @Slot()
+    def start_drag(self):
+        if self.window and self.window.windowHandle():
+            self.window.windowHandle().startSystemMove()
 
     @Slot(result=str)
     def rows(self):
@@ -242,16 +254,40 @@ class ContactsBridge(QObject):
         """The problem with what was typed, or "" if it's been added."""
         if not name.strip():
             return "Give them a name."
+        if any(key.casefold() == name.strip().casefold() for key in self.private.contacts()):
+            return "There is already a contact with that name."
         try:
             self.private.add_contact(name, number)
-        except ValueError as error:
+        except (ValueError, OSError) as error:
             return str(error)
         return ""
 
-    @Slot(str, str)
+    @Slot(str, str, str, str, str, result=str)
+    def update(self, old_name, old_number, name, number, rule):
+        if rule not in ("ask", "ai", "me"):
+            return "Choose Ask, AI, or Me."
+        old_key = number_key(old_number)
+        aliases = unambiguous_legacy_keys(old_key, os.path.dirname(self.private.book_path))
+        try:
+            number = self.private.edit_contact(old_name, old_number, name, number)
+            if old_key != number_key(number) and not any(number_key(value) == old_key for value in self.private.contacts().values()):
+                for key in [old_key, *aliases]:
+                    self.rules.rules.pop(key, None)
+            self.rules.set(number, rule)
+        except (ValueError, OSError) as error:
+            return str(error)
+        return ""
+
+    @Slot(str, str, result=str)
     def remove(self, name, number):
-        self.private.remove_contact(name)
-        self.rules.set(number, "ask")
+        try:
+            saved = self.private.contacts().get(name)
+            if saved and number_key(saved) == number_key(number):
+                self.private.remove_contact(name)
+            self.rules.set(number, "ask")
+        except OSError as error:
+            return str(error)
+        return ""
 
 
 class ContactsWindow(QWebEngineView):
@@ -259,13 +295,15 @@ class ContactsWindow(QWebEngineView):
         super().__init__()
         self.setWindowTitle("Pat contacts")
         self.setWindowIcon(tray_icon())
-        self.bridge = ContactsBridge(private, rules, eggs)
+        self.setWindowFlags(Qt.FramelessWindowHint | Qt.WindowMinimizeButtonHint)
+        self.setAttribute(Qt.WA_TranslucentBackground)
+        self.bridge = ContactsBridge(private, rules, eggs, self)
         self.channel = QWebChannel()
         self.channel.registerObject("bridge", self.bridge)
         self.page().setWebChannel(self.channel)
-        self.page().setBackgroundColor(QColor("#E6D6B8"))
+        self.page().setBackgroundColor(QColor(Qt.transparent))
         self.setContextMenuPolicy(Qt.NoContextMenu)
-        self.resize(*CONTACTS_SIZE)
+        self.setFixedSize(*CONTACTS_SIZE)
         self.load(QUrl.fromLocalFile(os.path.join(HERE, "note", "contacts.html")))
 
     def bring_up(self):
