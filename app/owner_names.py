@@ -47,7 +47,7 @@ def ask_haiku(text):
     """One question to Haiku on the owner's plan; the same route calls use."""
     import os
     import sys
-    folder = os.path.join(os.path.dirname(os.path.abspath(__file__)), "voice-loop")
+    folder = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "voice-loop")  # the repository's
     if folder not in sys.path:
         sys.path.insert(0, folder)
     from voice_loop import Brain

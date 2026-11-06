@@ -2,7 +2,7 @@
 import json
 import os
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
 SETTINGS_NAME = "note-settings.json"
 
 

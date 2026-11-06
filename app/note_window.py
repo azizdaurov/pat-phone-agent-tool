@@ -15,7 +15,7 @@ from PySide6.QtWebChannel import QWebChannel
 from PySide6.QtWebEngineWidgets import QWebEngineView
 from PySide6.QtWidgets import QApplication, QMenu, QSystemTrayIcon
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
 ICON_SIZES = (16, 20, 24, 32, 40, 48, 64, 128, 256)
 ICON_AGAIN_MS = 2000
 NOTE_WIDTH = 304

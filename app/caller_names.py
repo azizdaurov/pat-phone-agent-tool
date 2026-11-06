@@ -10,7 +10,7 @@ import json
 import os
 import re
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
 CACHE = os.path.join(HERE, "contacts", "caller-names.json")  # gitignored with the rest of contacts/
 WAIT_SECONDS = 4  # longest the ring waits for the check; most labels are already saved from an earlier call
 MAX_WORDS = 4

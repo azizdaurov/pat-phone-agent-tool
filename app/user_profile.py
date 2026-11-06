@@ -7,7 +7,8 @@ from zoneinfo import ZoneInfo
 
 from languages import LANGUAGES, guess_language, system_language
 
-with open(os.path.join(os.path.dirname(__file__), "TERMS.md"), encoding="utf-8") as _terms_file:
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
+with open(os.path.join(ROOT, "TERMS.md"), encoding="utf-8") as _terms_file:
     TERMS_TEXT = _terms_file.read()
 # Any edit to TERMS.md also requires a fresh acceptance, without a manual version bump.
 TERMS_VERSION = hashlib.sha256(TERMS_TEXT.encode("utf-8")).hexdigest()
@@ -29,7 +30,7 @@ def local_zone():
 
 class UserProfile:
     def __init__(self, path=None):
-        self.path = path or os.environ.get("PAT_PROFILE_PATH") or os.path.join(os.path.dirname(__file__), "contacts", "user-profile.json")
+        self.path = path or os.environ.get("PAT_PROFILE_PATH") or os.path.join(ROOT, "contacts", "user-profile.json")
         try:
             with open(self.path, encoding="utf-8") as stream:
                 self.values = json.load(stream)

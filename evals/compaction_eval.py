@@ -4,7 +4,7 @@ import sys
 import tempfile
 import time
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app"))
 import pat
 from phone_memory import ContactNotes, SUMMARY_LIMIT, SUMMARY_PROMPT, merge_call
 

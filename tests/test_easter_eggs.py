@@ -586,7 +586,7 @@ class HiddenFiles(unittest.TestCase):
         here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository
         names = [name for name in os.listdir(os.path.join(here, "fisheggs")) if name.endswith(".md")]
         self.assertGreaterEqual(len(names), 4)
-        for path in [os.path.join(here, "fisheggs", name) for name in names] + [os.path.join(here, "real_dates.py")]:
+        for path in [os.path.join(here, "fisheggs", name) for name in names] + [os.path.join(here, "app", "real_dates.py")]:
             with open(path, encoding="utf-8") as f:
                 text = f.read()
             self.assertEqual(text.strip().splitlines()[-1], "#fisheggs", path)

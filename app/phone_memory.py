@@ -7,7 +7,7 @@ import re
 from real_dates import date_lines, day_of, real_dates, preferences
 from phone_numbers import full_number_key, unambiguous_legacy_keys
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
 FOLDER = os.path.join(HERE, "contacts")
 SUMMARY_LIMIT = 800  # characters, about 200 tokens: what every later call pays for
 MIN_HEARD_CHARS = 15  # below this ("алло", "угу") there is nothing to remember, so the model isn't called

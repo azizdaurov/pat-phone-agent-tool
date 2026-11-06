@@ -10,7 +10,7 @@ import types
 import os
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app"))
 sys.argv, FOLDER = [sys.argv[0]], sys.argv[1]
 os.environ["PAT_NOTE_COPY"] = "PatNoteCheck"  # so this can run beside a real note
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")

@@ -13,7 +13,7 @@ import re
 import sys
 import threading
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
 FILE_NAME = "easter_eggs.json"
 JOKE_NOTICE_SECONDS = 10
 NEXT_STYLE_NAME = "next-summary-style.txt"  # how the note tells the phone tool which poem the next call gets

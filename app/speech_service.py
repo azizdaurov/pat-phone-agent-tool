@@ -14,7 +14,7 @@ from multiprocessing.connection import Client, Listener
 
 import numpy as np
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
 DESCRIPTOR_NAME = "speech-service.json"
 MAX_PACKET = 8 * 1024 * 1024
 IO_TIMEOUT = 30

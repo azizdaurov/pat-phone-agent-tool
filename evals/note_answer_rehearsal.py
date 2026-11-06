@@ -10,7 +10,7 @@ import time
 
 sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, ".."))
+sys.path.insert(0, os.path.join(HERE, "..", "app"))
 import live_call
 
 CALLS = os.path.join(HERE, "..", "calls")
@@ -64,7 +64,7 @@ def start():
     sent, result = os.path.join(folder, "sent.txt"), os.path.join(folder, "result.json")
     open(sent, "w").close()
     output = open(os.path.join(folder, "output.txt"), "w", encoding="utf-8")
-    proc = subprocess.Popen([sys.executable, runner, os.path.join(HERE, ".."), fake, sent, result], stdout=output, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
+    proc = subprocess.Popen([sys.executable, runner, os.path.join(HERE, "..", "app"), fake, sent, result], stdout=output, stderr=subprocess.STDOUT, stdin=subprocess.DEVNULL)
     return proc, sent, result, os.path.join(folder, "output.txt")
 
 

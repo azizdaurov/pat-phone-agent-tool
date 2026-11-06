@@ -8,7 +8,7 @@ import threading
 import time
 import types
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app"))
 import numpy as np
 import pat
 from call_brief import CallBrief

@@ -2,12 +2,13 @@
 
 Compares the loudness pattern of each speech turn with itself at lags from 0.15 to 1.5 s. Takes a saved call's WAV files.
 """
+import os
 import sys
 import wave
 
 import numpy as np
 
-sys.path.insert(0, __file__.rsplit("evals", 1)[0])
+sys.path.insert(0, os.path.join(__file__.rsplit("evals", 1)[0], "app"))
 import pat
 from pat import FRAME, MIC_RATE
 

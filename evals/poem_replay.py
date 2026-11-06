@@ -7,7 +7,7 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-sys.path.insert(0, os.path.join(HERE, ".."))
+sys.path.insert(0, os.path.join(HERE, "..", "app"))
 import pat
 from call_card import render_card
 from easter_eggs import POEM_PROMPTS, write_poem

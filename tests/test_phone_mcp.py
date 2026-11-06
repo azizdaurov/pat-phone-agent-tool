@@ -277,7 +277,7 @@ class Connection(unittest.TestCase):
         async def session_results():
             # An integration test must never rely on a real contact being absent to avoid dialing.
             folder = tempfile.mkdtemp()
-            bootstrap = ("import sys; import phone_mcp; from private_numbers import PrivateNumbers; "
+            bootstrap = (f"import sys; sys.path.insert(0, {os.path.join(HERE, 'app')!r}); import phone_mcp; from private_numbers import PrivateNumbers; "
                          "from easter_eggs import EasterEggs; "
                          "phone_mcp.CALLS=sys.argv[1]; phone_mcp.private=PrivateNumbers(sys.argv[1]); "
                          "phone_mcp.eggs=EasterEggs(sys.argv[1],sys.argv[1]); "

@@ -5,7 +5,7 @@ import os
 import re
 import sys
 
-sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), ".."))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "app"))
 import pat
 from call_brief import CallBrief
 from observer import OBSERVER_MODEL, Observer, parse_advice

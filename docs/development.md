@@ -13,7 +13,10 @@ helper), or run `setup.ps1` again.
 
 ## Files
 
-| File | |
+The code is in `app/`. `pat.py`, `note.py`, `report.py` and `phone_mcp.py` in the main folder only start it, so
+commands stay short.
+
+| File in `app/` | |
 |---|---|
 | `setup.ps1` | Gets a laptop ready; `-Rehearse` changes nothing |
 | `pat.py` | One call: `PhoneLine` drives `iphonecall`, `CallerAudio` records the loopback, `SpeechDetector` and `TurnDetector` take turns, `Conversation` runs Claude |
@@ -31,9 +34,14 @@ helper), or run `setup.ps1` again.
 | `live_call.py`, `live_notes.py` | State passed between a running call and the note; its bullet points |
 | `real_dates.py`, `easter_eggs.py` | Real dates in what's kept; the jokes |
 | `report.py` | The bug report |
+
+| Folder | |
+|---|---|
 | `tests/` | The tests |
 | `voice-loop/` | Speech recognition, Claude and speech |
 | `iphone-hfp/` | `iphonecall` and the older Python dialer |
+| `note/` | The note's pages, styles and icons |
+| `evals/` | Measurements and probes run by hand |
 
 ## Bug reports
 
