@@ -143,14 +143,14 @@ class LaptopSettings(unittest.TestCase):
                 raise answers.get(key, OSError("not found"))
             return mock.Mock(stdout=answers[key])
         with mock.patch.object(report, "_claude_path", return_value="claude"):
-            return report.laptop_state(run=run, headsets=lambda: ["Headphones (Redmi Buds 6 Lite Hands-Free)"], registry=registry)
+            return report.laptop_state(run=run, headsets=lambda: ["Headphones (Wireless Buds Hands-Free)"], registry=registry)
 
     def test_each_setting_is_reported_and_the_claude_email_never_is(self):
         lines = self.run_with({"Get-AppxPackage": "1.0.0.0", "tasklist": "PhoneExperienceHost.exe  4242 Console",
                                "phones": "phone   connected\niPhone   yes", "auth": '{"loggedIn": true, "email": "someone@example.com"}'})
         text = "\n".join(lines)
         for expected in ("Developer Mode: on", "Allow this PC to access your mobile devices: on", "Phone helper: installed, version 1.0.0.0",
-                         "Phone Link running: yes", "Redmi Buds 6 Lite", "  iPhone   yes", "Claude Code: logged in"):
+                         "Phone Link running: yes", "Wireless Buds", "  iPhone   yes", "Claude Code: logged in"):
             self.assertIn(expected, text)
         self.assertNotIn("someone@example.com", text)
 
@@ -183,8 +183,8 @@ class LaptopSettings(unittest.TestCase):
                                  "2026-11-06 19:26:30  authentication failed (it may hold an old pairing): device 1 (not paired now)",
                                  "2026-11-06 19:27:20  paired: iPhone Aziz",
                                  "2026-11-06 19:30:00  pairing removed: device 2 (not paired now)"])
-        single = report.bluetooth_events(run=lambda command, **_: mock.Mock(stdout='{"time":"t","id":8,"name":"Galaxy","device":"x"}'))
-        self.assertEqual(single, ["t  paired: Galaxy"])  # PowerShell writes one event as an object
+        single = report.bluetooth_events(run=lambda command, **_: mock.Mock(stdout='{"time":"t","id":8,"name":"Android phone","device":"x"}'))
+        self.assertEqual(single, ["t  paired: Android phone"])  # PowerShell writes one event as an object
         self.assertEqual(report.bluetooth_events(run=lambda command, **_: mock.Mock(stdout="")), ["None in the last day."])
 
         def broken(command, **_):

@@ -152,10 +152,10 @@ class Headsets(unittest.TestCase):
         endpoints = {"schema_version": 1, "phone": {"container_id": phone_id}, "endpoints": [
             {"name": "CABLE Output (VB-Audio Virtual Cable)"},
             {"name": "Speakers (My renamed phone)", "container_id": phone_id, "services": ["BthHfAud"]},
-            {"name": "Headphones (Redmi Buds 6 Lite)", "services": ["BthA2dp"]},
-            {"name": "Headset (Redmi Buds 6 Lite Hands-Free)", "services": ["BthHfAud"]},
+            {"name": "Headphones (Wireless Buds)", "services": ["BthA2dp"]},
+            {"name": "Headset (Wireless Buds Hands-Free)", "services": ["BthHfAud"]},
             {"name": "Microphone (My renamed phone)", "container_id": phone_id, "services": ["BthHfAud"]}]}
-        self.assertEqual(pat.connected_headsets(endpoints), ["Headset (Redmi Buds 6 Lite Hands-Free)"])
+        self.assertEqual(pat.connected_headsets(endpoints), ["Headset (Wireless Buds Hands-Free)"])
 
     def test_no_headset(self):
         self.assertEqual(pat.connected_headsets({"schema_version": 1, "phone": None,
@@ -361,7 +361,7 @@ class PickPhone(unittest.TestCase):
     def run_helper(self, ready):
         def run(command, **kwargs):
             if command[1] == "list-json":
-                return types.SimpleNamespace(stdout=json.dumps([{"id": "iphone-id", "name": "iPhone"}, {"id": "galaxy-id", "name": "Galaxy A13"}]))
+                return types.SimpleNamespace(stdout=json.dumps([{"id": "iphone-id", "name": "iPhone"}, {"id": "android-id", "name": "Android phone"}]))
             line = "line     : ready | canDial=True" if command[3] in ready else "connect  : False"
             return types.SimpleNamespace(stdout=line)
         return run
@@ -375,13 +375,13 @@ class PickPhone(unittest.TestCase):
 
     def test_a_connected_phone_is_found_and_nothing_is_saved(self):
         profile = self.profile()
-        self.assertEqual(pat.pick_phone(self.run_helper({"galaxy-id"}), profile), "Galaxy A13")
+        self.assertEqual(pat.pick_phone(self.run_helper({"android-id"}), profile), "Android phone")
         from user_profile import UserProfile
         self.assertEqual(UserProfile(profile.path).phone_device, "")
 
     def test_the_chosen_phone_is_tried_first_and_kept(self):
         profile = self.profile("iphone-id")
-        self.assertEqual(pat.pick_phone(self.run_helper({"iphone-id", "galaxy-id"}), profile), "iPhone")
+        self.assertEqual(pat.pick_phone(self.run_helper({"iphone-id", "android-id"}), profile), "iPhone")
         self.assertEqual(profile.phone_device, "iphone-id")
 
     def test_nothing_ready_saves_nothing(self):

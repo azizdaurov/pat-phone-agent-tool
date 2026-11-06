@@ -1,8 +1,8 @@
 # iphonecall
 
 Dial and answer calls on your phone (its SIM, its number) from a Windows laptop, with the voice on the laptop, through
-Windows' own Bluetooth hands-free calling. Pat runs it and drives its shell over pipes. Tested with an iPhone and a
-Galaxy A13.
+Windows' own Bluetooth hands-free calling. Pat runs it and drives its shell over pipes. Tested with an iPhone and an
+Android phone.
 
 `hfp_call.py` is an older fallback that needs only Python, but keeps the voice on the phone. Use one at a time: only one
 program can hold the hands-free link.

@@ -340,12 +340,12 @@ class AnsweringWithAI(DeskCase):
         self.ring()
         self.desk.answer_ai()
         with open(self.desk.result_file, "w", encoding="utf-8") as f:
-            json.dump({"status": "failed", "reason": "'Redmi Buds' is connected."}, f)
+            json.dump({"status": "failed", "reason": "'Wireless Buds' is connected."}, f)
         self.calls[0].finished = 1
         self.desk.ai_since -= 10
         state = self.desk.state()
         self.assertEqual(state["screen"], "ringing")
-        self.assertIn("Redmi", state["notice"])
+        self.assertIn("Wireless Buds", state["notice"])
 
     def test_the_claude_kept_ready_while_it_rang_ends_quietly_when_nobody_asked_for_ai(self):
         """Its exit after Me, or after the ringing stops, isn't a failure, so its reason never shows."""
@@ -445,7 +445,7 @@ class AnsweringMyself(DeskCase):
 
         def headsets():
             checked.wait(5)
-            return ["Headset (Redmi Buds 6 Lite Hands-Free)"]
+            return ["Headset (Wireless Buds Hands-Free)"]
         self.desk.headsets = headsets
         self.ring()
         self.desk.answer_me("laptop")
@@ -455,7 +455,7 @@ class AnsweringMyself(DeskCase):
         self.desk.headset_check.join(5)
         state = self.desk.state()
         self.assertEqual((state["route"], self.line.sent[-1]), ("iphone", "phone"))
-        self.assertIn("Redmi Buds 6 Lite is connected", state["notice"])
+        self.assertIn("Wireless Buds is connected", state["notice"])
         self.assertGreaterEqual(self.devices.restored, 1)
 
     def test_no_headset_leaves_the_call_on_the_laptop(self):
@@ -470,7 +470,7 @@ class AnsweringMyself(DeskCase):
 
         def headsets():
             checked.wait(5)
-            return ["Headset (Redmi Buds 6 Lite Hands-Free)"]
+            return ["Headset (Wireless Buds Hands-Free)"]
         self.desk.headsets = headsets
         self.ring()
         self.desk.answer_me("laptop")

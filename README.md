@@ -8,13 +8,14 @@ Pat places and answers calls through your own iPhone or Android phone, over Blue
 with Claude Haiku 4.5 on your Claude plan, and answers aloud in English or Russian. A sticky note on your desktop shows
 each call, and you can take over at any moment.
 
+- **Free, on your own SIM.** Your number, your phone plan. No calling service, no per-minute fees.
 - **Calls for you.** Type "call the dentist and ask if they open on Sunday" into the note, or let an agent place the call.
 - **Answers for you.** For each contact: show the note's options, let the AI answer, or let your phone ring.
 - **Supervised.** Sonnet 5.5 reads the call alongside Haiku and steps in only when it goes off track.
 - **Private numbers.** Real numbers stay on the laptop. The AI sees a contact's name or a placeholder such as `#1`.
 - **Honest.** Every call opens with a fixed line saying it's an AI assistant and whose. No option removes it.
 
-Tested on real calls with an iPhone and a Galaxy A13, November 2026.
+Tested on real calls with an iPhone and an Android phone, November 2026.
 
 ## How it works
 
@@ -36,7 +37,7 @@ Them ◄─ phone ◄─ Bluetooth ◄─ Windows takes the call's mic from CABL
 
 - Windows 11 on an Intel or AMD (x64) processor. Not Windows on ARM, not macOS.
 - [Claude Code](https://claude.com/claude-code), installed and logged in.
-- An iPhone or Android phone with Bluetooth. Android makers handle Bluetooth calls differently; a Galaxy A13 works.
+- An iPhone or Android phone with Bluetooth. Android makers handle Bluetooth calls differently.
 - About 4 GB of disk, mostly speech models.
 
 ## Install

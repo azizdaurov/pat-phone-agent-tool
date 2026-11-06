@@ -85,10 +85,10 @@ class Flow(unittest.TestCase):
 
     def test_phones_come_as_a_drop_down_with_the_connected_one_chosen(self):
         flow, run = self.open()
-        run.on_event({"event": "phones", "phones": [{"name": "Redmi 9A"}, {"name": "iPhone Aziz", "connected": True}]})
+        run.on_event({"event": "phones", "phones": [{"name": "Android phone"}, {"name": "iPhone Aziz", "connected": True}]})
         steps = flow.screen()
         self.assertEqual([o["label"] for o in steps["choose"]["options"]],
-                         ["Redmi 9A · not connected", "iPhone Aziz · connected", "My phone isn't here"])
+                         ["Android phone · not connected", "iPhone Aziz · connected", "My phone isn't here"])
         self.assertEqual(steps["choose"]["value"], "2")
         flow.answer("chosen", "2")
         self.assertEqual(run.answers, ["2"])

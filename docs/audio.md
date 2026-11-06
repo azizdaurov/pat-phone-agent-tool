@@ -57,6 +57,6 @@ words. Whisper turbo tied Parakeet on English but took 8.5 s per turn. Phone aud
 
 ## Tested on real calls
 
-Dozens of calls in November 2026, with an iPhone and a Galaxy A13. Their logs show the call's audio reaching the loopback
+Dozens of calls in November 2026, with an iPhone and an Android phone. Their logs show the call's audio reaching the loopback
 recording, Claude's replies going back through VB-CABLE, the person's echo not cutting Claude off, and `h` and `p` working
 mid-call.
