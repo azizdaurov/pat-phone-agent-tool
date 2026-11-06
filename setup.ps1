@@ -13,7 +13,6 @@ $pythonVersion = '3.13'
 $dotnetMajor = '10'
 $vbcableZip = 'https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip'
 $vbcablePage = 'https://vb-audio.com/Cable/'
-$phoneWaitSeconds = 300
 $todo = New-Object System.Collections.ArrayList
 $needsRestart = $false
 
@@ -165,29 +164,48 @@ function Pick-Phone {
     return $ok
 }
 
-function Wait-For-Phone {
+# Phone Link takes a phone's calls away from Pat: once it registers on the phone's pairing, Windows refuses Pat until the
+# pairing is made again, and its setup screen can delete the pairing. Seen 5-6 Nov 2026. So it is ended if it runs, and its
+# start at sign-in is turned off, each said in one line. "Mobile devices" didn't get in the way, so it is left alone.
+$phoneLinkStart = 'HKCU:\Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData\Microsoft.YourPhone_8wekyb3d8bbwe\YourPhone.Start'
+
+function Quiet-Phone-Link {
+    if ($Rehearse) {
+        Would 'end Phone Link if it is running, and turn off its start at sign-in if it is on'
+        return
+    }
+    if (Get-Process PhoneExperienceHost -ErrorAction SilentlyContinue) {
+        Get-Process PhoneExperienceHost -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+        Write-Host '   Ended Phone Link: while it runs, it can take your phone''s calls away from Pat.'
+    }
+    # State 2 means on; 0 and 1 are off (1 is "turned off by you"), and 3 and 4 are set by an administrator.
+    $start = Get-ItemProperty $phoneLinkStart -ErrorAction SilentlyContinue
+    if ($start -and $start.State -eq 2) {
+        Set-ItemProperty $phoneLinkStart -Name State -Value 1
+        Write-Host '   Turned off Phone Link''s start at sign-in, for the same reason. To undo: Settings > Apps > Startup.'
+    }
+}
+
+function Set-Up-Phone {
     if ($Rehearse) {
         Would "check 'Allow this PC to access your mobile devices', and open its page if it is off"
-        Would 'ask you to close Phone Link if it is open'
-        Would 'open Bluetooth settings, wait for an iPhone or Android phone to connect'
+        Would 'check for a phone that works for calls; if there is none, offer to set one up with iphonecall pair'
         return $true
     }
     Wait-For-Mobile-Access
-    # Windows lets one app at a time use the phone for calls; whichever has it keeps it. Closing it is the owner's choice.
-    if (Get-Process PhoneExperienceHost -ErrorAction SilentlyContinue) {
-        Write-Host '   Phone Link is open. Close it and turn off its start with Windows: only one app can use the phone for calls.' -ForegroundColor Yellow
-        Write-Host '   If it had your phone, also re-pair on both devices: remove the phone on the laptop, forget the laptop on the phone,' -ForegroundColor Yellow
-        Write-Host '   and pair them again.' -ForegroundColor Yellow
-    }
     if (Pick-Phone) { return $true }
-    Start-Process 'ms-settings:bluetooth'
-    Write-Host '   Bluetooth settings are open. Add your phone there if it is not paired, and accept on both.'
-    Write-Host "   Then on the phone, open Bluetooth settings and connect to $env:COMPUTERNAME, allowing calls when asked."
-    Write-Host "   On Android, also tap the gear next to $env:COMPUTERNAME and turn on Calls. Waiting for it..."
-    $deadline = (Get-Date).AddSeconds($phoneWaitSeconds)
+    Write-Host '   No phone works for Pat''s calls yet. Pat can set one up: it pairs the phone itself, so no other app can hold'
+    Write-Host '   its calls. A window opens and walks you through it; keep Settings > Bluetooth open on your phone.'
+    try { $answer = Read-Host '   Set up your phone for Pat''s calls now? [Y/n]' } catch { $answer = 'n' }
+    if ($answer -match '^[Nn]') { return $false }
+    $helper = (Get-Command iphonecall -ErrorAction SilentlyContinue).Source
+    if (-not $helper) { return $false }
+    Start-Process $helper -ArgumentList 'pair' -Wait
+    # Right after pairing, a phone can take a minute before it accepts the call link.
+    $deadline = (Get-Date).AddSeconds(60)
     while ((Get-Date) -lt $deadline) {
-        Start-Sleep -Seconds 5
         if (Pick-Phone) { return $true }
+        Start-Sleep -Seconds 5
     }
     return $false
 }
@@ -347,12 +365,12 @@ if ($Rehearse) {
 
 if (-not $needsRestart -or $Rehearse) {
     Step 'Phone'
-    if (Wait-For-Phone) {
+    Quiet-Phone-Link
+    if (Set-Up-Phone) {
         'Connected.'
     } else {
-        Todo ("No phone connected for calls. On the phone, connect to $env:COMPUTERNAME in its Bluetooth settings and allow calls " +
-              "(on Android, tap the gear next to it and turn on Calls). Check 'Allow this PC to access your mobile devices' in " +
-              "Settings > Bluetooth & devices > Mobile devices. Then run: .venv\Scripts\python.exe pat.py pick-phone")
+        Todo ("No phone works for Pat's calls yet. Open Pat's note and choose 'Set up the phone for Pat's calls' from its " +
+              "right-click menu. Keep Settings > Bluetooth open on your phone while it pairs.")
     }
 }
 
