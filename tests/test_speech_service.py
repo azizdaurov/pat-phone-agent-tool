@@ -14,7 +14,7 @@ import numpy as np
 
 from speech_service import (RemoteDetector, RemoteEar, RemoteVoice, ResidentSpeech, SpeechServer,
                             descriptor_path, read_status)
-from test_note import DeskCase
+from tests.test_note import DeskCase
 
 
 class FakeVoice:
@@ -69,7 +69,8 @@ def wait_until(function, seconds=20):
 def fake_service(folder):
     import sys
     path = os.path.join(folder, "speech-service.json")
-    code = ("import sys; from test_speech_service import FakeEngine; "
+    root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    code = (f"import sys; sys.path.insert(0, {root!r}); from tests.test_speech_service import FakeEngine; "
             "from speech_service import SpeechServer; SpeechServer(sys.argv[1], engine_factory=FakeEngine).serve()")
     return ResidentSpeech(folder, command=[sys.executable, "-B", "-u", "-c", code, path])
 
@@ -305,7 +306,7 @@ class ModelConstruction(unittest.TestCase):
         self.assertEqual(len({id(voice.model) for (lang, _), voice in engine.voices.items() if lang == "en"}), 1)
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

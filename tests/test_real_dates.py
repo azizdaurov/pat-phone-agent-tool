@@ -111,7 +111,7 @@ class WhereTheyAreKept(unittest.TestCase):
         self.assertIn("including the date table", task)
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

@@ -12,7 +12,7 @@ import phone_mcp
 from call_card import TEXT_WIDTH, display_width, render_card
 from private_numbers import PrivateNumbers
 
-HERE =os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository
 FAKE_PAT = r"""
 import json, sys
 args = sys.argv[1:]
@@ -316,7 +316,7 @@ class Connection(unittest.TestCase):
         self.assertIn("full phone number", refused.content[0].text)
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

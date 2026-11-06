@@ -169,7 +169,7 @@ class Attempts(unittest.TestCase):
             self.assertEqual(summary_may_change(reached, answers), expected, (reached, answers))
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

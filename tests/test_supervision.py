@@ -773,7 +773,7 @@ class Report(unittest.TestCase):
         self.assertIsNone(Observer(lambda text: "nonsense", []).final_report("goodbye"))
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

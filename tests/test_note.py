@@ -1120,7 +1120,7 @@ class Names(unittest.TestCase):
             self.assertEqual(note.split_caller(who), expected)
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

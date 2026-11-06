@@ -5,7 +5,7 @@ import threading
 import time
 import types
 from unittest import mock
-from test_note import DeskCase
+from tests.test_note import DeskCase
 
 
 def quick_control(note):
@@ -142,4 +142,4 @@ class Endings(DeskCase):
         self.assertEqual(self.desk.state()["screen"], "ringing")
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule

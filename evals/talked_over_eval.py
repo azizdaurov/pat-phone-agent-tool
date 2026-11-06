@@ -1,6 +1,6 @@
 """Someone keeps saying yes and talks over Claude's question. Does that yes get taken as their answer? Replays the call of 3-11-2026
 against real Claude: Haiku's next line, the live note's bullet and Sonnet's report. Text only, no phone.
-A bare yes over a question they heard none of no longer reaches Haiku at all (see test_supervision.py), so here that case only shows what the words alone do.
+A bare yes over a question they heard none of no longer reaches Haiku at all (see tests/test_supervision.py), so here that case only shows what the words alone do.
 Usage: talked_over_eval.py [runs] [--old]   --old uses the wording from before the fix, for Haiku's lines only"""
 import json
 import os

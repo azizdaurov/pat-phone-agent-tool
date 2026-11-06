@@ -5,7 +5,7 @@ from unittest import mock
 
 import pat
 from call_brief import CallBrief
-from test_supervision import FakeBrain, checked_call, conversation
+from tests.test_supervision import FakeBrain, checked_call, conversation
 
 
 class OpeningContext(unittest.TestCase):
@@ -102,7 +102,7 @@ class InterruptedConfirmation(unittest.TestCase):
                 self.assertEqual(call.mouth.spoken, ["Thank you.", "Goodbye."])
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

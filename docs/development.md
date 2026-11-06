@@ -3,7 +3,7 @@
 ## Tests
 
 ```powershell
-.venv\Scripts\python.exe -m unittest            # needs no phone, no call and no audio driver
+.venv\Scripts\python.exe -m unittest            # tests/: needs no phone, no call and no audio driver
 iphonecall self-test                            # the phone-choosing order, on made-up phones
 dotnet run --project evals\phone-selection\phone-selection.csproj
 ```
@@ -31,6 +31,7 @@ helper), or run `setup.ps1` again.
 | `live_call.py`, `live_notes.py` | State passed between a running call and the note; its bullet points |
 | `real_dates.py`, `easter_eggs.py` | Real dates in what's kept; the jokes |
 | `report.py` | The bug report |
+| `tests/` | The tests |
 | `voice-loop/` | Speech recognition, Claude and speech |
 | `iphone-hfp/` | `iphonecall` and the older Python dialer |
 

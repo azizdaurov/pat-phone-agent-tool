@@ -18,7 +18,7 @@ from call_card import TEXT_WIDTH, display_width, render_card
 from easter_eggs import (CALL_FACTS, FACTS, HATCH_KEY, HATCHED_NAME, NO_DIAL_REPLY, OCTO_NUMBER, POEM_PROMPTS, SERIOUS_REPLY, UNHATCHED_NAME, EasterEggs,
                          as_text, choose_next_style, number_joke, split_style, take_next_style, write_poem)
 from private_numbers import PrivateNumbers
-from test_note import DeskCase
+from tests.test_note import DeskCase
 
 
 class Eggs(unittest.TestCase):
@@ -583,7 +583,7 @@ class Watson(unittest.TestCase):
 
 class HiddenFiles(unittest.TestCase):
     def test_every_story_file_ends_in_the_tag_and_says_no_ending_in_plain_text(self):
-        here = os.path.dirname(os.path.abspath(__file__))
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository
         names = [name for name in os.listdir(os.path.join(here, "fisheggs")) if name.endswith(".md")]
         self.assertGreaterEqual(len(names), 4)
         for path in [os.path.join(here, "fisheggs", name) for name in names] + [os.path.join(here, "real_dates.py")]:
@@ -597,14 +597,14 @@ class HiddenFiles(unittest.TestCase):
         self.assertTrue(callable(real_dates.real_dates))
 
     def test_the_egg_really_is_a_scrambled_picture(self):
-        here = os.path.dirname(os.path.abspath(__file__))
+        here = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository
         with open(os.path.join(here, "fisheggs", UNHATCHED_NAME), "rb") as f:
             egg = f.read()
         self.assertFalse(egg.startswith(b"\x89PNG"))
         self.assertEqual(bytes(byte ^ HATCH_KEY[index % len(HATCH_KEY)] for index, byte in enumerate(egg[:8])), b"\x89PNG\r\n\x1a\n")
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

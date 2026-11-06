@@ -16,7 +16,7 @@ import numpy as np
 import pat
 from pat import FRAME, MIC_RATE
 
-HERE = os.path.dirname(os.path.abspath(__file__))
+HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository
 SAMPLE = os.path.join(HERE, "voice-loop", "samples", "ru_piper_irina.wav")
 FAKE_PHONE = r"""
 import sys
@@ -349,7 +349,7 @@ class Rehearsal(unittest.TestCase):
         self.assertFalse(any(pat.END_MARK in s for s in said))
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()

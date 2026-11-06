@@ -120,7 +120,7 @@ class Results(unittest.TestCase):
         self.assertEqual(self.private.hide("Dialing +998900000002"), "Dialing Рустам")
 
 
-from test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
+from tests.test_support import setup_profile as setUpModule, teardown_profile as tearDownModule
 
 if __name__ == "__main__":
     unittest.main()
