@@ -1,9 +1,18 @@
 """Call ending UI regressions with fake phones only."""
 import live_call
 import queue
+import threading
+import time
 import types
 from unittest import mock
 from test_note import DeskCase
+
+
+def quick_control(note):
+    """The note's line control without its 15-second waits between tries."""
+    control = note.LineControl()
+    control.rest = lambda seconds: None
+    return control
 
 
 class Endings(DeskCase):
@@ -16,26 +25,76 @@ class Endings(DeskCase):
         line = types.SimpleNamespace(events=events, wait_ready=lambda: True, close=lambda: None)
         desk = types.SimpleNamespace(on_event=mock.Mock(side_effect=[ValueError("test event error"), None]))
         problems = mock.Mock()
-        with mock.patch.object(note.time, "sleep"):
-            with self.assertRaises(FinishedTest):
-                note.watch_line(mock.Mock(side_effect=[line, FinishedTest()]), lambda _: desk, problems)
+        with self.assertRaises(FinishedTest):
+            note.watch_line(mock.Mock(side_effect=[line, FinishedTest()]), lambda _: desk, problems, quick_control(note))
         self.assertEqual(desk.on_event.call_count, 2)
 
-    def test_when_phone_link_has_the_phone_the_note_says_to_close_it(self):
+    def test_the_note_offers_set_up_only_when_the_pairing_is_the_problem(self):
         import note
-        import pat
         class FinishedTest(Exception):
             pass
-        refused = types.SimpleNamespace(started=["phone    : iPhone", "access   : DeniedBySystem"], wait_ready=lambda: False, close=lambda: None,
-                                        TAKEN=pat.PhoneLine.TAKEN)
-        refused.taken_by_another_app = lambda: pat.PhoneLine.taken_by_another_app(refused)
-        absent = types.SimpleNamespace(wait_ready=lambda: False, close=lambda: None)  # a pretend line without the check
+        def failed(*started):
+            return types.SimpleNamespace(started=list(started), wait_ready=lambda: False, close=lambda: None)
+        lines = [failed("phone    : iPhone", "access   : DeniedBySystem"),
+                 failed("phone    : the phone chosen in Pat's settings isn't paired any more; choosing automatically",
+                        "error: Several phones are paired and none has a phone line yet."),
+                 failed("No paired hands-free phone matches the selection."),
+                 failed("phone    : iPhone", "connect  : False"),  # off or away: Pat waits it out
+                 types.SimpleNamespace(wait_ready=lambda: False, close=lambda: None)]  # a pretend line that reports nothing
         problems = mock.Mock()
-        with mock.patch.object(note.time, "sleep"):
-            with self.assertRaises(FinishedTest):
-                note.watch_line(mock.Mock(side_effect=[refused, absent, FinishedTest()]), lambda _: None, problems)
-        self.assertEqual([call.args[0] for call in problems.call_args_list],
-                         ["Phone Link has your phone. Close it, forget the pairing on both laptop and phone, then pair again.", "Your phone isn't connected."])
+        with self.assertRaises(FinishedTest):
+            note.watch_line(mock.Mock(side_effect=lines + [FinishedTest()]), lambda _: None, problems, quick_control(note))
+        self.assertEqual([call.args for call in problems.call_args_list],
+                         [("Phone Link has your phone.", True), ("The phone Pat used isn't paired any more.", True),
+                          ("No phone is set up for Pat's calls.", True), (note.NOT_CONNECTED, False), (note.NOT_CONNECTED, False)])
+
+    def test_set_up_window_takes_the_line_without_a_problem_showing(self):
+        import note
+        class FinishedTest(Exception):
+            pass
+        control = quick_control(note)
+        problems = mock.Mock()
+
+        def make_line():
+            if make_line.calls:
+                raise FinishedTest()
+            make_line.calls += 1
+            line = types.SimpleNamespace(started=["access   : DeniedBySystem"], close=mock.Mock())
+            def wait_ready():  # the set-up window opens while the line is starting
+                control.pause()
+                threading.Timer(0.05, control.resume).start()
+                return False
+            line.wait_ready = wait_ready
+            return line
+        make_line.calls = 0
+        with self.assertRaises(FinishedTest):
+            note.watch_line(make_line, lambda _: None, problems, control)
+        problems.assert_not_called()
+
+    def test_note_state_offers_set_up_only_on_the_idle_screen(self):
+        import note
+        late = note.LateDesk()
+        late.on_problem("Phone Link has your phone.", True)
+        self.assertTrue(late.state()["setup_phone"])
+        late.desk = types.SimpleNamespace(state=lambda: {"screen": "ringing", "notice": ""})
+        self.assertFalse(late.state()["setup_phone"])
+        late.desk = None
+        late.on_problem("", False)
+        self.assertFalse(late.state()["setup_phone"])
+
+    def test_pausing_closes_the_open_line_and_resuming_retries_at_once(self):
+        import note
+        control = note.LineControl()
+        line = types.SimpleNamespace(close=mock.Mock())
+        control.hold(line)
+        control.pause()
+        line.close.assert_called_once()
+        self.assertFalse(control.running.is_set())
+        control.resume()
+        self.assertTrue(control.running.is_set())
+        started = time.monotonic()
+        control.rest(5)
+        self.assertLess(time.monotonic() - started, 1)
 
     def test_remote_hangup_cannot_be_undone_by_the_old_live_publisher(self):
         self.ring()

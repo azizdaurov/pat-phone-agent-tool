@@ -211,6 +211,14 @@ class Bridge(QObject):
     def set_typing(self, typing):
         self.window.typing = typing
 
+    @Slot()
+    def setup_phone(self):
+        self.window.open_pairing()
+
+    @Slot(str, str)
+    def pairing_answer(self, answer, chosen):
+        self._soon("pairing_answer", answer, chosen)
+
 
 class ContactsBridge(QObject):
     """What the contact list can call."""
@@ -409,6 +417,11 @@ class NoteWindow(QWebEngineView):
         self.pointer_left_for = LEAVE_MS  # no waiting: the pointer is on the button, so it hides until touched
         self.slide_in()
 
+    def open_pairing(self):
+        """The "Set up the phone for Pat's calls" steps, inside the note, so they sit under it and zoom with it."""
+        self.desk.start_pairing()
+        self.bring_back()
+
     def start_drag(self):
         """Follows the pointer itself. Windows' own window-move left the window unable to resize afterwards."""
         if self.is_hidden_at_edge:
@@ -492,6 +505,7 @@ def _settings_menu(menu, window, options):
     window.submenus = {}
     from onboarding import ProfileDialog
     menu.addAction(QAction("Your name, region and phone...", menu, triggered=lambda: ProfileDialog(window).exec()))
+    menu.addAction(QAction("Set up the phone for Pat's calls...", menu, triggered=window.open_pairing))
     for title, choices, name in (("Incoming calls speak", LANGUAGES, "language"), ("Unknown numbers", FOR_UNKNOWN, "unknown"),
                                  ("English voice", english_voices(), "voice_en"), ("Russian voice", RUSSIAN_VOICES, "voice_ru")):
         window.submenus[title] = _choices(menu, title, choices, getattr(settings, name), lambda value, name=name: settings.change(name, value))

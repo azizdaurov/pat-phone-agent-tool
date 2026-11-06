@@ -40,6 +40,30 @@ form{display:flex;align-items:center;gap:6px;padding:0 20px 0 2px}
 #prompt:focus{outline:none;background:rgba(243,233,211,.75)}
 #send{display:flex;align-items:center;justify-content:center;width:36px;height:36px;flex-shrink:0;border-radius:50%}
 #notice{margin:6px 8px 2px;font-size:12px;font-style:italic;line-height:1.3;color:var(--muted)}
+#setup-phone{display:block;height:30px;margin:6px 8px 2px;padding:0 14px;font-size:12px}
+#pairing{margin:6px 8px 4px}
+#pairing h2{margin:0 0 5px;font-size:15px}
+#pairing-text{margin:0 0 6px;font-size:13px;line-height:1.35;user-select:text}
+#pairing-code{margin:2px 0 6px;font-size:26px;letter-spacing:3px}
+#pairing-hint{margin:2px 0 8px;padding:7px 10px;font-size:13px;font-weight:bold;line-height:1.35;background:var(--card);border-left:3px solid var(--ink);border-radius:8px}
+#pairing-choose{margin:2px 0 6px}
+#choose-button{display:flex;align-items:center;justify-content:space-between;gap:8px;width:100%;min-height:34px;padding:0 12px;text-align:left;background:var(--card);border:1px solid var(--line);border-radius:12px;transition:background .15s}
+#choose-button:hover{background:var(--card-hover)}
+#choose-button svg{flex:none;transition:transform .15s}
+#choose-button[aria-expanded="true"] svg{transform:rotate(180deg)}
+#choose-button .empty{font-style:italic;color:var(--muted)}
+#choose-list{margin-top:4px;padding:4px;max-height:236px;overflow-y:auto;background:var(--card);border:1px solid var(--line);border-radius:12px}
+#choose-list::-webkit-scrollbar{width:6px}
+#choose-list::-webkit-scrollbar-thumb{background:var(--pale);border-radius:3px}
+#choose-list button{display:block;width:100%;min-height:30px;padding:5px 10px;text-align:left;line-height:1.3;background:transparent;border:0;border-radius:9px}
+#choose-list button:hover{background:var(--card-hover)}
+#choose-list button[aria-selected="true"]{color:var(--on-ink);background:var(--ink)}
+#pairing-status{margin:0 0 4px;font-size:12px;font-style:italic;line-height:1.3;color:var(--muted)}
+#pairing-buttons{display:flex;flex-wrap:wrap;gap:7px;justify-content:flex-end;margin-top:6px}
+#pairing-buttons button{height:30px;padding:0 14px;font-size:12px}
+#pairing-buttons button:disabled{opacity:.45;cursor:default}
+.plain{background:transparent;border:0;border-radius:999px;transition:background .15s}
+.plain:hover{background:rgba(107,82,56,.16)}
 #speech-status{margin:3px 8px 2px;font-size:11px;line-height:1.3;color:var(--muted)}
 .ringing{margin-bottom:7px;font-size:12px;font-style:italic;color:var(--muted);pointer-events:none}
 #s-header{padding-right:58px}
@@ -119,6 +143,19 @@ pre{margin:0 0 7px;font:12px/1.15 Consolas,'Courier New',monospace;color:var(--m
       <p id="speech-status" role="status" hidden></p>
     </section>
     <p id="notice" hidden></p>
+    <button id="setup-phone" class="dark" type="button" hidden>Set up the phone for Pat's calls</button>
+    <section id="pairing" aria-live="polite" hidden>
+      <h2 id="pairing-title"></h2>
+      <p id="pairing-text"></p>
+      <div id="pairing-code" hidden></div>
+      <div id="pairing-hint" hidden></div>
+      <div id="pairing-choose" hidden>
+        <button id="choose-button" type="button" aria-haspopup="listbox" aria-expanded="false"><span id="choose-label"></span><svg aria-hidden="true" width="12" height="12" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M4 6l4 4 4-4"></path></svg></button>
+        <div id="choose-list" role="listbox" aria-label="Phone" hidden></div>
+      </div>
+      <p id="pairing-status" role="status" hidden></p>
+      <div id="pairing-buttons"></div>
+    </section>
     <section id="panel" aria-live="polite" hidden>
       <h2 id="panel-title" hidden></h2>
       <pre id="panel-art" aria-hidden="true" hidden></pre>
@@ -276,7 +313,8 @@ function render(state) {
   $('name').textContent = state.name || 'Unknown caller';
   $('number').textContent = state.always ? `${state.number} · Always AI` : state.number;
   $('notice').textContent = state.notice || '';
-  $('notice').hidden = !state.notice;
+  $('notice').hidden = !state.notice || Boolean(state.pairing);
+  $('setup-phone').hidden = !state.setup_phone;
   $('speech-status').textContent = state.speech_status || '';
   $('speech-status').hidden = !state.speech_status;
   if (screen !== 'ringing' && menuOpen) setMenu(false);
@@ -297,9 +335,86 @@ function render(state) {
   $('listen-label').textContent = state.listening ? 'Listening' : 'Listen';
   $('listen').setAttribute('aria-pressed', Boolean(state.listening));
   renderPanel(screen === 'idle' ? state.panel : null);
+  renderPairing(state.pairing);
   renderAfterCall(state);
   reportTyping();
   fit();
+}
+
+// The "Set up the phone for Pat's calls" steps. The drop-down is drawn here rather than by Windows, so it keeps the
+// note's paper look and zooms with it. A choice survives the list growing, so a phone found mid-search doesn't undo it.
+let pairingChoice = '';
+let pairingSteps = null;
+
+function renderChooser() {
+  const choose = pairingSteps && pairingSteps.choose;
+  $('pairing-choose').hidden = !choose;
+  if (!choose) return;
+  const picked = choose.options.find((option) => option.value === pairingChoice);
+  const label = $('choose-label');
+  label.textContent = picked ? picked.label : (choose.placeholder || '');
+  label.className = picked ? '' : 'empty';
+  $('choose-list').replaceChildren(...choose.options.map((option) => {
+    const item = document.createElement('button');
+    item.type = 'button';
+    item.setAttribute('role', 'option');
+    item.setAttribute('aria-selected', option.value === pairingChoice);
+    item.textContent = option.label;
+    item.onclick = () => {
+      pairingChoice = option.value;
+      setChooser(false);
+      renderChooser();
+      renderPairingButtons();
+    };
+    return item;
+  }));
+}
+
+function setChooser(open) {
+  const list = $('choose-list');
+  const choose = pairingSteps && pairingSteps.choose;
+  list.hidden = !open || !choose || !choose.options.length;
+  $('choose-button').setAttribute('aria-expanded', !list.hidden);
+  fit();
+}
+
+function renderPairingButtons() {
+  const choose = pairingSteps && pairingSteps.choose;
+  const nothing = Boolean(choose) && !choose.options.some((option) => option.value === pairingChoice);
+  $('pairing-buttons').replaceChildren(...((pairingSteps && pairingSteps.actions) || []).map((action) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.textContent = action.label;
+    button.className = action.tone === 'primary' ? 'dark' : 'plain';
+    button.disabled = action.answer === 'chosen' && nothing;
+    button.onclick = () => api().pairing_answer(action.answer, pairingChoice);
+    return button;
+  }));
+}
+
+function renderPairing(steps) {
+  const box = $('pairing');
+  const signature = JSON.stringify(steps || null);
+  if (box.dataset.signature === signature) return;
+  box.dataset.signature = signature;
+  const sameStep = Boolean(steps && pairingSteps && pairingSteps.title === steps.title);
+  pairingSteps = steps || null;
+  box.hidden = !steps;
+  if (!steps) return;
+  $('pairing-title').textContent = steps.title;
+  $('pairing-text').textContent = steps.text || '';
+  $('pairing-text').hidden = !steps.text;
+  $('pairing-hint').textContent = steps.hint || '';
+  $('pairing-hint').hidden = !steps.hint;
+  $('pairing-code').textContent = steps.code || '';
+  $('pairing-code').hidden = !steps.code;
+  $('pairing-status').textContent = steps.status || '';
+  $('pairing-status').hidden = !steps.status;
+  const choose = steps.choose;
+  if (choose && !(sameStep && choose.options.some((option) => option.value === pairingChoice))) pairingChoice = choose.value || '';
+  if (!sameStep) setChooser(false);
+  renderChooser();
+  renderPairingButtons();
 }
 
 function renderPanel(panel) {
@@ -390,7 +505,7 @@ function fit() {
 function reportTyping() {
   const input = $('prompt');
   // An open panel counts as typing, so the note doesn't slide away with a joke on it.
-  if (api()) api().set_typing(!$('panel').hidden || input.value.length > 0 || (document.activeElement === input && document.hasFocus()));
+  if (api()) api().set_typing(!$('panel').hidden || !$('pairing').hidden || input.value.length > 0 || (document.activeElement === input && document.hasFocus()));
 }
 
 $('form').addEventListener('submit', (event) => {
@@ -422,6 +537,9 @@ $('listen').onclick = () => api().listen(!last.listening);
 $('take-over').onclick = () => api().take_over();
 $('end').onclick = () => api().end_call();
 $('done').onclick = () => api().dismiss();
+$('setup-phone').onclick = () => api().setup_phone();
+$('choose-button').onclick = () => setChooser($('choose-list').hidden);
+$('choose-list').addEventListener('keydown', (event) => { if (event.key === 'Escape') setChooser(false); });
 $('copy-poem').onclick = () => api().copy($('poem').textContent);
 startWave($('mixer'), () => last.level || 0);
 $('edge').onclick = () => api().hide_to_edge();

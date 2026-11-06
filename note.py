@@ -603,23 +603,77 @@ class Desk:
                 self.notice = ""
 
 
-def watch_line(make_line, desk_box, on_problem):
-    """Keeps a line open for as long as the note runs, and passes on what it reports."""
+SETUP_PHONE = "Set up the phone for Pat's calls"
+NOT_CONNECTED = "Your phone isn't connected. Turn on its Bluetooth, or tap this laptop in its Bluetooth list."
+# What the phone helper prints when the pairing itself is the problem, so pairing again is the fix. Other failures are
+# usually a phone that's off or away, which Pat waits out.
+NEEDS_SETUP = (
+    ("DeniedBySystem", "Phone Link has your phone."),
+    ("isn't paired any more", "The phone Pat used isn't paired any more."),
+    ("No paired hands-free phone", "No phone is set up for Pat's calls."),
+)
+
+
+def phone_problem(started):
+    """What the note says when the line didn't come up, and whether to offer the set-up button."""
+    for marker, message in NEEDS_SETUP:
+        if any(marker in line for line in started):
+            return message, True
+    return NOT_CONNECTED, False
+
+
+class LineControl:
+    """Lets the set-up window take the phone: the note's line closes and waits until the window is done."""
+
+    def __init__(self):
+        self.running = threading.Event()
+        self.running.set()
+        self.wake = threading.Event()
+        self.line = None
+        self.lock = threading.Lock()
+
+    def pause(self):
+        self.running.clear()
+        with self.lock:
+            line = self.line
+        if line:
+            line.close()
+
+    def resume(self):
+        self.running.set()
+        self.wake.set()  # try the phone straight away, not after the usual wait
+
+    def rest(self, seconds):
+        self.wake.wait(seconds)
+        self.wake.clear()
+
+    def hold(self, line):
+        with self.lock:
+            self.line = line
+
+
+def watch_line(make_line, desk_box, on_problem, control=None):
+    """Keeps a line open for as long as the note runs, and passes on what it reports.
+    on_problem(text, setup) also says whether the set-up button should show."""
+    control = control or LineControl()
     while True:
+        control.running.wait()
         try:
             line = make_line()
         except OSError as error:
-            on_problem(f"iphonecall won't start, so run setup.ps1: {error}"[:NOTICE_CHARS])
-            time.sleep(RETRY_SECONDS)
+            on_problem(f"iphonecall won't start, so run setup.ps1: {error}"[:NOTICE_CHARS], False)
+            control.rest(RETRY_SECONDS)
             continue
+        control.hold(line)
         desk = desk_box(line)
         if not line.wait_ready():
             line.close()
-            taken = getattr(line, "taken_by_another_app", lambda: False)()
-            on_problem("Phone Link has your phone. Close it, forget the pairing on both laptop and phone, then pair again." if taken else "Your phone isn't connected.")
-            time.sleep(RETRY_SECONDS)
+            control.hold(None)
+            if control.running.is_set():  # a line closed for the set-up window isn't a problem
+                on_problem(*phone_problem(getattr(line, "started", [])))
+            control.rest(RETRY_SECONDS)
             continue
-        on_problem("")
+        on_problem("", False)
         while True:
             try:
                 event = line.events.get(timeout=1)
@@ -628,21 +682,47 @@ def watch_line(make_line, desk_box, on_problem):
             try:
                 desk.on_event(event)
             except Exception as error:
-                on_problem(f"Couldn't update the call screen: {error}"[:NOTICE_CHARS])
+                on_problem(f"Couldn't update the call screen: {error}"[:NOTICE_CHARS], False)
                 print(f"[call screen event error: {error}]", flush=True)
             if event[0] == "Closed":
                 break
         line.close()
-        time.sleep(RETRY_SECONDS)
+        control.hold(None)
+        control.rest(RETRY_SECONDS)
 
 
 class LateDesk:
     """Lets the page ask for its state before the phone line is up."""
 
-    def __init__(self, speech=None):
+    def __init__(self, speech=None, control=None):
         self.desk = None
         self.notice = ""
+        self.setup_phone = False  # the pairing is the problem, so the note offers the set-up steps
         self.speech = speech
+        self.control = control or LineControl()
+        self.pairing = None
+
+    def on_problem(self, text, setup=False):
+        self.notice = text
+        self.setup_phone = setup
+
+    def pause_line(self):
+        self.control.pause()
+
+    def resume_line(self):
+        self.control.resume()
+
+    def start_pairing(self, flow_factory=None):
+        """The set-up steps, inside the note. One at a time: pressing the button again leaves the open one alone."""
+        if self.pairing and self.pairing.active:
+            return
+        from pairing_flow import PairingFlow
+        self.pairing = (flow_factory or PairingFlow)(pause=self.pause_line, resume=self.resume_line)
+        threading.Thread(target=self.pairing.start, daemon=True).start()
+
+    def pairing_answer(self, answer, chosen=""):
+        if self.pairing:
+            self.pairing.answer(answer, chosen)
 
     def state(self):
         if self.desk:
@@ -651,6 +731,10 @@ class LateDesk:
                 state["notice"] = self.notice
         else:
             state = {"screen": "idle", "notice": self.notice}
+        idle = state.get("screen") == "idle"
+        steps = self.pairing.screen() if self.pairing and idle else None
+        state["pairing"] = steps
+        state["setup_phone"] = self.setup_phone and idle and not steps
         if self.speech:
             from speech_service import public_notice
             state["speech_status"] = public_notice(self.speech.status())
@@ -716,11 +800,8 @@ def main():
         late.desk = Desk(line, start_call, always=rules, settings=settings, private=private, real_devices=real_names, headsets=pat.connected_headsets, speech_ready=speech.is_ready, tidy_defaults=pat.real_defaults)
         return late.desk
 
-    def on_problem(text):
-        late.notice = text
-
     os.makedirs(CALLS, exist_ok=True)
-    threading.Thread(target=watch_line, args=(make_line, desk_for, on_problem), daemon=True).start()
+    threading.Thread(target=watch_line, args=(make_line, desk_for, late.on_problem, late.control), daemon=True).start()
     try:
         show(late, on_quit=lambda: late.desk and late.desk.quit(), options=types.SimpleNamespace(settings=settings, rules=rules, private=private, eggs=EasterEggs()))
     finally:

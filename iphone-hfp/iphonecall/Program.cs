@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Calls;
 
-const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | lines | phones | self-test | audio-devices-json | unregister] [--device <name> | --device-id <id>] [--stay-on-phone] [--follow-phone]";
+const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | lines | phones | self-test | audio-devices-json | unregister | pair [--json]] [--device <name> | --device-id <id>] [--stay-on-phone] [--follow-phone]";
 const string Help = "commands: d <number> dial | a answer | h hang up/reject | m mute on/off |\n" +
                     "          l audio on laptop | p audio on phone | s status | q quit";
 
@@ -32,7 +32,7 @@ for (int i = 0; i < args.Length; i++)
     else rest.Add(args[i]);
 }
 string action = rest.Count > 0 ? rest[0].ToLowerInvariant() : "shell";
-if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "lines" or "phones" or "self-test" or "audio-devices-json" or "unregister"))
+if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "lines" or "phones" or "self-test" or "audio-devices-json" or "unregister" or "pair"))
 {
     Console.WriteLine(Usage);
     return action is "help" or "-h" or "--help" ? 0 : 1;
@@ -68,6 +68,7 @@ try
         return 0;
     }
     if (action == "self-test") return PhoneSelection.SelfTest() == 0 ? 0 : 1;
+    if (action == "pair") return await Pairing.RunAsync(rest.Skip(1).Contains("--json"));
 
     var info = await HandsFree.FindAsync(deviceHint, deviceId);
     if (info == null && !string.IsNullOrEmpty(deviceId))
@@ -174,7 +175,11 @@ static class Terminal
 {
     [DllImport("kernel32.dll")] private static extern IntPtr GetStdHandle(int which);
     [DllImport("kernel32.dll")] private static extern bool AllocConsole();
+    [DllImport("kernel32.dll")] private static extern bool GetConsoleMode(IntPtr handle, out uint mode);
+    [DllImport("kernel32.dll")] private static extern bool SetConsoleMode(IntPtr handle, uint mode);
     private const int StdOutput = -11;
+    private const int StdInput = -10;
+    private const uint QuickEdit = 0x40, ExtendedFlags = 0x80;
 
     public static bool HasPipes()
     {
@@ -182,5 +187,11 @@ static class Terminal
         return output != IntPtr.Zero && output != new IntPtr(-1);
     }
 
-    public static void Open() => AllocConsole();
+    // Without Quick Edit, a click in the window can't pause it: a paused window shows nothing new until a key is pressed.
+    public static void Open()
+    {
+        AllocConsole();
+        IntPtr input = GetStdHandle(StdInput);
+        if (GetConsoleMode(input, out uint mode)) SetConsoleMode(input, (mode | ExtendedFlags) & ~QuickEdit);
+    }
 }

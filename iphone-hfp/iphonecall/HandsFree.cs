@@ -9,7 +9,7 @@ static class HandsFree
 {
     public const string AddressKey = "System.DeviceInterface.Bluetooth.DeviceAddress";
 
-    private static async Task<IReadOnlyList<DeviceInformation>> AllAsync() =>
+    internal static async Task<IReadOnlyList<DeviceInformation>> AllAsync() =>
         await DeviceInformation.FindAllAsync(
             PhoneLineTransportDevice.GetDeviceSelector(PhoneLineTransport.Bluetooth), new[] { AddressKey }.Concat(BluetoothAudio.Properties))
             .AsTask().WaitAsync(TimeSpan.FromSeconds(10));
@@ -120,7 +120,7 @@ static class HandsFree
 
     // Prints each step on its own line (they fail independently, and which one fails is the
     // diagnosis) and returns the phone's line once the link is up, or null.
-    private static async Task<PhoneLine?> ConnectAsync(DeviceInformation info, PhoneCallStore store)
+    internal static async Task<PhoneLine?> ConnectAsync(DeviceInformation info, PhoneCallStore store)
     {
         var device = PhoneLineTransportDevice.FromId(info.Id);
 
