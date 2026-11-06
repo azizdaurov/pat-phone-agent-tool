@@ -109,14 +109,26 @@ class WholeReport(unittest.TestCase):
         logs = tempfile.mkdtemp()
         with open(os.path.join(logs, "setup-20261105-170000.txt"), "w", encoding="utf-8") as f:
             f.write("Username: LAPTOP7\\Aziz\n== Phone\n   Phone ready: iPhone Aziz\n")
+        with open(os.path.join(folder, "pair-20261106-222017.log"), "w", encoding="utf-8") as f:
+            f.write('{"event":"log","text":"(also written to C:\\\\Users\\\\Aziz\\\\calls\\\\pair.log)"}\n'
+                    '{"event":"found","text":"  1. iPhone Aziz","number":1,"name":"iPhone Aziz"}\n'
+                    'access   : Allowed\n'
+                    '{"event":"done","text":"Done: Pat can take calls on iPhone Aziz.","name":"iPhone Aziz",'
+                    '"id":"\\\\?\\\\BTHENUM#{0000111e}_LOCALMFG&0002#7&1A&0&30D7A1A4FC0B_C00000000"}\n')
         settings = ["Developer Mode: on", "Paired phones:", "  iPhone Aziz   yes   yes"]
+        pairings = ["2026-11-06 17:50:04  pairing removed: device 1 (not paired now)", "2026-11-06 19:39:51  paired: iPhone Aziz"]
         with mock.patch.object(report, "CALLS", folder), mock.patch.object(report, "SETUP_LOGS", logs), \
-                mock.patch.object(report, "environment", return_value=["Python: 3.13"]), mock.patch.object(report, "laptop_state", return_value=settings):
+                mock.patch.object(report, "environment", return_value=["Python: 3.13"]), mock.patch.object(report, "laptop_state", return_value=settings), \
+                mock.patch.object(report, "bluetooth_events", return_value=pairings):
             text = report.build(3, Redactor(["Рустам", "Aziz", "LAPTOP7"]))
         self.assertIn("Result: {\"status\": \"done\", \"reason\": \"goodbye\", \"seconds\": 54}", text)
         self.assertRegex(text, r"21:59:38\.783689 phone    : iPhone <name \d>")
         self.assertIn("Developer Mode: on", text)
         self.assertIn("===== Setup log setup-20261105-170000.txt", text)
+        self.assertIn("2026-11-06 17:50:04  pairing removed: device 1 (not paired now)", text)  # dates and times kept whole
+        self.assertIn("found: 1. iPhone <name", text)
+        self.assertIn("access   : Allowed", text)
+        self.assertNotIn("30D7A1A4FC0B", text.upper())
         for private in ("998901234567", "+998", "Рустам", "Aziz", "Alex", "chicken", "Table booked", "LAPTOP7"):
             self.assertNotIn(private, text)
 
@@ -149,6 +161,35 @@ class LaptopSettings(unittest.TestCase):
         for expected in ("Developer Mode: unknown", "Phone helper: not installed", "Phone Link running: unknown",
                          "Paired phones: the phone helper didn't answer", "Claude Code: not logged in"):
             self.assertIn(expected, text)
+
+    def test_phone_link_details_are_reported(self):
+        def registry(hive, path, name):
+            return {"State": 2, "PhoneLinkEnabled": 0}.get(name, 1)
+        text = "\n".join(self.run_with({"Get-AppxPackage": "1.26092.119.0", "tasklist": "INFO: No tasks", "auth": "{}"}, registry=registry))
+        for expected in ("Phone Link running: no", "Phone Link installed: yes, version 1.26092.119.0",
+                         "Phone Link starts at sign-in: on", "Phone Link option on the Mobile devices page: off"):
+            self.assertIn(expected, text)
+        text = "\n".join(self.run_with({"Get-AppxPackage": "", "auth": "{}"}, registry=lambda hive, path, name: None))
+        self.assertIn("Phone Link installed: no", text)
+        self.assertIn("Phone Link starts at sign-in: unknown", text)
+
+    def test_bluetooth_events_are_named_and_addresses_never_leave(self):
+        answer = ('[{"time":"2026-11-06 17:50:04","id":10,"name":null,"device":"30d7a1a4fc0b"},'
+                  '{"time":"2026-11-06 19:26:30","id":16,"name":null,"device":"30d7a1a4fc0b"},'
+                  '{"time":"2026-11-06 19:27:20","id":8,"name":"iPhone Aziz","device":"aabbccddeeff"},'
+                  '{"time":"2026-11-06 19:30:00","id":10,"name":null,"device":"112233445566"}]')
+        lines = report.bluetooth_events(run=lambda command, **_: mock.Mock(stdout=answer))
+        self.assertEqual(lines, ["2026-11-06 17:50:04  pairing removed: device 1 (not paired now)",
+                                 "2026-11-06 19:26:30  authentication failed (it may hold an old pairing): device 1 (not paired now)",
+                                 "2026-11-06 19:27:20  paired: iPhone Aziz",
+                                 "2026-11-06 19:30:00  pairing removed: device 2 (not paired now)"])
+        single = report.bluetooth_events(run=lambda command, **_: mock.Mock(stdout='{"time":"t","id":8,"name":"Galaxy","device":"x"}'))
+        self.assertEqual(single, ["t  paired: Galaxy"])  # PowerShell writes one event as an object
+        self.assertEqual(report.bluetooth_events(run=lambda command, **_: mock.Mock(stdout="")), ["None in the last day."])
+
+        def broken(command, **_):
+            raise OSError("no powershell")
+        self.assertEqual(report.bluetooth_events(run=broken), ["Couldn't read Windows' Bluetooth events."])
 
     def test_bluetooth_addresses_are_hidden_in_every_form_and_other_ids_stay(self):
         redact = Redactor()

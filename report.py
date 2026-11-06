@@ -38,6 +38,25 @@ CALLER_INCOMING = re.compile(r"^(\s*(?:\d\d:\d\d:\d\d\S* )?Incoming: )(.+)$")
 PACKAGES = ("numpy", "sounddevice", "PyAudioWPatch", "onnx-asr", "piper-tts", "pocket-tts", "PySide6", "mcp")
 SETUP_LOGS = os.path.join(HERE, "setup-logs")  # setup.ps1 writes one per run, so a failed setup can still be reported
 SETUP_LOG_LINES = 150
+PHONE_LINK_START = (r"Software\Classes\Local Settings\Software\Microsoft\Windows\CurrentVersion\AppModel\SystemAppData"
+                    r"\Microsoft.YourPhone_8wekyb3d8bbwe\YourPhone.Start")
+START_STATES = {0: "off", 1: "off (turned off by you or Pat's setup)", 2: "on", 3: "off (set by an administrator)",
+                4: "on (set by an administrator)"}
+BLUETOOTH_EVENTS_KEPT = 80  # a day of testing pairings made 113
+BLUETOOTH_EVENT_WORDS = {8: "paired", 10: "pairing removed", 16: "authentication failed (it may hold an old pairing)",
+                         37: "its connection was refused"}
+# Pairings from the last day, with each device's name where Windows still has one. Reads only.
+BLUETOOTH_EVENTS_SCRIPT = r"""
+$names = @{}
+Get-PnpDevice -ErrorAction SilentlyContinue | Where-Object { $_.InstanceId -match 'DEV_([0-9A-F]{12})' } | ForEach-Object {
+    if ($_.InstanceId -match 'DEV_([0-9A-F]{12})') { $names[$matches[1].ToLower()] = $_.FriendlyName } }
+@(Get-WinEvent -FilterHashtable @{LogName='System'; ProviderName='BTHUSB'; Id=8,10,16,37; StartTime=(Get-Date).AddDays(-1)} -ErrorAction SilentlyContinue |
+    Sort-Object TimeCreated | ForEach-Object {
+        $address = ''
+        if ($_.Message -match '([0-9a-f]{2}(:[0-9a-f]{2}){5})') { $address = ($matches[1] -replace ':', '').ToLower() }
+        [pscustomobject]@{ time = $_.TimeCreated.ToString('yyyy-MM-dd HH:mm:ss'); id = $_.Id; name = $names[$address]; device = $address }
+    }) | ConvertTo-Json -Compress
+"""
 # A Bluetooth address names one phone or headset. They can appear in Windows device ids, as in
 # "Bluetooth#Bluetooth38:00:25:aa:bb:cc-30:d7:a1:a4:fc:0b" or "BTHENUM\...\DEV_30D7A1A4FC0B".
 # Six hex pairs joined by colons or dashes, or 12 hex characters between the separators Windows device ids use
@@ -229,6 +248,11 @@ def laptop_state(run=subprocess.run, headsets=None, registry=_registry):
     lines.append("Phone helper: " + ("unknown" if version is None else f"installed, version {version}" if version else "not installed"))
     tasks = ask(["tasklist", "/FI", "IMAGENAME eq PhoneExperienceHost.exe", "/NH"])
     lines.append("Phone Link running: " + ("unknown" if tasks is None else "yes" if "PhoneExperienceHost" in tasks else "no"))
+    installed = ask(["powershell", "-NoProfile", "-Command", "(Get-AppxPackage Microsoft.YourPhone).Version"])
+    lines.append("Phone Link installed: " + ("unknown" if installed is None else f"yes, version {installed}" if installed else "no"))
+    lines.append("Phone Link starts at sign-in: " + START_STATES.get(registry("HKEY_CURRENT_USER", PHONE_LINK_START, "State"), "unknown"))
+    lines.append("Phone Link option on the Mobile devices page: " + _on_off(registry("HKEY_CURRENT_USER", r"Software\Microsoft\Windows\CurrentVersion\Mobility",
+                                                                                     "PhoneLinkEnabled")))
     try:
         found = (headsets or _connected_headsets)()
         lines.append(f"Bluetooth headsets with calls on: {', '.join(found) if found else 'none'}")
@@ -241,6 +265,44 @@ def laptop_state(run=subprocess.run, headsets=None, registry=_registry):
     # Only whether it's logged in: the full answer has the account's email address.
     lines.append("Claude Code: " + ("not found" if not claude else "unknown" if status is None else
                                     "logged in" if re.search(r'"loggedIn":\s*true', status) else "not logged in"))
+    return lines
+
+
+def bluetooth_events(run=subprocess.run):
+    """Windows' own record of pairings from the last day, by device name. It showed, for one, Phone Link's setup screen
+    deleting a phone's pairing (6 Nov 2026). Addresses stay inside this function: a device that is no longer paired, so
+    has no name to look up, is "device 1", "device 2"..."""
+    try:
+        done = run(["powershell", "-NoProfile", "-Command", BLUETOOTH_EVENTS_SCRIPT], capture_output=True, text=True,
+                   encoding="utf-8", errors="replace", timeout=60)
+        found = json.loads(done.stdout) if done.stdout.strip() else []
+    except (OSError, subprocess.TimeoutExpired, ValueError):
+        return ["Couldn't read Windows' Bluetooth events."]
+    if isinstance(found, dict):  # PowerShell writes a single event as an object, not a list
+        found = [found]
+    unnamed = {}
+    lines = []
+    for event in found:
+        if not isinstance(event, dict):
+            continue
+        name = event.get("name") or unnamed.setdefault(event.get("device") or "?", f"device {len(unnamed) + 1} (not paired now)")
+        lines.append(f"{event.get('time', '?')}  {BLUETOOTH_EVENT_WORDS.get(event.get('id'), 'event ' + str(event.get('id')))}: {name}")
+    if len(lines) > BLUETOOTH_EVENTS_KEPT:
+        lines = [f"({len(lines) - BLUETOOTH_EVENTS_KEPT} earlier ones left out)", *lines[-BLUETOOTH_EVENTS_KEPT:]]
+    return lines or ["None in the last day."]
+
+
+def pair_log_lines(path):
+    """A set-up run's steps as plain lines; the note's runs write them as JSON."""
+    lines = []
+    for line in read_lines(path):
+        try:
+            step = json.loads(line)
+        except ValueError:
+            lines.append(line.rstrip("\r\n"))
+            continue
+        if isinstance(step, dict) and step.get("event") != "log":
+            lines.append(f"{step.get('event')}: {str(step.get('text', '')).strip()}")
     return lines
 
 
@@ -276,7 +338,8 @@ def result_line(path):
 def build(calls=3, redactor=None):
     redactor = redactor or Redactor(private_names(), os.path.expanduser("~"))
     sections = [("About this laptop", environment(), False),  # version numbers, not phone numbers
-                ("Laptop settings", laptop_state(), True)]
+                ("Laptop settings", laptop_state(), True),
+                ("Bluetooth pairings in the last day", bluetooth_events(), False)]  # times, not phone numbers
     setup_log = newest_setup_log()
     if setup_log:
         sections.append((f"Setup log {os.path.basename(setup_log)} (last {SETUP_LOG_LINES} lines)", read_lines(setup_log, SETUP_LOG_LINES), True))
@@ -287,6 +350,8 @@ def build(calls=3, redactor=None):
         sections.append((f"Call {os.path.basename(path)}", body + ([result] if result else []), True))
     for path in newest("phone-*.log", calls):
         sections.append((f"Phone line {os.path.basename(path)}", read_lines(path), True))
+    for path in newest("pair-*.log", 2):
+        sections.append((f"Phone set-up {os.path.basename(path)}", pair_log_lines(path), True))
     for name, last in (("note-phone.log", 200), ("note.log", 100), ("speech-service.log", 100)):
         path = os.path.join(CALLS, name)
         if os.path.exists(path):
