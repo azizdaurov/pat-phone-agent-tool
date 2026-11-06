@@ -163,7 +163,7 @@ class PairingFlow:
                                "Keep that screen open.",
                           actions=[CANCEL, {"label": "Try again", "answer": "", "tone": "primary"}])
         if kind == "connecting":
-            return screen("Connecting", "Connecting Pat to the phone…")
+            return screen("Connecting", text or "Connecting Pat to the phone…", hint=PAIR_THERE if "isn't ready" in text else "")
         if kind == "done":
             self.save(event.get("name", ""), event.get("id", ""))
             return screen("Done", text, actions=[CLOSE])

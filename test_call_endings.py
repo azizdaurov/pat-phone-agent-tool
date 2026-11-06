@@ -39,6 +39,8 @@ class Endings(DeskCase):
                  failed("phone    : the phone chosen in Pat's settings isn't paired any more; choosing automatically",
                         "error: Several phones are paired and none has a phone line yet."),
                  failed("No paired hands-free phone matches the selection."),
+                 failed("phone    : iPhone is paired for notifications only, not calls",
+                        "error: Several phones are paired and none has a phone line yet."),
                  failed("phone    : iPhone", "connect  : False"),  # off or away: Pat waits it out
                  types.SimpleNamespace(wait_ready=lambda: False, close=lambda: None)]  # a pretend line that reports nothing
         problems = mock.Mock()
@@ -46,7 +48,9 @@ class Endings(DeskCase):
             note.watch_line(mock.Mock(side_effect=lines + [FinishedTest()]), lambda _: None, problems, quick_control(note))
         self.assertEqual([call.args for call in problems.call_args_list],
                          [("Phone Link has your phone.", True), ("The phone Pat used isn't paired any more.", True),
-                          ("No phone is set up for Pat's calls.", True), (note.NOT_CONNECTED, False), (note.NOT_CONNECTED, False)])
+                          ("No phone is set up for Pat's calls.", True),
+                          ("Your phone is paired for notifications only, not calls.", True),
+                          (note.NOT_CONNECTED, False), (note.NOT_CONNECTED, False)])
 
     def test_set_up_window_takes_the_line_without_a_problem_showing(self):
         import note

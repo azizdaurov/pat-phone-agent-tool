@@ -90,6 +90,7 @@ try
     }
     if (info == null)
     {
+        await Pairing.SayNotificationsOnlyAsync();
         Console.WriteLine("No paired hands-free phone matches the selection. Pair your phone or choose it in Pat's settings. Try: iphonecall list");
         return 1;
     }
@@ -101,7 +102,11 @@ try
     }
 
     var (line, phone) = await HandsFree.ConnectAnyAsync(info);
-    if (line == null || phone == null) return 1;
+    if (line == null || phone == null)
+    {
+        await Pairing.SayNotificationsOnlyAsync();
+        return 1;
+    }
 
     // --follow-phone: for a shell that waits for calls for hours. It closes, so its owner can start a new one, when the
     // phone in use disconnects, or when a phone chosen by --device-id comes back after this line fell back to another.
@@ -116,6 +121,7 @@ try
 }
 catch (InvalidOperationException e)
 {
+    await Pairing.SayNotificationsOnlyAsync();
     Console.WriteLine($"error: {e.Message}");
     return 1;
 }

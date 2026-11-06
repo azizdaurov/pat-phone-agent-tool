@@ -16,6 +16,8 @@ static class Pairing
     const uint PhoneMajor = 2;
     const uint PhoneAppearance = 1;
     const int SearchSeconds = 30;
+    const int ConnectTries = 4;        // about 20 seconds in all, with the pauses
+    const int ConnectPauseSeconds = 5;
 
     // Phone Link's own program ("Phone Link" in Task Manager). While it runs, an iPhone showed no pairing code twice; with it
     // ended, pairing worked first time (6 Nov). "Mobile devices" (CrossDeviceService) didn't get in the way, so it stays.
@@ -93,6 +95,19 @@ static class Pairing
             phones.Add(new Entry(le.DeviceInformation, true, le.ConnectionStatus == BluetoothConnectionStatus.Connected));
         }
         return phones;
+    }
+
+    // When no phone connects: names a phone that is paired only for notifications (Phone Link's setup screen can delete the
+    // calls entry and leave this one), so the note can offer to set it up instead of saying it isn't connected.
+    public static async Task SayNotificationsOnlyAsync()
+    {
+        try
+        {
+            foreach (var group in (await PairedPhonesAsync()).GroupBy(e => e.Info.Name))
+                if (group.All(e => e.Le))
+                    Console.WriteLine($"phone    : {group.Key} is paired for notifications only, not calls");
+        }
+        catch (Exception) { }  // only a hint: the failure it explains is reported anyway
     }
 
     static string Kinds(IEnumerable<Entry> entries)
@@ -197,21 +212,35 @@ static class Pairing
         var store = await PhoneCallManager.RequestStoreAsync();  // open before connecting: see HandsFree.ConnectAnyAsync
         PhoneLine? line = null;
         bool slow = false;
-        try { line = await HandsFree.ConnectAsync(info, store); }
-        catch (TimeoutException) { slow = true; }  // after a fresh pairing, Windows can take over a minute to make the line
+        // Right after pairing, a phone can refuse the call link for a few seconds (an iPhone said connect: False at once and
+        // connected by itself a minute later, 6 Nov), so try a few times before saying it isn't connected yet.
+        for (int attempt = 1; attempt <= ConnectTries && line == null && !slow; attempt++)
+        {
+            if (attempt > 1)
+            {
+                Tell("connecting", "The phone isn't ready yet. Trying again...");
+                await Task.Delay(ConnectPauseSeconds * 1000);
+            }
+            try { line = await HandsFree.ConnectAsync(info, store); }
+            catch (TimeoutException) { slow = true; }  // after a fresh pairing, Windows can take over a minute to make the line
+        }
 
+        bool registered = PhoneLineTransportDevice.FromId(info.Id).IsRegistered();
         if (!json)
         {
             Console.WriteLine("\nNow paired as: " + Kinds((await PairedPhonesAsync()).Where(e => e.Info.Name == phone.Name)));
-            Console.WriteLine($"Pat registered: {(PhoneLineTransportDevice.FromId(info.Id).IsRegistered() ? "yes" : "no")}");
+            Console.WriteLine($"Pat registered: {(registered ? "yes" : "no")}");
         }
-        if (line == null && !slow)
+        if (!registered)
         {
-            Tell("failed", "Paired, but Pat couldn't connect to the phone: see the lines above.");
+            Tell("failed", "Paired, but Windows didn't let Pat use this phone for calls. Try setting it up again.");
             return 1;
         }
+        // Registered is what matters: the phone is Pat's now, and the note connects by itself once the phone is ready.
         Tell("done", line != null ? $"Done: Pat can take calls on {info.Name}." :
-                     "Paired and registered. Windows is still making the phone line; Pat's note picks it up by itself once it's there.",
+                     slow ? $"{info.Name} is set up for Pat. Windows is still making its phone line; Pat connects by itself once it's there." :
+                            $"{info.Name} is set up for Pat, but isn't connected yet. If Pat doesn't connect within a minute, tap " +
+                            $"{Environment.MachineName} in the phone's Settings > Bluetooth.",
              new { name = info.Name, id = info.Id, line = line != null });
         return 0;
     }

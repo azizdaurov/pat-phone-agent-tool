@@ -610,6 +610,7 @@ NOT_CONNECTED = "Your phone isn't connected. Turn on its Bluetooth, or tap this 
 NEEDS_SETUP = (
     ("DeniedBySystem", "Phone Link has your phone."),
     ("isn't paired any more", "The phone Pat used isn't paired any more."),
+    ("paired for notifications only", "Your phone is paired for notifications only, not calls."),
     ("No paired hands-free phone", "No phone is set up for Pat's calls."),
 )
 

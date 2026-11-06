@@ -36,6 +36,11 @@ static class HandsFree
             var match = active == null ? null : all.FirstOrDefault(d =>
                 string.Equals(PhoneLineTransportDevice.FromId(d.Id).DeviceId, active, StringComparison.OrdinalIgnoreCase));
             if (match != null) return match;
+            // No phone line to go by, as when Phone Link holds the phone: start from a phone that is connected, so it gets
+            // tried and Windows says why it refuses. ConnectAnyAsync tries the others after it.
+            foreach (var d in all)
+                if ((await PhoneWatch.DeviceAsync(d))?.ConnectionStatus == Windows.Devices.Bluetooth.BluetoothConnectionStatus.Connected)
+                    return d;
         }
         return PhoneSelection.Choose(all, d => d.Name, d => d.Id, nameHint, deviceId);
     }
@@ -69,7 +74,13 @@ static class HandsFree
         {
             var info = all.First(d => d.Id == candidate.Id);
             if (tried != null) Console.WriteLine($"phone    : {tried} isn't reachable, trying {info.Name}");
-            var line = await ConnectAsync(info, store);
+            PhoneLine? line;
+            try { line = await ConnectAsync(info, store); }
+            catch (TimeoutException e)  // connected, but Windows never made its line: try the next phone instead of stopping
+            {
+                Console.WriteLine($"line     : {e.Message}");
+                line = null;
+            }
             if (line != null) return (line, info);
             tried = info.Name;
         }

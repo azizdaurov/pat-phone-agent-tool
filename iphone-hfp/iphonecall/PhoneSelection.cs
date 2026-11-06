@@ -19,9 +19,10 @@ static class PhoneSelection
 
     // The order to try phones in: a phone that is connected beats one that isn't, whatever Windows' default says; among
     // those, the first choice, then one that already has a phone line, then Windows' default. A phone with no phone line is
-    // only tried if it is the first choice, since Windows may make its line when it connects.
+    // tried if it is the first choice, since Windows may make its line when it connects, or if it is connected: Pat can't see
+    // the line of a phone that Phone Link holds, and only trying it gets Windows to say so (DeniedBySystem).
     public static List<Candidate> Order(IEnumerable<Candidate> phones) =>
-        phones.Where(p => p.HasLine || p.First)
+        phones.Where(p => p.HasLine || p.First || p.Connected)
               .OrderByDescending(p => p.Connected)
               .ThenByDescending(p => p.First)
               .ThenByDescending(p => p.HasLine)
@@ -43,11 +44,15 @@ static class PhoneSelection
              new[] { P("chosen", false, true, first: true), P("here", true, true) }, new[] { "here", "chosen" }),
             ("nothing is here: the first choice, then Windows' default",
              new[] { P("other", false, true, isDefault: true), P("chosen", false, true, first: true) }, new[] { "chosen", "other" }),
-            ("a paired phone never set up for calls is not tried",
-             new[] { P("here", true, true, first: true), P("drawer", true, false) }, new[] { "here" }),
-            ("two phones here, none chosen: the one with a line, then Windows' default",
+            ("a connected phone with no line is tried after one that has a line",
+             new[] { P("here", true, true, first: true), P("no-line", true, false) }, new[] { "here", "no-line" }),
+            ("Phone Link holds the only connected phone: it is still tried, first",
+             new[] { P("held", true, false), P("away", false, true, isDefault: true) }, new[] { "held", "away" }),
+            ("a phone that is away with no line is never tried",
+             new[] { P("here", true, true, first: true), P("drawer", false, false) }, new[] { "here" }),
+            ("phones here, none chosen: the one with a line, then Windows' default, then one with no line",
              new[] { P("noline", true, false), P("default", true, true, first: true, isDefault: true), P("line", true, true) },
-             new[] { "default", "line" }),
+             new[] { "default", "line", "noline" }),
         };
         int failed = 0;
         foreach (var (name, phones, expected) in cases)
