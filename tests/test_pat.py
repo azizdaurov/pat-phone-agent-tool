@@ -220,6 +220,27 @@ class QuietCalls(unittest.TestCase):
         self.assertEqual(pat.preferred_device(devices, ("Unplugged (Gone)",)), 2)
         self.assertEqual(pat.preferred_device(devices, ()), 2)
 
+    def test_another_apps_software_speaker_is_skipped_but_its_default_is_left_alone(self):
+        """A tester's default for calls was a screen-sharing app's speaker, so Listen played into it and he heard nothing."""
+        share, realtek = "Динамики (ScreenShareAudio)", "Динамики (Realtek(R) Audio)"
+        devices = [(56, share), (50, realtek)]
+        with mock.patch.object(pat, "software_devices", return_value={share}):
+            self.assertEqual(pat.preferred_device(devices, (share, realtek)), 50)
+            self.assertTrue(pat.is_virtual_device(share))
+            self.assertFalse(pat.is_pats_virtual_device(share))  # fix-audio leaves another app's default where it is
+            self.assertFalse(pat.is_virtual_device(realtek))
+        # A laptop whose own speakers come through a software driver: never worse than the name checks alone.
+        with mock.patch.object(pat, "software_devices", return_value={share, realtek}):
+            self.assertEqual(pat.preferred_device([(49, "CABLE Input (VB-Audio Virtual Cable)"), (50, realtek)], (realtek,)), 50)
+
+    def test_software_devices_are_the_ones_on_a_software_driver(self):
+        from audio_defaults import SOFTWARE_DEVICE
+        for software in (r"{1}.ROOT\MEDIA\0001", r"{1}.SWD\MMDEVAPI\something", r"{1}.root\media\0002"):
+            self.assertTrue(SOFTWARE_DEVICE.match(software), software)
+        for hardware in (r"{1}.HDAUDIO\FUNC_01&VEN_10EC&DEV_0257", r"{1}.INTELAUDIO\FUNC_01&VEN_10EC", r"{1}.USB\VID_046D&PID_0A44",
+                         r"{1}.BTHHFENUM\BTHHFPAUDIO\9&2471BA3E", ""):
+            self.assertFalse(SOFTWARE_DEVICE.match(hardware), hardware)
+
     def test_microphone_check_tells_silence_quiet_and_working_apart(self):
         info = {"name": "Microphone Array (Realtek(R) Audio)", "default_samplerate": 48000, "max_input_channels": 2}
         with mock.patch.object(pat, "real_devices", return_value=(1, 7)), mock.patch.object(pat.sd, "query_devices", return_value=info):

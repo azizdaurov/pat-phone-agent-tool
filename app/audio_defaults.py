@@ -18,6 +18,10 @@ ROLES = (0, 1, 2)  # games and system sounds, music and video, calls: Windows ke
 ENDPOINTS_KEY = r"SOFTWARE\Microsoft\Windows\CurrentVersion\MMDevices\Audio"
 FRIENDLY_NAME = "{a45c254e-df1c-4efd-8020-67d146a850e0},2"  # "Speakers"
 ADAPTER_NAME = "{b3f8fa53-0004-438e-9003-51a46e139bfc},6"  # "Boom Audio"
+ADAPTER_INSTANCE = "{b3f8fa53-0004-438e-9003-51a46e139bfc},2"  # "{1}.HDAUDIO\FUNC_01&VEN_10EC..." or "{1}.ROOT\MEDIA\0001"
+# Virtual audio drivers (Voicemeeter, VB-CABLE, a screen-sharing app's speaker) are software devices under ROOT\ or SWD\.
+# Real ones sit on hardware: HDAUDIO\ or INTELAUDIO\ for the laptop's own, USB\, or Bluetooth's BTH...\.
+SOFTWARE_DEVICE = re.compile(r"^\{\d+\}\.(ROOT|SWD)\\", re.IGNORECASE)
 ACTIVE = 1
 
 
@@ -109,6 +113,32 @@ class WindowsAudio:
             return name, device_id
         finally:
             _release(device)
+
+    def software_devices(self):
+        """Names, as sounddevice shows them, of the working speakers and microphones that belong to a software driver.
+        Such a device plays and records nowhere unless its app routes it, so it's never Pat's "real" speaker or mic."""
+        found = set()
+        for flow in ("Render", "Capture"):
+            try:
+                devices = winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, rf"{ENDPOINTS_KEY}\{flow}")
+            except OSError:
+                continue
+            with devices:
+                for number in range(winreg.QueryInfoKey(devices)[0]):
+                    try:
+                        guid = winreg.EnumKey(devices, number)
+                        with winreg.OpenKey(devices, guid) as device:
+                            if winreg.QueryValueEx(device, "DeviceState")[0] != ACTIVE:
+                                continue
+                            with winreg.OpenKey(device, "Properties") as properties:
+                                friendly = winreg.QueryValueEx(properties, FRIENDLY_NAME)[0]
+                                adapter = winreg.QueryValueEx(properties, ADAPTER_NAME)[0]
+                                instance = winreg.QueryValueEx(properties, ADAPTER_INSTANCE)[0]
+                    except OSError:
+                        continue  # without these details a device keeps the name checks only
+                    if SOFTWARE_DEVICE.match(instance or ""):
+                        found.add(f"{friendly} ({adapter})")
+        return found
 
     def _endpoints_from_registry(self, kind):
         flow = "Render" if kind == RENDER else "Capture"

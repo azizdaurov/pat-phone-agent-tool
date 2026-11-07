@@ -385,7 +385,8 @@ class LaptopTakeover:
         self.error = None
         self.started = None
         print(f"Takeover microphone: {mic_info['name']} ({input_rate} Hz, {input_channels} channels); "
-              f"call output: {cable_info['name']} ({output_rate} Hz, {output_channels} channels)", flush=True)
+              f"call output: {cable_info['name']} ({output_rate} Hz, {output_channels} channels); "
+              f"their voice on: {sd.query_devices(speaker)['name']}", flush=True)
 
     def _play_caller(self):
         while not self.closed.is_set():
@@ -667,8 +668,10 @@ class Conversation:
 
     def __init__(self, line, frames, ear, mouth, brain, transcript, opening, max_seconds=300,
                  nobody_seconds=NOBODY_THERE_SECONDS, observer=None, nonce="", owner=None, language="en",
-                 task_message=None):
+                 task_message=None, caller_id_name=""):
         self.task_message = task_message  # None when there's nobody to check for, and Haiku already has the task
+        # On a call Pat answered: the name Haiku greets them by, from caller ID. Their reply to that greeting settles who they are.
+        self.caller_id_name = caller_id_name
         self.confirmed = task_message is None
         self.reached = "not_checked" if task_message is None else "unclear"
         self.observer = observer
@@ -727,7 +730,8 @@ class Conversation:
         def speak(piece):
             for mark, reached in REACHED_MARKS.items():
                 if mark in piece:
-                    self.reached = reached
+                    if self.task_message is not None:  # on a call Pat answered, code decides when they're known: _caller_known
+                        self.reached = reached
                     piece = piece.replace(mark, "").strip()
             if question or ASK_MARK in piece:
                 question.append(piece.replace(ASK_MARK, "").strip())
@@ -763,6 +767,18 @@ class Conversation:
             delay = time.monotonic() - ended
             self.reply_delays.append(round(delay, 2))
             self.transcript.add("Pat", f"first audio {delay:.2f} s after their speech ended, plus {END_FRAMES * FRAME / MIC_RATE:.1f} s of waiting to be sure they had")
+
+    def _caller_known(self):
+        """On a call Pat answered: from here on, Pat knows who called. From their reply to the caller ID name, or else from
+        the sticky note's Person line, which a separate Claude fills in only from what they said."""
+        if self.reached != "confirmed":
+            self.reached = "confirmed"
+            self.transcript.add("Status", "person confirmed")
+
+    def caller_named(self, facts):
+        """The sticky note's facts changed. Its Person line is filled in only once they've said who they are."""
+        if any(fact["label"] == "Person" and fact["value"] for fact in facts):
+            self._caller_known()
 
     def _start_task(self, token):
         """Hands Haiku the task once it has marked the person confirmed. Until then it has nothing to reveal."""
@@ -842,6 +858,9 @@ class Conversation:
             self.last_reply = []
             if text:
                 self.caller_turns += 1
+                # Haiku greets them by the caller ID name in its first reply. Their next words accept that name or correct it.
+                if self.task_message is None and self.caller_id_name and self.caller_turns == 2:
+                    self._caller_known()
                 message = re.sub(r"[\[\]]", " ", text)  # only Pat can write a supervisor mark
             else:
                 message = self._supervisor(prompt or "They made a short sound, but speech recognition got no words. "
@@ -849,9 +868,10 @@ class Conversation:
             if self.opening_pending:
                 self.opening_pending = False
                 opening_note = (f'The call is connected. The person has just heard this opening in full: "{self.opening}" '
-                                "Their words below respond to that opening. Do not say the greeting again. "
-                                "If they clearly answer its identity question with yes, mark them confirmed now; "
-                                "do not ask the same identity question again. If their answer is unclear, clarify it.")
+                                "Their words below respond to that opening. Do not say the greeting again.")
+                if self.task_message is not None:  # only the identity check's opening asks who they are
+                    opening_note += (" If they clearly answer its identity question with yes, mark them confirmed now; "
+                                     "do not ask the same identity question again. If their answer is unclear, clarify it.")
                 message = f"{self._supervisor(opening_note)}\n{message}"
             if self.pending_note:
                 message = f"{self._supervisor(self.pending_note)}\n{message}"
@@ -1058,15 +1078,41 @@ def find_silent_speaker(find=None):
     return next((name for name in silent_speakers() if find(name) is not None), None)
 
 
-def is_virtual_device(name):
+_software_devices = {"names": None, "at": 0.0}
+SOFTWARE_DEVICES_FOR = 60  # seconds before the list of software devices is read again, for a driver installed meanwhile
+
+
+def software_devices():
+    """Speakers and microphones that belong to a software driver, read from Windows at most once a minute."""
+    if _software_devices["names"] is None or time.monotonic() - _software_devices["at"] > SOFTWARE_DEVICES_FOR:
+        try:
+            from audio_defaults import WindowsAudio
+            names = WindowsAudio().software_devices()
+        except Exception:  # no registry to read: the name checks still apply
+            names = set()
+        _software_devices.update(names=names, at=time.monotonic())
+    return _software_devices["names"]
+
+
+def is_pats_virtual_device(name):
+    """The cable, the silent speaker or a phone's call audio: the virtual devices Pat itself uses."""
     return any(virtual in name for virtual in ("CABLE", "Hands-Free", "Voicemeeter", *silent_speakers()))
 
 
+def is_virtual_device(name):
+    """Not a real speaker or microphone: one of Pat's own virtual devices, or any other software device, such as a
+    screen-sharing app's speaker, which plays nowhere. One was a tester's default for calls, so Listen and take-over
+    played into it and he heard nothing (7 Nov 2026)."""
+    return is_pats_virtual_device(name) or name in software_devices()
+
+
 def pick_real_device(devices):
-    """The first (index, name) that's a real speaker or microphone, not the cable or the silent speaker."""
-    for index, name in devices:
-        if not is_virtual_device(name):
-            return index
+    """The first (index, name) that's a real speaker or microphone, not the cable or the silent speaker. If every device
+    looks like software, as on a laptop whose own speakers come through a software driver, only Pat's own count as virtual."""
+    for check in (is_virtual_device, is_pats_virtual_device):
+        for index, name in devices:
+            if not check(name):
+                return index
     return None
 
 
@@ -1080,7 +1126,8 @@ def real_defaults():
         return []
     speaker, microphone = real_devices()
     names = [sd.query_devices(device)["name"] if device is not None else None for device in (speaker, microphone)]
-    return repair_defaults(*names, is_virtual_device)
+    # Only Pat's own drivers: another app's virtual default, such as a screen-sharing speaker, may be there on purpose.
+    return repair_defaults(*names, is_pats_virtual_device)
 
 
 def preferred_device(devices, chosen):
@@ -1604,6 +1651,7 @@ def main():
     status = "no_answer"
     reason = "the call was not answered"
     picked_up = None
+    caller_name = caller_id = ""
     try:
         if args.action == "dial":
             print(f"Dialing {args.number}. Claude's task: {brief.goal}", flush=True)
@@ -1627,7 +1675,8 @@ def main():
                 spoken_name = CallerNames().start(caller_id)  # checked while Claude starts; never the number
                 brain = start_brain(args, brief, opening, nonce, known)
                 live.update(stage="ringing", number=incoming[1], name=caller_id)
-                tell_caller_name(brain, spoken_name(), nonce)
+                caller_name = spoken_name()
+                tell_caller_name(brain, caller_name, nonce)
                 if args.wait_for_go and not wait_for_go(go, cancelled, line):
                     left_ringing = True
                     reason = "the sticky note took this call, or it stopped ringing"
@@ -1658,6 +1707,10 @@ def main():
         transcript.add("Pat", f"task: {brief.text()}")
         transcript.add("Pat", f"hearing through: {caller.name}; call audio: {line.audio}")
         observer, sonnet = start_observer(args, brief, transcript)
+        if caller_name:
+            transcript.add("Status", f"caller ID name: {caller_name}")
+            if observer:
+                observer.caller_id = (caller_name, caller_id)
         live.update(stage="talking")
         frames = caller.frames()
         if args.save_audio:
@@ -1665,7 +1718,8 @@ def main():
         conversation = Conversation(line, frames, ear, mouth, brain, transcript, opening,
                                     max_seconds=args.max_minutes * 60, observer=observer, nonce=nonce,
                                     owner=args.owner, language=brief.language,
-                                    task_message=brief.task_message(args.owner, known) if brief.has_target() else None)
+                                    task_message=brief.task_message(args.owner, known) if brief.has_target() else None,
+                                    caller_id_name=caller_name)
         listen_for_keys(line, conversation)
         watch_take_over_key(conversation)
 
@@ -1677,11 +1731,15 @@ def main():
                 print(f"[no bullet points on the sticky note: {error}]", flush=True)
                 return
             transcript.on_them = live_notes.request
+            if brief.incoming and not caller_name:
+                live_notes.on_facts = lambda facts: conversation.caller_named(facts)
 
         def set_listening(on):
             nonlocal listening
             if on and listening is None:
-                listening = Listening(caller, mouth.out, mouth.sample_rate, real_devices()[0])
+                speaker = real_devices()[0]
+                print(f"Pat: listening on {sd.query_devices(speaker)['name'] if speaker is not None else 'no speaker found'}", flush=True)
+                listening = Listening(caller, mouth.out, mouth.sample_rate, speaker)
             elif not on and listening is not None:
                 listening.stop()
                 listening = None
