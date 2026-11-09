@@ -72,6 +72,7 @@ class LiveNotes:
         self.pending = None
         self.wake = threading.Event()
         self.closed = False
+        self.on_facts = None  # called with the facts after each update, on this note's own thread
         threading.Thread(target=self._run, daemon=True).start()
 
     def request(self, spoken):
@@ -102,6 +103,11 @@ class LiveNotes:
             if notes and notes[0]:
                 self.facts = real_dates(self._keep_what_was_known(notes[0]), self.today)
                 self.summary = real_dates(notes[1] or self.summary, self.today)
+                if self.on_facts:
+                    try:
+                        self.on_facts(self.facts)
+                    except Exception as error:
+                        print(f"[sticky note's update wasn't passed on: {error}]", flush=True)
 
     def _keep_what_was_known(self, facts):
         """A fact the model forgets on a later turn stays on the note, so answers don't flicker back to dots."""

@@ -81,8 +81,15 @@ def read_last_call(folder):
     return _read_json(os.path.join(folder, LAST_CALL_NAME))
 
 
+def _sentence(text):
+    """Sonnet writes details as fragments, which run together when joined: "Bring a passport Parking is behind"."""
+    text = text.strip()
+    return text if text[-1] in ".!?…" else text + "."
+
+
 def final_note(report, facts, summary):
-    """(bullet points, summary, what to do next) for the end of a call, nothing cut. Sonnet's report if there is one, or else the live note."""
+    """(bullet points, summary, contact question) for the end of a call, nothing cut. Sonnet's report if there is one, or else
+    the live note. What they said to keep in mind and what to do next are the last bullet, Advice."""
     report = report if isinstance(report, dict) else {}
     answers = [item for item in report.get("answers") or [] if isinstance(item, dict)]
     if answers:
@@ -90,8 +97,10 @@ def final_note(report, facts, summary):
                  for item in answers]
     else:
         facts = [{"label": fact["label"], "value": fact["value"] or "not found"} for fact in facts]
-    details = [str(detail) for detail in report.get("important_details") or []]
-    return facts, str(report.get("summary") or summary or ""), " ".join(details + ([str(report["follow_up"])] if report.get("follow_up") else []))
+    advice = [str(detail) for detail in report.get("important_details") or []] + ([str(report["follow_up"])] if report.get("follow_up") else [])
+    if advice:
+        facts = facts + [{"label": "Advice", "value": " ".join(_sentence(item) for item in advice if item.strip())}]
+    return facts, str(report.get("summary") or summary or ""), str(report.get("contact") or "")
 
 
 def send_command(folder, command):

@@ -98,6 +98,8 @@ class Brief(unittest.TestCase):
         self.assertNotIn("say why you are calling", answered)
         self.assertNotIn("{", answered)
         self.assertIn("incoming: True", brief.observer_prompt("Aziz"))
+        self.assertIn("on purpose", brief.observer_prompt("Aziz"))  # Sonnet doesn't treat the caller ID greeting as a mistake
+        self.assertIn("ask their name early", answered)
         brief.incoming = False
         self.assertIn("say why you are calling", brief.haiku_prompt("VOICE", "OPENING", "Aziz", "n0nce"))
 
@@ -112,7 +114,8 @@ class Brief(unittest.TestCase):
         pat.tell_caller_name(brain, "", "n0nce")
         self.assertEqual(asked, [])  # "Idiot", "Restaurant": no name, so nothing is said about it
         pat.tell_caller_name(brain, "Рустам", "n0nce")
-        self.assertTrue(asked[0].startswith("[SUPERVISOR-n0nce] Caller ID says this is Рустам. You may greet them by that name, but it isn't confirmed"))
+        self.assertTrue(asked[0].startswith("[SUPERVISOR-n0nce] Caller ID says this is Рустам. Greet them by that name in your first reply"))
+        self.assertIn("light sorry", asked[0])  # a wrong guess is corrected in passing, not made a fuss of
 
     def test_observer_sees_the_brief_and_limits(self):
         prompt = CallBrief.from_dict({"goal": "GOAL", "must_not": ["FORBID"]}).observer_prompt("Aziz")
@@ -592,6 +595,49 @@ class IdentityFlow(unittest.TestCase):
         self.assertEqual(call.mouth.spoken, ["Кто это?", "Звоню узнать про встречу."])
         self.assertIn(("Status", "person confirmed; the task starts now"), transcript.spoken)
 
+    def test_an_answered_call_with_no_caller_id_name_is_confirmed_once_the_note_has_their_name(self):
+        brain = FakeBrain("Здравствуйте! Как вас зовут? [CONFIRMED]", "Спасибо, Борис.")
+        call, transcript = conversation(brain)  # no task message: Pat answered, and Haiku has the task already
+        call._turn("алло", call.epoch)
+        self.assertEqual(call.reached, "not_checked")  # a mark from Haiku decides nothing on an answered call
+        call.caller_named([{"label": "Person", "value": None}, {"label": "Reason", "value": "привет"}])
+        self.assertEqual(call.reached, "not_checked")
+        call.caller_named([{"label": "Person", "value": "Борис"}, {"label": "Reason", "value": "привет"}])
+        call.caller_named([{"label": "Person", "value": "Борис"}])
+        self.assertEqual(call.reached, "confirmed")
+        self.assertEqual(transcript.spoken.count(("Status", "person confirmed")), 1)
+        self.assertNotIn("[CONFIRMED]", " ".join(call.mouth.spoken))  # never read aloud
+
+    def test_an_answered_call_with_a_caller_id_name_is_confirmed_by_their_reply_to_it(self):
+        brain = FakeBrain("Привет, Алекс! [CONFIRMED]", "Ой, простите, Борис. Чем помочь?", "Хорошо.")
+        transcript = pat.Transcript(tempfile.mkdtemp())
+        line = types.SimpleNamespace(ended=threading.Event())
+        call = pat.Conversation(line, iter(()), None, FakeMouth(), brain, transcript, "Здравствуйте.", nonce="abc123",
+                                language="ru", caller_id_name="Алекс")
+        transcript.add("Them", "алло")  # as the listening loop does before each turn
+        call._turn("алло", call.epoch)
+        self.assertEqual(call.reached, "not_checked")  # Haiku's early mark is ignored: they haven't answered the name yet
+        self.assertNotIn(("Status", "person confirmed"), transcript.spoken)
+        transcript.add("Them", "я не Алекс, я Борис")
+        call._turn("я не Алекс, я Борис", call.epoch)
+        self.assertEqual(call.reached, "confirmed")
+        status = transcript.spoken.index(("Status", "person confirmed"))
+        self.assertEqual(transcript.spoken[status - 1], ("Them", "я не Алекс, я Борис"))
+        transcript.add("Them", "передайте привет")
+        call._turn("передайте привет", call.epoch)
+        self.assertEqual(transcript.spoken.count(("Status", "person confirmed")), 1)
+
+    def test_once_an_answered_caller_is_known_haiku_is_told_not_to_ask_their_name_again(self):
+        brain = FakeBrain("Здравствуйте! Как вас зовут?", "Спасибо, Борис.", "Хорошо.")
+        call, transcript = conversation(brain)
+        call._turn("алло", call.epoch)
+        call.caller_named([{"label": "Person", "value": "Борис"}])
+        call._turn("я Борис", call.epoch)
+        call._turn("передайте привет", call.epoch)
+        told = [message for message in brain.messages if pat.KNOWN_CALLER in message]
+        self.assertEqual(len(told), 1)  # once, with the next reply after they are known
+        self.assertIn("я Борис", told[0])
+
     def test_task_is_sent_only_once(self):
         brain = FakeBrain("[CONFIRMED]", "Звоню.", "[CONFIRMED] Да.")
         call, _ = checked_call(brain)
@@ -768,6 +814,30 @@ class Report(unittest.TestCase):
     def test_report_is_parsed(self):
         reply = json.dumps({"outcome": "done", "answers": [], "summary": "ok", "follow_up": ""})
         self.assertEqual(Observer(lambda text: reply, []).final_report("goodbye")["outcome"], "done")
+
+    def test_an_answered_call_asks_about_the_contact_name_in_its_own_field(self):
+        asked = []
+        reply = json.dumps({"outcome": "done", "answers": [], "summary": "ok", "follow_up": ""})
+        observer = Observer(lambda text: (asked.append(text), reply)[1], [], owner="Aziz")
+        observer.final_report("goodbye")  # a call Pat placed: nothing about contacts
+        self.assertNotIn('"contact"', asked[-1])
+        observer.caller_id = ("Алекс", "Alex, Giotto Restaurant")
+        observer.final_report("goodbye")
+        self.assertIn('saved as Alex, Giotto Restaurant: update the contact?', asked[-1])
+        self.assertIn("greeted them as Алекс", asked[-1])
+        observer.caller_id = ("", "Smile Dental")  # saved, but with no name to greet them by
+        observer.final_report("goodbye")
+        self.assertIn('saved as Smile Dental: update the contact?', asked[-1])
+        self.assertNotIn("greeted", asked[-1])
+        observer.caller_id = ("", "")  # not in the contacts
+        observer.final_report("goodbye")
+        self.assertIn("isn't in Aziz's contacts", asked[-1])
+        self.assertIn("add to contacts?", asked[-1])
+        self.assertIn("Leave follow_up empty", asked[-1])  # the note's one Advice line, with nothing said twice
+
+    def test_the_report_is_about_the_call_not_how_haiku_did(self):
+        from call_brief import REPORT_REQUEST
+        self.assertIn("not how it went", REPORT_REQUEST)
 
     def test_report_failure_is_none(self):
         self.assertIsNone(Observer(lambda text: "nonsense", []).final_report("goodbye"))

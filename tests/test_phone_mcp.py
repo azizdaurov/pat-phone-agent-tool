@@ -55,6 +55,12 @@ class Card(unittest.TestCase):
                      "Reply by Friday", "come early"):
             self.assertIn(part, card)
 
+    def test_a_contact_question_gets_its_own_section(self):
+        card = render_card({"status": "done", "report": {"outcome": "done", "summary": "ok", "contact": "Says they are Sam: add to contacts?"}})
+        self.assert_frame_lines_up(card)
+        self.assertIn("CONTACT", card)
+        self.assertIn("add to contacts?", card)
+
     def test_long_labels_wrap_instead_of_being_cut(self):
         card = render_card({"status": "done", "report": {"outcome": "done", "answers": [{"label": "Time and place of the meeting", "answer": "11:00", "confirmed": True}]}})
         self.assert_frame_lines_up(card)

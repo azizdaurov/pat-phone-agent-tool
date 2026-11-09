@@ -31,6 +31,7 @@ from audio_defaults import CallDevices, chosen_devices, headset_problem, repair_
 from call_brief import (ASK_MARK, DEFAULT_ENGLISH_VOICE, END_MARK, ENGLISH_VOICES, HEARD_NOTHING, REACHED_MARKS, CallBrief,
                         caller_id_message, is_bare_answer)
 from caller_names import CallerNames
+import claude_errors
 from easter_eggs import EasterEggs, POEM_PROMPTS, WATSON, write_poem
 from live_call import LiveCall, SoundMeter, final_note, write_last_call
 from live_notes import INCOMING_LABELS, LiveNotes, NOTES_PROMPT
@@ -98,6 +99,9 @@ TAKING_OVER = {"en": "One moment, I'm passing you to {owner}.", "ru": "Одну 
 # When nobody comes to the phone during the identity check.
 NOBODY_CAME = {"en": "I couldn't reach them. We will call again. Goodbye.", "ru": "Не дождался ответа. Мы перезвоним. До свидания."}
 DEFAULT_ANSWER_GOAL = "Find out who is calling and why, and offer to pass on a message."
+# Told to Haiku on a call Pat answered, once Pat knows who called.
+KNOWN_CALLER = ("You now know who they are. Don't ask their name again, and don't ask for their full name, surname or phone number "
+                "unless your task asks for it.")
 WARM_UP = {"en": "The call is about to connect. Reply with just the word ready.",
            "ru": "Звонок сейчас начнётся. Ответь одним словом: готов."}
 # Said when Sonnet changes what Haiku will say. Varied, so it doesn't sound like a machine stalling.
@@ -668,8 +672,10 @@ class Conversation:
 
     def __init__(self, line, frames, ear, mouth, brain, transcript, opening, max_seconds=300,
                  nobody_seconds=NOBODY_THERE_SECONDS, observer=None, nonce="", owner=None, language="en",
-                 task_message=None):
+                 task_message=None, caller_id_name=""):
         self.task_message = task_message  # None when there's nobody to check for, and Haiku already has the task
+        # On a call Pat answered: the name Haiku greets them by, from caller ID. Their reply to that greeting settles who they are.
+        self.caller_id_name = caller_id_name
         self.confirmed = task_message is None
         self.reached = "not_checked" if task_message is None else "unclear"
         self.observer = observer
@@ -728,7 +734,8 @@ class Conversation:
         def speak(piece):
             for mark, reached in REACHED_MARKS.items():
                 if mark in piece:
-                    self.reached = reached
+                    if self.task_message is not None:  # on a call Pat answered, code decides when they're known: _caller_known
+                        self.reached = reached
                     piece = piece.replace(mark, "").strip()
             if question or ASK_MARK in piece:
                 question.append(piece.replace(ASK_MARK, "").strip())
@@ -764,6 +771,20 @@ class Conversation:
             delay = time.monotonic() - ended
             self.reply_delays.append(round(delay, 2))
             self.transcript.add("Pat", f"first audio {delay:.2f} s after their speech ended, plus {END_FRAMES * FRAME / MIC_RATE:.1f} s of waiting to be sure they had")
+
+    def _caller_known(self):
+        """On a call Pat answered: from here on, Pat knows who called. From their reply to the caller ID name, or else from
+        the sticky note's Person line, which a separate Claude fills in only from what they said."""
+        if self.reached != "confirmed":
+            self.reached = "confirmed"
+            self.transcript.add("Status", "person confirmed")
+            # Without this, Haiku asked again for a full name or contact details they had already given.
+            self.pending_note = f"{self.pending_note} {KNOWN_CALLER}" if self.pending_note else KNOWN_CALLER
+
+    def caller_named(self, facts):
+        """The sticky note's facts changed. Its Person line is filled in only once they've said who they are."""
+        if any(fact["label"] == "Person" and fact["value"] for fact in facts):
+            self._caller_known()
 
     def _start_task(self, token):
         """Hands Haiku the task once it has marked the person confirmed. Until then it has nothing to reveal."""
@@ -843,6 +864,9 @@ class Conversation:
             self.last_reply = []
             if text:
                 self.caller_turns += 1
+                # Haiku greets them by the caller ID name in its first reply. Their next words accept that name or correct it.
+                if self.task_message is None and self.caller_id_name and self.caller_turns == 2:
+                    self._caller_known()
                 message = re.sub(r"[\[\]]", " ", text)  # only Pat can write a supervisor mark
             else:
                 message = self._supervisor(prompt or "They made a short sound, but speech recognition got no words. "
@@ -850,9 +874,10 @@ class Conversation:
             if self.opening_pending:
                 self.opening_pending = False
                 opening_note = (f'The call is connected. The person has just heard this opening in full: "{self.opening}" '
-                                "Their words below respond to that opening. Do not say the greeting again. "
-                                "If they clearly answer its identity question with yes, mark them confirmed now; "
-                                "do not ask the same identity question again. If their answer is unclear, clarify it.")
+                                "Their words below respond to that opening. Do not say the greeting again.")
+                if self.task_message is not None:  # only the identity check's opening asks who they are
+                    opening_note += (" If they clearly answer its identity question with yes, mark them confirmed now; "
+                                     "do not ask the same identity question again. If their answer is unclear, clarify it.")
                 message = f"{self._supervisor(opening_note)}\n{message}"
             if self.pending_note:
                 message = f"{self._supervisor(self.pending_note)}\n{message}"
@@ -1314,9 +1339,12 @@ def tell_caller_name(brain, name, nonce):
 def start_brain(args, brief, opening, nonce, notes):
     print("Starting Claude...", flush=True)
     prompt = brief.haiku_prompt(SYSTEM_PROMPTS[brief.language], opening, args.owner, nonce, notes)
-    brain = Brain(brief.language, system_prompt=prompt)
-    for _ in brain.ask(f"[SUPERVISOR-{nonce}] {WARM_UP[brief.language]}"):
-        pass
+    try:
+        brain = Brain(brief.language, system_prompt=prompt)
+        for _ in brain.ask(f"[SUPERVISOR-{nonce}] {WARM_UP[brief.language]}"):
+            pass
+    except Exception as error:  # marked as Claude's, so the note can say it in plain words (claude_errors)
+        raise RuntimeError(f"{claude_errors.STARTING}{error}") from error
     return brain
 
 
@@ -1604,7 +1632,12 @@ def main():
         # Started before dialing, so a Claude failure can't leave someone on a silent call.
         key = number_key(args.number)
         notes, known = load_notes(key, args)
-        brain = start_brain(args, brief, opening, nonce, known)
+        try:
+            brain = start_brain(args, brief, opening, nonce, known)
+        except RuntimeError as error:
+            write_result(args, status="failed", reason=claude_errors.plain_reason(error))
+            live.close()
+            sys.exit(str(error))
 
     print("Connecting to your phone...", flush=True)
     os.makedirs(os.path.join(HERE, "calls"), exist_ok=True)
@@ -1632,6 +1665,7 @@ def main():
     status = "no_answer"
     reason = "the call was not answered"
     picked_up = None
+    caller_name = caller_id = ""
     try:
         if args.action == "dial":
             print(f"Dialing {args.number}. Claude's task: {brief.goal}", flush=True)
@@ -1655,7 +1689,8 @@ def main():
                 spoken_name = CallerNames().start(caller_id)  # checked while Claude starts; never the number
                 brain = start_brain(args, brief, opening, nonce, known)
                 live.update(stage="ringing", number=incoming[1], name=caller_id)
-                tell_caller_name(brain, spoken_name(), nonce)
+                caller_name = spoken_name()
+                tell_caller_name(brain, caller_name, nonce)
                 if args.wait_for_go and not wait_for_go(go, cancelled, line):
                     left_ringing = True
                     reason = "the sticky note took this call, or it stopped ringing"
@@ -1686,6 +1721,10 @@ def main():
         transcript.add("Pat", f"task: {brief.text()}")
         transcript.add("Pat", f"hearing through: {caller.name}; call audio: {line.audio}")
         observer, sonnet = start_observer(args, brief, transcript)
+        if caller_name:
+            transcript.add("Status", f"caller ID name: {caller_name}")
+        if observer and brief.incoming:
+            observer.caller_id = (caller_name, caller_id)
         live.update(stage="talking")
         frames = caller.frames()
         if args.save_audio:
@@ -1693,7 +1732,8 @@ def main():
         conversation = Conversation(line, frames, ear, mouth, brain, transcript, opening,
                                     max_seconds=args.max_minutes * 60, observer=observer, nonce=nonce,
                                     owner=args.owner, language=brief.language,
-                                    task_message=brief.task_message(args.owner, known) if brief.has_target() else None)
+                                    task_message=brief.task_message(args.owner, known) if brief.has_target() else None,
+                                    caller_id_name=caller_name)
         listen_for_keys(line, conversation)
         watch_take_over_key(conversation)
 
@@ -1705,6 +1745,8 @@ def main():
                 print(f"[no bullet points on the sticky note: {error}]", flush=True)
                 return
             transcript.on_them = live_notes.request
+            if brief.incoming and not caller_name:
+                live_notes.on_facts = lambda facts: conversation.caller_named(facts)
 
         def set_listening(on):
             nonlocal listening
@@ -1790,9 +1832,9 @@ def main():
         pat_facts = eggs.after_call(seconds, reason, reached) if seconds and transcript else []  # for the note only, never in the agent's result
         last_call = None
         if transcript:
-            facts, summary, next_step = final_note(report, live_notes.facts if live_notes else [], live_notes.summary if live_notes else "")
+            facts, summary, contact_question = final_note(report, live_notes.facts if live_notes else [], live_notes.summary if live_notes else "")
             last_call = dict(id=os.path.basename(transcript.path), number=live.fields.get("number", ""), name=live.fields.get("name") or brief.target() or display_book.display_name(live.fields.get("number", "")),
-                             facts=facts, summary=summary, next_step=next_step, flair=flair, pat_facts=pat_facts)
+                             facts=facts, summary=summary, contact_question=contact_question, flair=flair, pat_facts=pat_facts)
         poem = ""
         if args.summary_style and report:
             if last_call:  # the summary shows at once, and the poem joins it

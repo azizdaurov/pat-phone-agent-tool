@@ -45,6 +45,7 @@ class Observer:
         self.interventions = 0
         self.reviews = 0
         self.last_turn = None
+        self.caller_id = None  # on a call Pat answered: (name Haiku greeted them by, contact label); either may be empty
 
     def _new_lines(self):
         lines = self.spoken[self.sent:]
@@ -90,6 +91,26 @@ class Observer:
         thread.join(seconds)
         return answer[0] if answer and answer[0] else None
 
+    def _name_check(self):
+        """On a call Pat answered: one list of advice, and the name they gave, when it isn't the saved one, as a question."""
+        if not self.caller_id:
+            return ""
+        # The note shows both as one Advice line, and Sonnet kept saying the same deadline in each.
+        advice = (f"\nLeave follow_up empty: important_details holds what else {self.owner} should know or do, "
+                  "beyond the answers, each thing once.")
+        return advice + self._contact_check()
+
+    def _contact_check(self):
+        """The name they gave, when it isn't the saved one, as a question for the owner."""
+        name, label = self.caller_id
+        if label:
+            greeted = f", so Haiku greeted them as {name}" if name else ""
+            return (f"\nThe caller is saved in {self.owner}'s contacts as \"{label}\"{greeted}. If they gave a different name for "
+                    f"themselves, add a \"contact\" field to the JSON: \"Says they are <their name>; saved as {label}: update the "
+                    f"contact?\" Otherwise leave it out, and say nothing about names elsewhere.")
+        return (f"\nThis number isn't in {self.owner}'s contacts. If they said who they are, add a \"contact\" field to the JSON: "
+                f"\"Says they are <their name>: add to contacts?\" Otherwise leave it out, and say nothing about names elsewhere.")
+
     def final_report(self, reason, seconds=45):
         """The result for whoever asked for the call. None if Sonnet can't produce one in time."""
         report = []
@@ -97,7 +118,7 @@ class Observer:
         def run():
             with self.lock:
                 try:
-                    request = f"{self._new_lines()}\n\n{REPORT_REQUEST.format(reason=reason, owner=self.owner)}\n\n{date_lines()} {WRITE_REAL_DATES}"
+                    request = f"{self._new_lines()}\n\n{REPORT_REQUEST.format(reason=reason, owner=self.owner)}{self._name_check()}\n\n{date_lines()} {WRITE_REAL_DATES}"
                     report.append(real_dates(_first_json(self.ask(request))))
                 except Exception:
                     pass

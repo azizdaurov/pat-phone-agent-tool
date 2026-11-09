@@ -44,6 +44,7 @@ if sys.stdout is None:  # pythonw has no console
     sys.stdout = sys.stderr = open(os.path.join(CALLS, "note.log"), "a", encoding="utf-8", buffering=1)
 
 from audio_defaults import CallDevices, headset_problem  # noqa: E402
+from claude_errors import plain_reason  # noqa: E402
 from easter_eggs import EasterEggs, choose_next_style, split_style  # noqa: E402
 from live_call import SoundMeter, read_last_call, read_live, send_command, take_commands  # noqa: E402
 from note_settings import SETTINGS_NAME, NoteSettings  # noqa: E402
@@ -534,7 +535,7 @@ class Desk:
                 reason = json.load(f).get("reason") or reason
         except (OSError, ValueError, TypeError):
             pass
-        self.notice = reason[:NOTICE_CHARS]
+        self.notice = plain_reason(reason)[:NOTICE_CHARS]
         if self.screen == "ai":
             self.screen = "ringing"
             self.chosen_ai = False
@@ -587,7 +588,7 @@ class Desk:
                 state["talking"] = state["level"] > 0
             elif screen == "done":
                 state.update(number=last.get("number", ""), name=last.get("name", ""), facts=last.get("facts", []), summary=last.get("summary", ""),
-                             next_step=last.get("next_step", ""), always=False, flair=last.get("flair", []), pat_facts=last.get("pat_facts", []), poem=last.get("poem", ""),
+                             contact_question=last.get("contact_question", ""), always=False, flair=last.get("flair", []), pat_facts=last.get("pat_facts", []), poem=last.get("poem", ""),
                              poem_style=last.get("poem_style", ""), poem_pending=last.get("poem_pending", False))
                 self.showing_last = last.get("id")
             supplied_name, number = split_caller(state.get("number", ""))

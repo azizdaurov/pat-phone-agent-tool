@@ -115,6 +115,8 @@ def render_card(state):
         sections.append(_wrap(_clean(report["summary"]), TEXT_WIDTH))
     if report.get("follow_up") and _clean(report["follow_up"]):
         sections.append(["NEXT"] + _wrap(_clean(report["follow_up"]), TEXT_WIDTH))
+    if report.get("contact") and _clean(report["contact"]):
+        sections.append(["CONTACT"] + _wrap(_clean(report["contact"]), TEXT_WIDTH))
     if not report and state.get("reason"):
         sections.append(_wrap(_clean(state["reason"]), TEXT_WIDTH))
     for extra in state.get("flair") or []:

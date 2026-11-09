@@ -62,6 +62,33 @@ Check everything without making a call:
 Before calls, keep the Voicemeeter app closed, and disconnect Bluetooth headphones from the laptop
 ([why, and how to keep them](docs/audio.md#bluetooth-headphones)).
 
+## Update
+
+Quit Pat first: right-click its icon in the tray and choose Quit. Then, in the project folder:
+
+```powershell
+git pull
+powershell -ExecutionPolicy Bypass -File setup.ps1
+```
+
+Setup installs what the new version needs and rebuilds the phone helper. Your calls, contacts, settings and profile stay
+as they are. Open Pat again when setup is done. Claude Code chats that were open during the update use the new phone
+tool once you restart them.
+
+## Uninstall
+
+Quit Pat from its tray icon, then, in the project folder:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File uninstall.ps1
+```
+
+It puts your default speaker and microphone back on real devices and removes Pat's phone tool, shortcuts and phone
+helper. It asks before removing the audio drivers, turning off Developer Mode, or turning Phone Link's start at sign-in
+back on, since other apps may use them; the default is no. Python, the .NET SDK and the phone's Bluetooth pairing stay.
+Your calls and contacts stay in the folder: copy what you want to keep, then delete the folder. `-Rehearse` shows the
+steps without changing anything.
+
 ## Use
 
 **The note.** Setup opens it; afterwards run `.venv\Scripts\pythonw.exe note.py`. Type what you want in its bar. When a

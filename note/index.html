@@ -72,7 +72,7 @@ h1{margin:0;font-size:19px;font-weight:700;line-height:1.2;pointer-events:none}
 #mixer{display:flex;align-items:center;justify-content:space-between;height:53px;margin-top:13px;padding-top:12px;border-top:1px solid var(--rule)}
 .bar{display:block;width:6px;height:6px;border-radius:3px;background:var(--pale)}
 #done-summary{margin:13px 0 0;font-size:14px;line-height:1.35;user-select:text}
-#done-next{margin:8px 0 0;font-size:13px;font-style:italic;line-height:1.35;color:var(--muted);user-select:text}
+#done-contact{margin:8px 0 0;font-size:13px;font-style:italic;line-height:1.35;color:var(--muted);user-select:text}
 #done{width:100%;margin-top:13px}
 ul{display:flex;flex-direction:column;gap:6px;margin:13px 0 0;padding:12px 0 0 15px;font-size:14px;line-height:1.3;border-top:1px solid var(--rule)}
 li span{pointer-events:none}
@@ -177,7 +177,7 @@ pre{margin:0 0 7px;font:12px/1.15 Consolas,'Courier New',monospace;color:var(--m
 
     <section id="s-done" hidden>
       <p id="done-summary"></p>
-      <p id="done-next"></p>
+      <p id="done-contact"></p>
       <div id="done-flair" hidden></div>
       <div id="poem-wrap" hidden>
         <div id="poem-writing" hidden></div>
@@ -327,8 +327,8 @@ function render(state) {
   $('facts').hidden = !(screen === 'ai' || screen === 'done') || !(state.facts || []).length;
   $('done-summary').textContent = state.summary || '';
   $('done-summary').hidden = !state.summary;
-  $('done-next').textContent = state.next_step || '';
-  $('done-next').hidden = !state.next_step;
+  $('done-contact').textContent = state.contact_question || '';
+  $('done-contact').hidden = !state.contact_question;
   $('summary').textContent = state.summary || '';
   $('summary').hidden = !state.summary;
   $('listen').classList.toggle('on', Boolean(state.listening));

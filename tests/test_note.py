@@ -347,6 +347,15 @@ class AnsweringWithAI(DeskCase):
         self.assertEqual(state["screen"], "ringing")
         self.assertIn("Wireless Buds", state["notice"])
 
+    def test_an_expired_claude_login_says_what_to_do_in_plain_words(self):
+        self.ring()
+        self.desk.answer_ai()
+        with open(self.desk.result_file, "w", encoding="utf-8") as f:
+            json.dump({"status": "failed", "reason": "Claude couldn't start: Invalid API key · Please run /login"}, f)
+        self.calls[0].finished = 1
+        self.desk.ai_since -= 10
+        self.assertIn("type /login", self.desk.state()["notice"])
+
     def test_the_claude_kept_ready_while_it_rang_ends_quietly_when_nobody_asked_for_ai(self):
         """Its exit after Me, or after the ringing stops, isn't a failure, so its reason never shows."""
         self.ring()
@@ -764,13 +773,13 @@ class AfterACall(DeskCase):
 
     def finish_a_call(self, call_id="call-1"):
         live_call.write_last_call(self.folder, id=call_id, number="+998900000001", name="Alex", summary=self.LONG,
-                                  next_step="Bring a suit.", facts=[{"label": "Time", "value": "11:00"}])
+                                  contact_question="Says they are Sam: add to contacts?", facts=[{"label": "Time", "value": "11:00"}])
 
     def test_summary_stays_whole_until_dismissed(self):
         self.finish_a_call()
         for _ in range(3):
             state = self.desk.state()
-            self.assertEqual((state["screen"], state["name"], state["next_step"]), ("done", "Alex", "Bring a suit."))
+            self.assertEqual((state["screen"], state["name"], state["contact_question"]), ("done", "Alex", "Says they are Sam: add to contacts?"))
             self.assertEqual(state["summary"], self.LONG)
         self.desk.dismiss()
         self.assertEqual(self.desk.state()["screen"], "idle")
@@ -833,16 +842,18 @@ class Sound(unittest.TestCase):
 class FinalNote(unittest.TestCase):
     def test_sonnets_report_is_used_whole(self):
         long = "x" * 300
-        facts, summary, next_step = live_call.final_note({"answers": [{"label": "Place", "answer": long}, {"need": "When?", "answer": None}], "summary": long,
-                                                          "important_details": ["Bring a suit"], "follow_up": "Reply by Friday"}, [], "ignored")
-        self.assertEqual(facts, [{"label": "Place", "value": long}, {"label": "When?", "value": "not found"}])
+        facts, summary, contact = live_call.final_note({"answers": [{"label": "Place", "answer": long}, {"need": "When?", "answer": None}], "summary": long,
+                                                        "important_details": ["Bring a suit."], "follow_up": "Reply by Friday.",
+                                                        "contact": "Says they are Sam; saved as Alex: update the contact?"}, [], "ignored")
+        self.assertEqual(facts, [{"label": "Place", "value": long}, {"label": "When?", "value": "not found"},
+                                 {"label": "Advice", "value": "Bring a suit. Reply by Friday."}])  # the last bullet
         self.assertEqual(summary, long)
-        self.assertEqual(next_step, "Bring a suit Reply by Friday")
+        self.assertEqual(contact, "Says they are Sam; saved as Alex: update the contact?")
 
     def test_no_report_falls_back_to_the_live_note_with_no_dots_left(self):
-        facts, summary, next_step = live_call.final_note(None, [{"label": "Time", "value": None}, {"label": "Person", "value": "Alex"}], "Meeting")
+        facts, summary, contact = live_call.final_note(None, [{"label": "Time", "value": None}, {"label": "Person", "value": "Alex"}], "Meeting")
         self.assertEqual(facts, [{"label": "Time", "value": "not found"}, {"label": "Person", "value": "Alex"}])
-        self.assertEqual((summary, next_step), ("Meeting", ""))
+        self.assertEqual((summary, contact), ("Meeting", ""))
 
     def test_odd_reports_cant_break_it(self):
         for report in ("nonsense", {}, {"answers": None}, {"answers": ["x"]}, {"important_details": None}):
@@ -1042,6 +1053,16 @@ class Notes(unittest.TestCase):
     def test_incoming_call_starts_with_dots_for_each_label(self):
         notes = live_notes.LiveNotes(lambda text: "", ["why"], live_notes.INCOMING_LABELS)
         self.assertEqual([(f["label"], f["value"]) for f in notes.facts], [("Person", None), ("Reason", None), ("Message", None)])
+        notes.close()
+
+    def test_each_update_is_passed_on_and_a_failing_listener_cant_stop_the_note(self):
+        seen = []
+        notes = live_notes.LiveNotes(lambda text: '{"facts":[{"label":"Person","value":"Sam"}],"summary":"Message"}', ["who"], ["Person"])
+        notes.on_facts = lambda facts: (seen.append(facts), 1 / 0)
+        notes.request([("Them", "It's Sam")])
+        self.wait_until(lambda: seen)
+        self.assertEqual(seen[0], [{"label": "Person", "value": "Sam"}])
+        self.assertEqual(notes.summary, "Message")
         notes.close()
 
     def test_answer_arrives_and_a_later_reply_cant_take_it_back(self):

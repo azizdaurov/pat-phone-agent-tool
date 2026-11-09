@@ -458,19 +458,19 @@ class TheNote(DeskCase):
 
     def test_after_a_call_shows_flair_and_poem(self):
         import live_call
-        live_call.write_last_call(self.folder, id="new", number="", name="Dentist", facts=[], summary="ok", next_step="",
+        live_call.write_last_call(self.folder, id="new", number="", name="Dentist", facts=[], summary="ok", contact_question="",
                                   flair=[{"text": "Happy birthday, telephone! First call: 1876."}], poem_style="haiku", poem_pending=True)
         state = self.desk.state()
         self.assertEqual((state["screen"], state["poem_pending"], state["poem_style"]), ("done", True, "haiku"))
         self.assertIn("birthday", state["flair"][0]["text"])
         self.assertIsNone(state["panel"])
-        live_call.write_last_call(self.folder, id="new", number="", name="Dentist", facts=[], summary="ok", next_step="", flair=[], poem="Eleven o'clock", poem_style="haiku")
+        live_call.write_last_call(self.folder, id="new", number="", name="Dentist", facts=[], summary="ok", contact_question="", flair=[], poem="Eleven o'clock", poem_style="haiku")
         state = self.desk.state()
         self.assertEqual((state["poem"], state["poem_pending"]), ("Eleven o'clock", False))
 
     def test_facts_show_after_a_call_but_never_reach_the_agents_result(self):
         import live_call
-        live_call.write_last_call(self.folder, id="new", number="", name="Dentist", facts=[], summary="ok", next_step="", pat_facts=["Pat fact #1: Pat has eight arms."])
+        live_call.write_last_call(self.folder, id="new", number="", name="Dentist", facts=[], summary="ok", contact_question="", pat_facts=["Pat fact #1: Pat has eight arms."])
         self.assertEqual(self.desk.state()["pat_facts"], ["Pat fact #1: Pat has eight arms."])
         self.assertNotIn("eight arms", render_card({"status": "done", "pat_facts": ["Pat fact #1: Pat has eight arms."]}))
 
