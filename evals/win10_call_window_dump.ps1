@@ -31,7 +31,13 @@ while ((Get-Date) -lt $end) {
     $windows = $root.FindAll([System.Windows.Automation.TreeScope]::Children, [System.Windows.Automation.Condition]::TrueCondition) |
         Where-Object { $_.Current.Name -match '^(Call|Calls|Phone)' -or $_.Current.ClassName -match 'Call' }
     $now = ($windows | ForEach-Object { Dump $_ }) -join "`n"
-    if (-not $now) { $now = '(no Call window)' }
+    if (-not $now) {
+        # Not found by name: list every top-level window, so the Call window can be recognised by its class or process.
+        $now = "(no window named Call; all top-level windows:)`n" + (($root.FindAll([System.Windows.Automation.TreeScope]::Children,
+            [System.Windows.Automation.Condition]::TrueCondition) | ForEach-Object {
+                "  '$(& $hide $_.Current.Name)' class=$($_.Current.ClassName) process=$((Get-Process -Id $_.Current.ProcessId -ErrorAction SilentlyContinue).ProcessName)"
+            }) -join "`n")
+    }
     if ($now -ne $last) { "`n--- $(Get-Date -Format HH:mm:ss)`n$now"; $last = $now }
     Start-Sleep -Milliseconds 700
 }
