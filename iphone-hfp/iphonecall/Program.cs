@@ -5,7 +5,7 @@ using System.Runtime.InteropServices;
 using Windows.ApplicationModel.Activation;
 using Windows.ApplicationModel.Calls;
 
-const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | lines | phones | self-test | audio-devices-json | unregister | pair [--json]] [--device <name> | --device-id <id>] [--stay-on-phone] [--follow-phone]";
+const string Usage = "usage: iphonecall [shell | dial <number> | status | list | list-json | lines | phones | self-test | audio-devices-json | unregister | pair [--json] | win10-probe] [--device <name> | --device-id <id>] [--stay-on-phone] [--follow-phone]";
 const string Help = "commands: d <number> dial | a answer | h hang up/reject | m mute on/off |\n" +
                     "          l audio on laptop | p audio on phone | s status | q quit";
 
@@ -32,7 +32,7 @@ for (int i = 0; i < args.Length; i++)
     else rest.Add(args[i]);
 }
 string action = rest.Count > 0 ? rest[0].ToLowerInvariant() : "shell";
-if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "lines" or "phones" or "self-test" or "audio-devices-json" or "unregister" or "pair"))
+if (action is not ("shell" or "dial" or "status" or "list" or "list-json" or "lines" or "phones" or "self-test" or "audio-devices-json" or "unregister" or "pair" or "win10-probe"))
 {
     Console.WriteLine(Usage);
     return action is "help" or "-h" or "--help" ? 0 : 1;
@@ -110,6 +110,8 @@ try
 
     // --follow-phone: for a shell that waits for calls for hours. It closes, so its owner can start a new one, when the
     // phone in use disconnects, or when a phone chosen by --device-id comes back after this line fell back to another.
+    if (action == "win10-probe") return await Win10Probe.RunAsync(line);
+
     var watch = followPhone ? await PhoneWatch.CreateAsync(phone, string.IsNullOrEmpty(deviceId) ? null : info) : null;
     var session = new CallSession(line) { CloseAfterCalls = openedForCall, MoveToLaptop = !(openedForCall || stayOnPhone), Watch = watch };
     if (openedForCall) Console.WriteLine("opened by Windows for a call; this window closes when the call ends");
