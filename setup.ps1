@@ -236,7 +236,9 @@ function Ask-To-Restart {
 
 Step 'Windows'
 $build = [Environment]::OSVersion.Version.Build
-if ($build -lt 22000) { throw "Pat needs Windows 11; this is build $build." }
+# Windows 10 can pair the phone and dial, but has no PhoneCall API (build 20348+) for answering, hanging up or moving a
+# call's audio from an app: tried 10 Nov on build 19045, iphonecall crashed on GetAllActivePhoneCalls. See branch windows-10-trial.
+if ($build -lt 22000) { throw "Pat needs Windows 11 (this is build $build). Windows 10 can pair your phone, but it doesn't let apps answer, hang up or move a call's audio." }
 "Windows build $build"
 # Run as administrator, setup still works, but everything per-user (Python, the Claude login, the phone tool, the
 # mobile-devices switch) lands in the account that opened the window. Another account's password puts it in the wrong one.
