@@ -21,7 +21,7 @@
 | `--name`, `--company`, `--confidence` | Who you're trying to reach; see [checking who answered](#checking-who-answered) |
 | `--brief-file brief.json` | A full brief, with the fields below |
 | `--time-zone`, `--date-format` | For someone in another zone, or another date style in the report |
-| `--max-minutes` | Call length limit, default 5 |
+| `--max-minutes` | Call length limit: 5 by default, and never more than 5 |
 | `--audible` | Hear the call on your real speaker |
 | `--no-observer` | No Sonnet on this call |
 | `--save-audio` | Keep the other person's voice as a WAV. Only with their agreement |
@@ -137,6 +137,8 @@ Transcripts stay word for word.
   unless the brief allows it. These rules rely on the model, so write briefs with that in mind.
 - It has no tools: it can only talk. Don't put anything in a brief you wouldn't want said aloud.
 - A call ends when Claude says goodbye, the other person leaves, 60 seconds pass without speech, or the time limit hits.
+  No call lasts more than 5 minutes. At the limit Claude says "Unfortunately I have to finish the call, as it has run
+  too long. Goodbye." and Pat hangs up, even if they talk over it.
 - Russian and English only.
 
 ## Known limits
@@ -145,5 +147,5 @@ Transcripts stay word for word.
 - When interrupted, Pat estimates what was heard from the audio played and rounds down to a whole word, so Claude may
   repeat a few words but shouldn't skip any. The transcript marks it `(cut off, heard only: ...)`.
 - After 8 s of silence Claude checks they're still there, at most twice in a row.
-- Talking over Claude's goodbye keeps the call going (`_finish_if_goodbye` in `pat.py`); `--max-minutes` limits that.
+- Talking over Claude's goodbye keeps the call going (`_finish_if_goodbye` in `pat.py`), until the 5-minute limit.
 - It depends on `claude -p` working on your plan login, and on Haiku 4.5 staying available.

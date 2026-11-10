@@ -33,6 +33,26 @@ def international_number(text, country=None):
     return phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.E164)
 
 
+def valid_number(text, country=None):
+    """The number in +E.164 if the text is a phone number that really exists in its country's plan, else None.
+    Stricter than international_number, which only checks the length."""
+    try:
+        number = international_number(text, country)
+        return number if phonenumbers.is_valid_number(phonenumbers.parse(number)) else None
+    except (ValueError, TypeError, phonenumbers.NumberParseException):
+        return None
+
+
+def local_forms(number):
+    """The digits of a number as its own country writes it: with the trunk prefix (07700900123) and without (7700900123)."""
+    try:
+        parsed = phonenumbers.parse(number)
+    except phonenumbers.NumberParseException:
+        return set()
+    national = re.sub(r"\D", "", phonenumbers.format_number(parsed, phonenumbers.PhoneNumberFormat.NATIONAL))
+    return {form for form in (national, str(parsed.national_number)) if len(form) >= 7}
+
+
 def full_number_key(text, country=None):
     try:
         return international_number(text, country).lstrip("+")

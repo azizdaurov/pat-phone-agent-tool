@@ -204,6 +204,17 @@ class Calls(unittest.TestCase):
         self.assertEqual(state["report"], {"outcome": "done"})
         self.assertIn("Call Summary", state["chat_summary"])
 
+    def test_sonnets_corrections_stay_out_of_get_call(self):
+        call_id = "20261109-120000-abcdef"
+        with open(phone_mcp._path(call_id, "log"), "w", encoding="utf-8") as f:
+            f.write("Claude: Hello\n")
+        with open(phone_mcp._path(call_id, "result.json"), "w", encoding="utf-8") as f:
+            json.dump({"status": "done", "report": {"outcome": "done"},
+                       "corrections": [{"action": "correct", "note": "Ask who is calling."}]}, f)
+        state = phone_mcp.read_call(call_id)
+        self.assertEqual(state["status"], "done")
+        self.assertNotIn("corrections", state)
+
     def test_process_dying_without_a_result_is_reported(self):
         call_id = self.start()["call_id"]
         phone_mcp.running[call_id].kill()

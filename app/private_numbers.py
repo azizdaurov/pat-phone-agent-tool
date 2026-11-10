@@ -9,20 +9,43 @@ import json
 import os
 import re
 import sys
+import unicodedata
 
 from phone_memory import FOLDER, number_key
-from phone_numbers import international_number, unambiguous_legacy_keys
+from phone_numbers import international_number, local_forms, unambiguous_legacy_keys, valid_number
 
 BOOK_NAME = "book.json"  # {name: number}
 PLACEHOLDERS_NAME = "private_numbers.json"  # {"#1": number}
 # Country metadata decides the length, including short international numbers. Colons are valid delimiters.
-NUMBER_LIKE = re.compile(r"(?<![\w#])\+?\d(?:[ \t().-]*\d){2,14}(?![\w])")
+NUMBER_LIKE = re.compile(r"(?<![\w#+])\+?\d(?:[ \t().-]*\d){2,14}(?![\w])")
+# Also split by slashes, underscores, commas, other dashes and spaces, or glued to a word. Anything only this finds is
+# hidden only if it's a known number or a real one, so dates, amounts and lists stay.
+LOOSE_NUMBER = re.compile(r"(?<![\d#])\+?\d(?:[\s   ().\-/_,‐-―−]*\d){2,14}(?!\d)")
 DATE_FIRST = re.compile(r"\d{4}[-./]\d{1,2}[-./]\d{1,2}")
+DATE = re.compile(r"(\d{1,2})([-./])(\d{1,2})\2(\d{4}|\d{2})")  # 4-11-2026, 13.11.2026, 12/11/2026
+YEARS = re.compile(r"(?:19|20)\d\d\s*[-‐-―]\s*(?:19|20)\d\d")  # 2015-2020
+AMOUNT = re.compile(r"\d{1,3}(?:[    .,']\d{3})+")  # 1 500 000, 15.000.000, 15,000,000
 PLACEHOLDER = re.compile(r"#\d+")
 
 
 def digit_count(text):
     return len(re.sub(r"\D", "", text))
+
+
+def digits_of(text):
+    """The digits in the text, as 0-9 even if typed in another script or full width."""
+    return "".join(str(unicodedata.decimal(char)) for char in text if char.isdecimal())
+
+
+def looks_like_a_date(text):
+    text = text.strip()
+    if DATE_FIRST.match(text) or YEARS.fullmatch(text):
+        return True
+    match = DATE.fullmatch(text)
+    if not match:
+        return False
+    first, second = int(match.group(1)), int(match.group(3))
+    return 1 <= first <= 31 and 1 <= second <= 31 and min(first, second) <= 12
 
 
 def split_caller(who):
@@ -154,13 +177,41 @@ class PrivateNumbers:
         """Swaps every number in what someone typed for its label, before it leaves the laptop."""
         def swap(match):
             found = match.group(0)
-            if DATE_FIRST.match(found):
+            if looks_like_a_date(found):
                 return found
+            if AMOUNT.fullmatch(found):  # grouped like money: hidden only if it's a known or real number
+                return self._label_if_real(found) or found
             try:
                 return self.label_for(found, allow_unresolved=True)
             except ValueError:
                 return found
-        return NUMBER_LIKE.sub(swap, text)
+
+        def swap_loose(match):
+            found, whole = match.group(0), match.string
+            label = None if looks_like_a_date(found) else self._label_if_real(found)
+            if not label:
+                return found
+            before = whole[match.start() - 1] if match.start() else ""
+            after = whole[match.end()] if match.end() < len(whole) else ""
+            return (" " if before.isalpha() else "") + label + (" " if after.isalpha() else "")
+        return LOOSE_NUMBER.sub(swap_loose, NUMBER_LIKE.sub(swap, text))
+
+    def _label_if_real(self, found):
+        """The label for a known number, or for one that really exists, however it's written. None for anything else."""
+        digits = digits_of(found)
+        if len(digits) < 7:
+            return None
+        candidates = ["+" + digits] if "+" in found else [digits, "+" + digits]
+        known = self._known()
+        for candidate in candidates:
+            key = number_key(candidate)
+            if key in known:
+                return known[key]
+        for candidate in candidates:
+            number = valid_number(candidate)
+            if number:
+                return self.label_for(number)
+        return None
 
     def reveal(self, text):
         """Placeholders back to numbers, for showing to the owner."""
@@ -183,11 +234,20 @@ class PrivateNumbers:
         """Copies a result with each number this laptop knows swapped for its label: as written, and as the digits in a file name.
         Numbers it doesn't know stay, as one may be what the call was for."""
         known = self._known()
+        local = {}  # a known number as its own country writes it, such as 07700 900123 for +44 7700 900123
+        for key, label in known.items():
+            for form in local_forms("+" + key):
+                local.setdefault(form, label)
 
         def clean(text):
             def swap(match):
-                return known.get(number_key(match.group(0)), match.group(0))
-            text = NUMBER_LIKE.sub(swap, text)
+                found = match.group(0)
+                label = known.get(number_key(found))
+                if label is None:
+                    digits = digits_of(found)
+                    label = known.get(digits) or local.get(digits)
+                return found if label is None else label
+            text = LOOSE_NUMBER.sub(swap, text)
             for key in sorted(known, key=len, reverse=True):
                 text = re.sub(rf"(?<!\d){re.escape(key)}(?!\d)", lambda _: known[key], text)
             return text

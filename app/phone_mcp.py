@@ -28,7 +28,7 @@ from user_profile import requires_setup, setup_refusal
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
 CALLS = os.path.join(HERE, "calls")
 COMMAND = [sys.executable, os.path.join(HERE, "pat.py")]
-MAX_MINUTES = 15
+MAX_MINUTES = 5  # pat.MAX_CALL_MINUTES: Pat caps every call at this too
 GET_CALL_MAX_WAIT = 50
 
 GUIDE = """Places real phone calls from the owner's paired phone. A fast AI (Haiku) speaks and listens; a supervisor AI (Sonnet) steps in only if the call goes off the rails. You won't take part during the call, so everything Haiku needs must be in the brief.
@@ -121,6 +121,7 @@ def read_call(call_id):
     if os.path.exists(result_path):
         with open(result_path, encoding="utf-8") as f:
             state.update(json.load(f))
+        state.pop("corrections", None)  # Sonnet's notes on Haiku stay in the file, for analysis; the agent doesn't need them
         state = private.hide(state)
         state["chat_summary"] = render_card(state)
         return state

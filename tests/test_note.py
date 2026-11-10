@@ -217,6 +217,15 @@ class AgentReply(DeskCase):
         live_call.write_last_call(self.folder, id="a call")
         self.assertEqual(self.desk.state()["notice"], "Couldn't set up the laptop's audio")
 
+    def test_the_agent_gets_only_the_phone_tools(self):
+        args = note.agent_command("claude", "call Alex")
+        self.assertEqual(args[args.index("--tools") + 1], "")  # no Read or Grep, so it can't open contacts/book.json
+        self.assertIn("--strict-mcp-config", args)  # and none of the claude.ai connectors
+        servers = json.loads(args[args.index("--mcp-config") + 1])["mcpServers"]
+        self.assertEqual(list(servers), ["pat-phone"])
+        self.assertTrue(servers["pat-phone"]["args"][0].endswith("phone_mcp.py"))
+        self.assertTrue(servers["pat-phone"]["command"].endswith("python.exe"))
+
 
 class Ringing(DeskCase):
     def test_idle_until_it_rings(self):

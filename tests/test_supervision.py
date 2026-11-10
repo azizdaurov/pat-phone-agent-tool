@@ -203,6 +203,22 @@ class Turns(unittest.TestCase):
         self.assertIn("Take back the promise", brain.messages[0])
         self.assertIn(call.mouth.spoken[0], brain.messages[0])
 
+    def test_a_correct_is_kept_for_the_result_file(self):
+        brain = FakeBrain("Как вас зовут?")
+        call, _ = conversation(brain, Observer(lambda text: CORRECT, []))
+        call._review(3)
+        record = call.corrections[0]
+        self.assertEqual((record["action"], record["turn"], record["note"]), ("correct", 3, "Take back the promise."))
+        self.assertIn(record["stall"], pat.STALLS["ru"])
+        self.assertEqual(record["said_next"], "Как вас зовут?")
+        self.assertIn(pat.CARRY_ON, brain.messages[0])
+
+    def test_a_steer_is_kept_with_the_reply_it_led_to(self):
+        call, _ = conversation(FakeBrain("В воскресенье?"), Observer(lambda text: STEER, []))
+        call._review(3)
+        call._turn("первый", call.epoch)
+        self.assertEqual((call.corrections[0]["action"], call.corrections[0]["said_next"]), ("steer", "В воскресенье?"))
+
     def test_stall_phrases_vary(self):
         phrases = set()
         for _ in range(40):
@@ -706,6 +722,30 @@ class IdentityFlow(unittest.TestCase):
             pat.SpeechDetector = original
             call.turn_lock.release()
         self.assertEqual(call.mouth.spoken, [pat.NOBODY_CAME["ru"]])
+
+    def test_the_time_limit_ends_with_a_fixed_goodbye_that_nothing_cuts(self):
+        call, transcript = conversation(FakeBrain())
+        call.opening_done.set()
+        call.frames = iter([pat.np.zeros(pat.FRAME, dtype=pat.np.float32)] * 3)
+        call.max_seconds = 0
+        call.turn_lock.acquire()  # the opening has nothing to do in this test
+        original = pat.SpeechDetector
+        pat.SpeechDetector = lambda: (lambda frame: 0.0)
+        try:
+            time.sleep(0.01)
+            self.assertEqual(call.run(), "time limit")
+        finally:
+            pat.SpeechDetector = original
+            call.turn_lock.release()
+        ending = "К сожалению, мне придётся закончить звонок, так как он слишком затянулся. До свидания."
+        self.assertEqual(call.mouth.spoken, [ending])
+        call._correct("Say something else.")  # a review still running when the time ran out
+        self.assertEqual(call.mouth.spoken, [ending])
+
+    def test_no_call_is_longer_than_five_minutes(self):
+        self.assertEqual(pat.MAX_CALL_MINUTES, 5)
+        self.assertEqual(pat.ENDING["en"].format(reason=pat.ENDING_REASONS["time limit"]["en"]),
+                         "Unfortunately I have to finish the call, as it has run too long. Goodbye.")
 
 
 class QuietFrames:

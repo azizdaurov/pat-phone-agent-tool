@@ -81,6 +81,19 @@ class TypedNumbers(unittest.TestCase):
         for text in ("meet at 11:00", "on 2026-11-03", "on 2026-11-03 at 10:30", "room 12", "costs 500 000 sum", "call Rustam", "#1", "version 1.2.3"):
             self.assertEqual(self.private.protect(text), text)
 
+    def test_numbers_split_or_glued_in_other_ways_are_swapped_too(self):
+        first = self.private.protect("+998 90 123 45 67")
+        for written in ("+998/90/123/45/67", "+998_90_123_45_67", "+998 90 123 45 67", "+998–90–123–45–67",
+                        "+998,90,123,45,67", "tel+998901234567", "tel998901234567", "998901234567x"):
+            text = self.private.protect(f"call {written} please")
+            self.assertIn(first, text, written)
+            self.assertNotIn("123", text, written)
+
+    def test_dates_amounts_and_lists_stay(self):
+        for text in ("on 4-11-2026", "on 13.11.2026", "on 12/11/2026", "from 2015-2020", "costs 1 500 000 sum", "costs 15,000,000 sum",
+                     "costs 15.000.000 sum", "rooms 101, 102, 103"):
+            self.assertEqual(self.private.protect(text), text)
+
     def test_unknown_placeholder_is_refused(self):
         with self.assertRaisesRegex(LookupError, "#9"):
             self.private.resolve("#9")
@@ -114,6 +127,11 @@ class Results(unittest.TestCase):
 
     def test_other_numbers_said_on_the_call_stay(self):
         self.assertEqual(self.private.hide("Their office is +998 71 123 45 67"), "Their office is +998 71 123 45 67")
+
+    def test_a_foreign_contact_said_in_its_own_local_form_is_hidden(self):
+        self.private.add_contact("Drama", "+44 7700 900123")  # a UK number kept for TV and film
+        self.assertEqual(self.private.hide("Them: it's 07700 900123"), "Them: it's Drama")
+        self.assertEqual(self.private.hide("Them: it's 7700 900123"), "Them: it's Drama")
 
     def test_contacts_are_hidden_too(self):
         self.private.add_contact("Рустам", "+998 90 000 00 02")

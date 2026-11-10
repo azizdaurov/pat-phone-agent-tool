@@ -119,8 +119,10 @@ calls**: Pat pairs the phone again and registers first. [Details](docs/phone.md)
 ## Privacy
 
 - `calls/` and `contacts/` hold transcripts, notes and real numbers. They're ignored by git and never leave the laptop.
-- Numbers typed into the note are swapped for a contact's name or `#1` before Claude sees them. Numbers typed into a
-  Claude Code chat reach Claude, so use names there.
+- Numbers typed into the note are swapped for a contact's name or `#1` before Claude sees them, however the digits are
+  split. Dates and amounts stay; numbers written in words aren't caught. Numbers typed into a Claude Code chat reach
+  Claude, so use names there.
+- The note's agent gets only Pat's phone tools: it can't open files, so it can't read `contacts/`.
 - Names, the task and everything said on a call do go to Claude.
 
 ## Something wrong?

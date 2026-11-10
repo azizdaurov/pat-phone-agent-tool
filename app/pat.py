@@ -98,6 +98,11 @@ OPENINGS = {
 TAKING_OVER = {"en": "One moment, I'm passing you to {owner}.", "ru": "Одну секунду, передаю трубку. С вами будет говорить {owner_ru}."}
 # When nobody comes to the phone during the identity check.
 NOBODY_CAME = {"en": "I couldn't reach them. We will call again. Goodbye.", "ru": "Не дождался ответа. Мы перезвоним. До свидания."}
+# No call lasts longer, so nobody can keep Claude on the line by talking over every goodbye (Aziz, 9 Nov).
+MAX_CALL_MINUTES = 5
+# Said in Claude's voice when Pat itself ends the call. Pat hangs up after it, even if they talk over it.
+ENDING = {"en": "Unfortunately I have to finish the call{reason}. Goodbye.", "ru": "К сожалению, мне придётся закончить звонок{reason}. До свидания."}
+ENDING_REASONS = {"time limit": {"en": ", as it has run too long", "ru": ", так как он слишком затянулся"}}
 DEFAULT_ANSWER_GOAL = "Find out who is calling and why, and offer to pass on a message."
 # Told to Haiku on a call Pat answered, once Pat knows who called.
 KNOWN_CALLER = ("You now know who they are. Don't ask their name again, and don't ask for their full name, surname or phone number "
@@ -105,8 +110,12 @@ KNOWN_CALLER = ("You now know who they are. Don't ask their name again, and don'
 WARM_UP = {"en": "The call is about to connect. Reply with just the word ready.",
            "ru": "Звонок сейчас начнётся. Ответь одним словом: готов."}
 # Said when Sonnet changes what Haiku will say. Varied, so it doesn't sound like a machine stalling.
-STALLS = {"en": ["One moment.", "Just a moment, please.", "One second.", "Sorry, one moment.", "Hold on a second, please."],
-          "ru": ["Одну секунду.", "Секундочку.", "Минутку, пожалуйста.", "Одну минуту.", "Извините, одну секунду."]}
+# No "sorry": after a correction the call should carry on as if nothing went wrong.
+STALLS = {"en": ["One moment.", "Just a moment, please.", "One second.", "Hold on a second, please."],
+          "ru": ["Одну секунду.", "Секундочку.", "Минутку, пожалуйста.", "Одну минуту."]}
+# Added to Sonnet's note after a correction. On the 7 Nov call Haiku began its corrected line with "Прошу прощения, я ошибся".
+CARRY_ON = ("Carry on naturally from there: no sorry or apology, even if the note's wording has one; don't say you made a mistake, "
+            "and don't explain why.")
 
 
 def pick_phone(run=subprocess.run, profile=None):
@@ -685,6 +694,8 @@ class Conversation:
         self.epoch = 0  # goes up each time the other person talks over Claude
         self.caller_turns = 0
         self.pending_note = None
+        self.corrections = []  # each steer and correct from Sonnet, kept in the result file for later analysis
+        self.steer_waiting = None  # the steer whose note goes with their next words
         self.pending_cut = None
         self.generating = False
         self.nudges = 0
@@ -879,14 +890,18 @@ class Conversation:
                     opening_note += (" If they clearly answer its identity question with yes, mark them confirmed now; "
                                      "do not ask the same identity question again. If their answer is unclear, clarify it.")
                 message = f"{self._supervisor(opening_note)}\n{message}"
+            steered = None
             if self.pending_note:
                 message = f"{self._supervisor(self.pending_note)}\n{message}"
                 self.pending_note = None
+                steered, self.steer_waiting = self.steer_waiting, None
             cut_note = self._cut_note()
             if cut_note:
                 message = f"{cut_note}\n{message}"
             try:
                 question = self._speak_reply(message, token)
+                if steered is not None:
+                    steered["said_next"] = " ".join(self.last_reply)
                 question = self._start_task(token) or question
                 if question and live:
                     self._consult(question, token)
@@ -914,27 +929,37 @@ class Conversation:
         if advice["action"] == "none":
             return
         self.transcript.add("Pat", f"Sonnet {advice['action']} ({advice['reason']}): {advice['note']}")
+        record = {"at": f"{datetime.datetime.now():%H:%M:%S}", "turn": turn, "action": advice["action"],
+                  "reason": advice["reason"], "note": advice["note"], "said_next": None}
+        self.corrections.append(record)
         if advice["action"] == "steer":
             self.pending_note = advice["note"]
+            self.steer_waiting = record
         else:
-            self._correct(advice["note"])
+            self._correct(advice["note"], record)
 
-    def _correct(self, note):
+    def _correct(self, note, record=None):
         """Sonnet changes what Haiku says: cut off the speech, say "one moment", speak again from the note."""
+        record = record if record is not None else {}
+        if self.finished.is_set():
+            return
         self._cut_speech()
         with self.turn_lock:
             if self.finished.is_set():
                 return
             token = self.mouth.token
+            record.update(was_saying=" ".join(self.last_reply), heard=self.pending_cut)  # heard is None if nothing was playing
             cut_note = self._cut_note()
             self.mouth.start_reply()
             self.last_reply = []
             phrase = self._say_stall(token)
-            message = self._supervisor(f'You just said "{phrase}" to them. {note} Say your next line now, with no {ASK_MARK}.')
+            record["stall"] = phrase
+            message = self._supervisor(f'You just said "{phrase}" to them. {note} Say your next line now, with no {ASK_MARK}. {CARRY_ON}')
             if cut_note:
                 message = f"{cut_note}\n{message}"
             try:
                 self._speak_reply(message, token)
+                record["said_next"] = " ".join(self.last_reply)
                 self.mouth.drain()
                 self._finish_if_goodbye(token)
             except Exception as error:
@@ -981,6 +1006,12 @@ class Conversation:
                 if reason == "nobody there" and not self.confirmed:
                     self.transcript.add("Claude", NOBODY_CAME[self.language])
                     self.mouth.say(NOBODY_CAME[self.language], self.mouth.token)
+                    self.mouth.drain()
+                elif reason in ENDING_REASONS:
+                    self.finished.set()  # so a correction arriving now can't cut these last words
+                    ending = ENDING[self.language].format(reason=ENDING_REASONS[reason][self.language])
+                    self.transcript.add("Claude", ending)
+                    self.mouth.say(ending, self.mouth.token)
                     self.mouth.drain()
                 self.transcript.add("Pat", f"call over: {reason}, loudest sound heard {loudest:.3f} of 1")
                 return reason
@@ -1540,7 +1571,7 @@ def main():
     parser.add_argument("--owner-ru", default=None, help="optional spoken Russian version of the owner's name")
     parser.add_argument("--time-zone", help="IANA time zone for this call, such as Europe/London")
     parser.add_argument("--date-format", choices=["iso", "dmy", "mdy"], help="date format for this call's reports")
-    parser.add_argument("--max-minutes", type=float, default=5, help="hang up after this long")
+    parser.add_argument("--max-minutes", type=float, default=MAX_CALL_MINUTES, help=f"hang up after this long, at most {MAX_CALL_MINUTES}")
     parser.add_argument("--audible", action="store_true", help="play the call on your real speaker instead of silently")
     parser.add_argument("--no-memory", action="store_true", help="don't read or update this number's notes")
     parser.add_argument("--save-audio", action="store_true",
@@ -1730,7 +1761,7 @@ def main():
         if args.save_audio:
             frames = saved_frames(frames, transcript.path.replace(".txt", ".wav"))
         conversation = Conversation(line, frames, ear, mouth, brain, transcript, opening,
-                                    max_seconds=args.max_minutes * 60, observer=observer, nonce=nonce,
+                                    max_seconds=min(args.max_minutes, MAX_CALL_MINUTES) * 60, observer=observer, nonce=nonce,
                                     owner=args.owner, language=brief.language,
                                     task_message=brief.task_message(args.owner, known) if brief.has_target() else None,
                                     caller_id_name=caller_name)
@@ -1846,7 +1877,8 @@ def main():
                      reply_delays=conversation.reply_delays if conversation else [],
                      transcript_file=transcript.path if transcript else None,
                      interventions=observer.interventions if observer else 0,
-                     reviews=observer.reviews if observer else 0)
+                     reviews=observer.reviews if observer else 0,
+                     corrections=conversation.corrections if conversation else [])
         if last_call:
             write_last_call(calls_folder, **last_call, poem=poem, poem_style=args.summary_style if poem else "")
         live.close()

@@ -7,7 +7,7 @@ import threading
 from call_brief import HEARD_NOTHING, is_bare_answer
 from real_dates import date_lines, real_dates
 
-MAX_FACTS = 4
+MAX_FACTS = 5  # the prompt asks for 4, and a 5th only when it's really needed
 MAX_SUMMARY_WORDS = 4
 MAX_VALUE_CHARS = 200  # only so a runaway reply can't fill the screen: the note wraps, it doesn't cut
 INCOMING_LABELS = ("Person", "Reason", "Message")
@@ -16,7 +16,7 @@ Reply with one JSON line and nothing else, like this:
 {"facts": [{"label": "Time", "value": "11:00"}, {"label": "Place", "value": null}], "summary": "Confirming the meeting"}
 
 Rules:
-- One fact per thing we want to find out, in the same order, at most 4. Keep a label you are given if it is already short.
+- One fact per thing we want to find out, in the same order. Keep to 4 if you can: use a 5th only if it's really needed, and never more than 5. Keep a label you are given if it is already short.
 - A label is one or two English words naming the thing, never the question: "What time does it start?" becomes Time, "Where is it?" becomes Place. A value is as short as you can make it, in the language it was said in.
 - A value only holds what was really said on the call. Until then it is null. Never guess.
 - An amount of money is just the number: no currency, unless they named one themselves.

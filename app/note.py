@@ -39,6 +39,18 @@ AGENT_PROMPT = ("The owner typed this into Pat's sticky note. Do it with the pat
                 "named instead: list_contacts has the names. "
                 "Nobody can answer questions here. If something essential is missing, such as the number, don't call: say what's "
                 "missing in one short sentence.")
+
+
+def agent_command(claude, text):
+    """The note's agent gets the pat-phone tools and nothing else. With Claude Code's own tools it could read files in
+    Pat's folder without asking, contacts/book.json with the real numbers among them; with every MCP server it would
+    also get your claude.ai connectors, such as Gmail."""
+    python = os.path.join(os.path.dirname(sys.executable), "python.exe")  # the note may run under pythonw; the server needs a console Python
+    server = {"mcpServers": {"pat-phone": {"type": "stdio", "command": python, "args": [os.path.join(HERE, "phone_mcp.py")]}}}
+    return [claude, "-p", text, "--model", AGENT_MODEL, "--tools", "", "--strict-mcp-config", "--mcp-config", json.dumps(server),
+            "--allowedTools", AGENT_TOOLS, "--append-system-prompt", AGENT_PROMPT]
+
+
 if sys.stdout is None:  # pythonw has no console
     os.makedirs(CALLS, exist_ok=True)
     sys.stdout = sys.stderr = open(os.path.join(CALLS, "note.log"), "a", encoding="utf-8", buffering=1)
@@ -502,7 +514,7 @@ class Desk:
         before = self._last_call_id()
         try:
             choose_next_style(self.folder, style)  # the phone tool takes this for the call it places
-            done = subprocess.run([find_claude(), "-p", text, "--model", AGENT_MODEL, "--allowedTools", AGENT_TOOLS, "--append-system-prompt", AGENT_PROMPT],
+            done = subprocess.run(agent_command(find_claude(), text),
                                   capture_output=True, text=True, encoding="utf-8", errors="replace", stdin=subprocess.DEVNULL,
                                   creationflags=subprocess.CREATE_NO_WINDOW, cwd=HERE)
             reply = done.stdout.strip() or done.stderr.strip()
