@@ -7,7 +7,8 @@ SETTINGS_NAME = "note-settings.json"
 
 
 class NoteSettings:
-    DEFAULTS = {"zoom": 1.0, "language": "en", "unknown": "ask", "voice_en": "charles", "voice_ru": "irina"}
+    DEFAULTS = {"zoom": 1.0, "language": "en", "unknown": "ask", "voice_en": "charles", "voice_ru": "irina",
+                "noise_cancellation": False}
 
     def __init__(self, folder=os.path.join(HERE, "calls")):
         self.path = os.path.join(folder, SETTINGS_NAME)

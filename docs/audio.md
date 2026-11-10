@@ -26,6 +26,37 @@ If a call is killed, the laptop stays on the silent speaker until Pat starts aga
 .venv\Scripts\python.exe pat.py restore-audio
 ```
 
+## Taking over on the laptop
+
+When you take over, their voice plays on your real speaker and your real microphone goes into CABLE Input. On a laptop the
+microphone sits next to the speakers, so it also picks up their voice and sends it back down the line: they hear
+themselves a moment later, and an AI on their end hears speech and stops mid-sentence, again and again.
+
+**Noise cancellation is off by default.** Right-click Pat's tray icon and choose **Noise cancellation** >
+**With** to enable it, or **Without (default)** to turn it off. Your choice stays saved. You can switch during laptop
+take-over; the audio briefly restarts when you change it. With cancellation off, use wired headphones to avoid echo.
+
+When enabled, Pat uses Windows' own echo and noise cancellation, the Voice Capture DSP that comes with Windows 10 and 11. It records the
+microphone together with what the speaker is playing, and takes that sound out of the microphone before it goes to the
+call. It runs in software, so it works whatever the sound driver. Your voice reaches the call at 16 kHz, the quality a
+phone call carries. The take-over line in the log says `echo cancellation on` or `off`.
+
+If cancellation is enabled but cannot open, Pat uses the plain microphone and headphones are needed to avoid echo:
+
+- Windows N without the Media Feature Pack, which has no Voice Capture DSP.
+- A microphone or speaker that Windows doesn't list as working. The log then says
+  `Echo cancellation unavailable, using the plain microphone` and why.
+
+To check a laptop, with no call:
+
+```powershell
+.venv\Scripts\python.exe evals\echo_cancel_probe.py
+```
+
+It plays a recorded voice through the take-over twice, with and without echo cancellation, records what the other phone
+would receive, and counts how often their speech detector would think someone started talking. On the laptop it was built
+on: 0 times with echo cancellation, 2 without, from a 6-second voice.
+
 ## Bluetooth headphones
 
 With Bluetooth headphones connected to the laptop, the call's audio stays on the phone: Windows reports the move to the

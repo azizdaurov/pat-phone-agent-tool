@@ -602,6 +602,14 @@ class Settings(unittest.TestCase):
     def test_defaults_are_english_and_the_notes_options(self):
         settings = note.NoteSettings(tempfile.mkdtemp())
         self.assertEqual((settings.language, settings.unknown, settings.zoom), ("en", "ask", 1.0))
+        self.assertIs(settings.noise_cancellation, False)
+
+    def test_noise_cancellation_choice_can_be_saved_and_turned_off_again(self):
+        with tempfile.TemporaryDirectory() as folder:
+            note.NoteSettings(folder).change("noise_cancellation", True)
+            self.assertIs(note.NoteSettings(folder).noise_cancellation, True)
+            note.NoteSettings(folder).change("noise_cancellation", False)
+            self.assertIs(note.NoteSettings(folder).noise_cancellation, False)
 
     def test_changes_last_through_a_restart(self):
         folder = tempfile.mkdtemp()

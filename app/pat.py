@@ -364,9 +364,12 @@ class CallerAudio:
 
 
 class LaptopTakeover:
-    """Puts the owner on the call: the other person's voice on the real speaker, their real microphone into the cable."""
+    """Puts the owner on the call: the other person's voice on the real speaker, their real microphone into the cable.
 
-    def __init__(self, caller, speaker, microphone, cable):
+    The plain microphone is the default. When enabled, Windows' echo and noise cancellation keeps the speaker's sound out
+    of the microphone. If Windows can't open it, the plain microphone still works."""
+
+    def __init__(self, caller, speaker, microphone, cable, echo_cancel=False):
         self.caller = caller
         self.closed = threading.Event()
         from mic_relay import MicRelay
@@ -378,14 +381,23 @@ class LaptopTakeover:
         output_channels = min(2, int(cable_info["max_output_channels"]))
         if not input_channels or not output_channels:
             raise RuntimeError("The selected microphone or call output has no audio channels.")
-        self.relay = MicRelay(input_rate, output_rate)
         self.streams = []
+        self.relay = None
+        self.echo_cancelled = False
         try:
             self.speaker = sd.OutputStream(samplerate=caller.rate, channels=caller.channels, dtype="float32", device=speaker,
                                            extra_settings=sd.WasapiSettings(auto_convert=True))
             self.streams.append(self.speaker)
-            self.microphone = sd.InputStream(samplerate=input_rate, channels=input_channels, dtype="float32", device=microphone,
-                                             callback=self.relay.capture, latency="low")
+            self.microphone = self._echo_cancelled_mic(echo_cancel, mic_info["name"], sd.query_devices(speaker)["name"])
+            if self.microphone:
+                self.echo_cancelled = True
+                import echo_cancel as canceller
+                input_rate, input_channels = canceller.RATE, canceller.CHANNELS
+                self.relay = MicRelay(input_rate, output_rate)
+            else:
+                self.relay = MicRelay(input_rate, output_rate)
+                self.microphone = sd.InputStream(samplerate=input_rate, channels=input_channels, dtype="float32", device=microphone,
+                                                 callback=self.relay.capture, latency="low")
             self.streams.append(self.microphone)
             self.cable = sd.OutputStream(samplerate=output_rate, channels=output_channels, dtype="float32", device=cable,
                                          callback=self.relay.render, latency="low", extra_settings=sd.WasapiSettings(auto_convert=True))
@@ -397,9 +409,23 @@ class LaptopTakeover:
         self.forwarding = threading.Thread(target=self._play_caller, daemon=True)
         self.error = None
         self.started = None
-        print(f"Takeover microphone: {mic_info['name']} ({input_rate} Hz, {input_channels} channels); "
+        print(f"Takeover microphone: {mic_info['name']} ({input_rate} Hz, {input_channels} channels, "
+              f"echo cancellation {'on' if self.echo_cancelled else 'off'}); "
               f"call output: {cable_info['name']} ({output_rate} Hz, {output_channels} channels); "
               f"their voice on: {sd.query_devices(speaker)['name']}", flush=True)
+
+    def _echo_cancelled_mic(self, opener, microphone, speaker):
+        """False bypasses processing; True or None uses Windows; a callable is a test/probe opener."""
+        if opener is False:
+            return None
+        try:
+            if opener is None or opener is True:
+                from echo_cancel import EchoCancelledMic as opener
+            # The relay is made once the rate is known, so the callback looks it up when sound arrives.
+            return opener(microphone, speaker, lambda *block: self.relay.capture(*block))
+        except (OSError, ImportError) as error:
+            print(f"Echo cancellation unavailable, using the plain microphone: {error}", flush=True)
+            return None
 
     def _play_caller(self):
         while not self.closed.is_set():
@@ -1499,7 +1525,7 @@ def start_live_notes(brief, spoken_so_far):
     return notes, brain
 
 
-def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable, tell=None, headsets=None):
+def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable, tell=None, headsets=None, noise_preference=None):
     """The owner talks from here on, until the call ends or they hang up or move it to the phone. Claude says nothing more."""
     tell = tell or (lambda text: print(text, flush=True))
     found, check_errors = [], []
@@ -1528,11 +1554,24 @@ def stay_on_laptop(conversation, line, caller, mouth, args, brief, cable, tell=N
         conversation.hand_over.set()
         return
     takeover = None
+    noise_preference = noise_preference or (lambda: NoteSettings().noise_cancellation is True)
+    chosen = None
+    next_check = 0.0
     try:
-        takeover = LaptopTakeover(caller, speaker, microphone, cable)
-        takeover.start()
-        print("You're on the call. Use wired headphones, or they'll hear an echo. Type h to hang up, p to move it to your phone.", flush=True)
         while not (line.ended.is_set() or conversation.stopped.is_set() or conversation.hand_over.is_set()):
+            if time.monotonic() >= next_check:
+                wanted = noise_preference()
+                if takeover is None or wanted != chosen:
+                    if takeover:
+                        takeover.stop()
+                        takeover = None
+                    takeover = LaptopTakeover(caller, speaker, microphone, cable, echo_cancel=wanted)
+                    takeover.start()
+                    chosen = wanted  # remember the choice even if Windows fell back to the plain mic
+                    echo = ("Noise and echo cancellation are on, so the laptop's speakers are fine."
+                            if takeover.echo_cancelled is True else "Use wired headphones, or they'll hear an echo.")
+                    print(f"You're on the call. {echo} Type h to hang up, p to move it to your phone.", flush=True)
+                next_check = time.monotonic() + 1.0
             problem = takeover.problem()
             if problem:
                 raise RuntimeError(problem)

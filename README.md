@@ -53,6 +53,18 @@ Setup installs Python, the .NET SDK, the packages, the speech models, the phone 
 Mode, ends Phone Link, and sets up your phone for calls. Approve what Windows asks, and restart when it offers: setup
 carries on by itself. It's safe to run again, and `-Rehearse` shows what it would do without changing anything.
 
+Setup adds **Pat** to your Desktop and Start menu, with Pat's icon and no console window. It asks whether to start Pat
+when you sign in to Windows; the default is no. Running setup again updates the shortcuts and keeps your current choice
+when you press Enter. Keep the project folder in place, since the shortcuts open it from there.
+
+To add or repair just the shortcuts, without reinstalling anything:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File setup.ps1 -ShortcutsOnly
+```
+
+Add `-Startup On` or `-Startup Off` to turn startup on or off, or `-Startup Keep` to keep the current choice without asking.
+
 Check everything without making a call:
 
 ```powershell
@@ -91,8 +103,9 @@ steps without changing anything.
 
 ## Use
 
-**The note.** Setup opens it; afterwards run `.venv\Scripts\pythonw.exe note.py`. Type what you want in its bar. When a
-call rings, choose `AI once`, `Always AI` or `Me`. During a call, press **F9** anywhere to take over on the laptop.
+**The note.** Setup opens it. Later, double-click **Pat** on your Desktop, or type **Pat** in the Start menu. Type what you
+want in its bar. When a call rings, choose `AI once`, `Always AI` or `Me`. During a call, press **F9** anywhere to take over
+on the laptop.
 [More](docs/note.md)
 
 **The command line.**

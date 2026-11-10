@@ -2,6 +2,12 @@
 
 A small paper note that stays on top, watches the phone line, and decides who takes each incoming call.
 
+Double-click **Pat** on your Desktop, or type **Pat** in the Start menu. It opens without a console window. If it is already
+running, the shortcut brings the same note back. Setup can also start Pat when you sign in to Windows; this is off by default.
+To change that choice or repair the shortcuts, run `powershell -ExecutionPolicy Bypass -File setup.ps1 -ShortcutsOnly`.
+
+For a manual start or a demo:
+
 ```powershell
 .venv\Scripts\pythonw.exe note.py           # the real note
 .venv\Scripts\python.exe evals\note_demo.py  # a pretend phone: nothing rings or dials
@@ -20,8 +26,9 @@ A small paper note that stays on top, watches the phone line, and decides who ta
 - **`Always AI`** applies to that number. Undo it in Contacts.
 - **AI** answers by itself. **Me** never does, since you may be away: the phone rings as usual and the note keeps its buttons.
 - **`Listen`** plays both sides on your speaker; your microphone stays out of the call.
-- **`Take over`** and **F9** put you on the call on the laptop after Claude says it's passing them to you. Use wired
-  headphones, or they'll hear an echo.
+- **`Take over`** and **F9** put you on the call on the laptop after Claude says it's passing them to you. Noise and echo
+  cancellation is optional and off by default. Choose **With** or **Without (default)** on the tray menu, including during take-over
+  ([details](audio.md#taking-over-on-the-laptop)).
 - **`Me`** answers on the phone the first time, then wherever the arrow last pointed.
 - **Bullet points** come from a separate Claude that only reads the transcript. Values pass through speech recognition,
   so they can be wrong.
@@ -45,6 +52,7 @@ Right-click the note's icon in the hidden icons:
 | Incoming calls speak | The language Claude answers in. English by default |
 | Unknown numbers | The note's options (default), Always AI, or Always me |
 | English voice, Russian voice | Who Claude sounds like, for agents' calls too unless they name another |
+| Noise cancellation | With or Without (default), for laptop take-over. The choice stays saved and can be changed during take-over |
 | Contacts... | Add, edit and remove contacts, and choose Ask, AI or Me for each |
 | Stats, Facts found, Pat facts | See [easter eggs](#easter-eggs) |
 

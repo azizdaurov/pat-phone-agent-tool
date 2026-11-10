@@ -4,11 +4,22 @@
 #
 # Windows asks you to approve anything that needs an administrator: turning on Developer Mode and installing drivers.
 # It only makes a call if you ask it to, later. -Rehearse shows what it would do on a new laptop, and changes nothing.
-param([switch]$SkipModels, [switch]$Rehearse)
+# -ShortcutsOnly updates Pat's shortcuts without running the rest of setup. -Startup accepts Ask, On, Off or Keep.
+param(
+    [switch]$SkipModels,
+    [switch]$Rehearse,
+    [switch]$ShortcutsOnly,
+    [ValidateSet('Ask', 'On', 'Off', 'Keep')][string]$Startup = 'Ask'
+)
 $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $venv = "$root\.venv"
 $python = "$venv\Scripts\python.exe"
+. "$root\app\shortcuts.ps1"
+if ($ShortcutsOnly) {
+    Set-PatShortcuts -Root $root -Startup $Startup -Rehearse:$Rehearse
+    return
+}
 $pythonVersion = '3.13'
 $dotnetMajor = '10'
 $vbcableZip = 'https://download.vb-audio.com/Download_CABLE/VBCABLE_Driver_Pack45.zip'
@@ -19,8 +30,12 @@ $needsRestart = $false
 # Everything this prints also goes to a file, so a setup that fails on someone else's laptop can be sent for help.
 # report.py adds the newest one to its bug report, with names and numbers taken out.
 $setupLog = Join-Path $root "setup-logs\setup-$(Get-Date -Format 'yyyyMMdd-HHmmss').txt"
-New-Item -ItemType Directory -Force (Split-Path $setupLog) | Out-Null
-try { Start-Transcript -Path $setupLog | Out-Null } catch { $setupLog = $null }
+if ($Rehearse) {
+    $setupLog = $null
+} else {
+    New-Item -ItemType Directory -Force (Split-Path $setupLog) | Out-Null
+    try { Start-Transcript -Path $setupLog | Out-Null } catch { $setupLog = $null }
+}
 trap {
     Write-Host "`nSetup stopped: $_" -ForegroundColor Red
     if ($setupLog) { Write-Host "Everything it printed is in $setupLog. Send that file if you need help." -ForegroundColor Yellow }
@@ -259,6 +274,9 @@ if ($Rehearse) {
     & $python --version
 }
 
+Step 'Pat shortcuts'
+Set-PatShortcuts -Root $root -Startup $Startup -Rehearse:$Rehearse
+
 if ($SkipModels) {
     Step 'Speech models: skipped'
 } elseif ($Rehearse) {
@@ -382,8 +400,7 @@ if ($todo.Count) {
     Would 'open the sticky note'
 } elseif ($isAdmin) {
     # Opened from here it would run as administrator too, and a second, normal copy couldn't tell it was there.
-    'All ready. This window runs as administrator, so open Pat yourself from a normal PowerShell window in this folder:'
-    "   .venv\Scripts\pythonw.exe note.py"
+    'All ready. Close this administrator window, then double-click Pat on your Desktop or find Pat in the Start menu.'
 } else {
     'All ready. Opening the sticky note: its icon is in the hidden icons, and its settings are on its right-click menu.'
     Start-Process "$venv\Scripts\pythonw.exe" -ArgumentList "`"$root\note.py`"" -WorkingDirectory $root
