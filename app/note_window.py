@@ -222,15 +222,21 @@ class Bridge(QObject):
         self._soon("pairing_answer", answer, chosen)
 
 
+def check_caller_names(labels):
+    from caller_names import CallerNames
+    return CallerNames().check_ahead(labels)
+
+
 class ContactsBridge(QObject):
     """What the contact list can call."""
 
-    def __init__(self, private, rules, eggs=None, window=None):
+    def __init__(self, private, rules, eggs=None, window=None, check_names=None):
         super().__init__()
         self.private = private
         self.rules = rules
         self.eggs = eggs
         self.window = window
+        self.check_names = check_names or check_caller_names  # each saved name is checked now, not when they ring
 
     @Slot()
     def close_window(self):
@@ -261,6 +267,7 @@ class ContactsBridge(QObject):
             self.private.add_contact(name, number)
         except (ValueError, OSError) as error:
             return str(error)
+        self.check_names([name.strip()])
         return ""
 
     @Slot(str, str, str, str, str, result=str)
@@ -277,6 +284,7 @@ class ContactsBridge(QObject):
             self.rules.set(number, rule)
         except (ValueError, OSError) as error:
             return str(error)
+        self.check_names([name.strip()])
         return ""
 
     @Slot(str, str, result=str)

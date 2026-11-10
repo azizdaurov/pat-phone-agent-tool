@@ -48,7 +48,9 @@ def agent_command(claude, text):
     python = os.path.join(os.path.dirname(sys.executable), "python.exe")  # the note may run under pythonw; the server needs a console Python
     server = {"mcpServers": {"pat-phone": {"type": "stdio", "command": python, "args": [os.path.join(HERE, "phone_mcp.py")]}}}
     return [claude, "-p", text, "--model", AGENT_MODEL, "--tools", "", "--strict-mcp-config", "--mcp-config", json.dumps(server),
-            "--allowedTools", AGENT_TOOLS, "--append-system-prompt", AGENT_PROMPT]
+            "--allowedTools", AGENT_TOOLS, "--system-prompt", AGENT_PROMPT]
+    # --system-prompt replaces Claude Code's own, about coding and files, which this agent has no use for. Claude Code
+    # still adds the pat-phone server's guide and today's date. Its first request went from 20.5k to 13.4k characters.
 
 
 if sys.stdout is None:  # pythonw has no console
@@ -785,6 +787,8 @@ def main():
     settings = NoteSettings()
     rules = CallRules(CALL_RULES_FILE, ALWAYS_AI_FILE)
     private = PrivateNumbers()
+    from note_window import check_caller_names
+    check_caller_names(list(private.contacts()))  # names checked before are saved, so only new ones go to Claude
 
     # sys.executable would be pythonw, whose children can't print.
     python = os.path.join(os.path.dirname(sys.executable), "python.exe")

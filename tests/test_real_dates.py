@@ -91,7 +91,7 @@ class WhereTheyAreKept(unittest.TestCase):
 
     def test_model_gets_the_date_table_on_the_live_note(self):
         notes = LiveNotes(lambda text: "", ["When?"], today=TODAY)
-        self.assertIn("Tomorrow is 4-11-2026", notes._prompt([]))
+        self.assertIn("Tomorrow is 4-11-2026", notes._prompt([])[0])
         notes.close()
 
     def test_only_haiku_is_told_how_to_say_dates(self):

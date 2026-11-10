@@ -9,6 +9,7 @@ import concurrent.futures
 import json
 import os
 import re
+import threading
 
 HERE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))  # the repository: this file is in app/
 CACHE = os.path.join(HERE, "contacts", "caller-names.json")  # gitignored with the rest of contacts/
@@ -90,6 +91,19 @@ class CallerNames:
             except Exception:  # timeout, no login, no network: no name
                 return ""
         return result
+
+    def check_ahead(self, labels):
+        """Checks contact names when they're saved, in the background, so a ring finds the answer saved and waits for no AI.
+        A failure saves nothing, so that label is checked again next time."""
+        def run():
+            for label in labels:
+                try:
+                    self.name_for(label)
+                except Exception as error:
+                    print(f"[caller name check for a contact failed: {error}]", flush=True)
+        thread = threading.Thread(target=run, daemon=True)  # daemon, so quitting the note never waits for Claude
+        thread.start()
+        return thread
 
 
 def _ask_haiku(text):

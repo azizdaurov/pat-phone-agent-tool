@@ -215,6 +215,28 @@ class Calls(unittest.TestCase):
         self.assertEqual(state["status"], "done")
         self.assertNotIn("corrections", state)
 
+    def test_each_get_call_has_only_the_lines_since_the_last_one(self):
+        call_id = "20261110-120000-abcdef"
+        log = phone_mcp._path(call_id, "log")
+        with open(log, "w", encoding="utf-8") as f:
+            f.write("Claude: Hello\nThem: Hi\n")
+        get = lambda full_transcript=False: phone_mcp.only_new_lines(phone_mcp.read_call(call_id), call_id, full_transcript)
+        first = get()
+        self.assertEqual(first["transcript"], ["Claude: Hello", "Them: Hi"])
+        self.assertNotIn("earlier_lines", first)
+        self.assertEqual(get()["transcript"], [])  # nothing new
+        with open(log, "a", encoding="utf-8") as f:
+            f.write("Pat: Sonnet steer\nClaude: Is this Alex?\nThem: Yes\n")
+        later = get()
+        self.assertEqual(later["transcript"], ["Claude: Is this Alex?", "Them: Yes"])
+        self.assertIn("2 earlier lines", later["earlier_lines"])
+        self.assertEqual(get(full_transcript=True)["transcript"], ["Claude: Hello", "Them: Hi", "Claude: Is this Alex?", "Them: Yes"])
+        with open(phone_mcp._path(call_id, "result.json"), "w", encoding="utf-8") as f:
+            json.dump({"status": "done", "report": {"outcome": "done"}}, f)
+        final = get()
+        self.assertEqual((final["status"], final["transcript"]), ("done", []))  # the report and card still come in full
+        self.assertIn("chat_summary", final)
+
     def test_process_dying_without_a_result_is_reported(self):
         call_id = self.start()["call_id"]
         phone_mcp.running[call_id].kill()
@@ -327,7 +349,7 @@ class Connection(unittest.TestCase):
         schema = tools["place_call"].input_schema
         self.assertEqual(schema["properties"]["language"]["default"], "en")
         self.assertEqual(set(schema["required"]), {"number", "goal", "confidence"})
-        for name in ("voice", "name", "company", "role", "confidence", "confirm_question", "who_can_answer", "need_from_them", "context", "may_share", "must_not", "done_when", "if_stuck", "language", "time_zone", "date_format"):
+        for name in ("voice", "name", "company", "role", "confidence", "confirm_question", "who_can_answer", "need_from_them", "context", "may_share", "must_not", "done_when", "if_stuck", "language", "time_zone", "date_format", "may_say_before_confirmed"):
             self.assertTrue(schema["properties"][name].get("description"), name)
         self.assertIn("refused", refused.content[0].text)
         self.assertIn("full phone number", refused.content[0].text)

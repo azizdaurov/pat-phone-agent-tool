@@ -41,6 +41,21 @@ class Saved(unittest.TestCase):
         release.set()
         self.assertEqual(CallerNames(ask=lambda text: 1 / 0, path=self.path).start("Timur")(1), "")
 
+    def test_contacts_are_checked_ahead_and_a_ring_then_waits_for_nothing(self):
+        asked = []
+        names = CallerNames(ask=lambda text: (asked.append(text), '{"name": "Rustam"}')[1], path=self.path)
+        names.name_for("Rustam work")
+        names.check_ahead(["Rustam work", "Rustam", "Carwash"]).join(5)
+        self.assertEqual(len(asked), 3)  # the one already saved isn't asked again
+        never = CallerNames(ask=lambda text: 1 / 0, path=self.path)
+        self.assertEqual(never.name_for("Rustam"), "Rustam")  # saved, so the ring asks no AI
+
+    def test_a_failed_check_ahead_saves_nothing_so_it_is_tried_again(self):
+        CallerNames(ask=lambda text: 1 / 0, path=self.path).check_ahead(["Timur"]).join(5)
+        asked = []
+        CallerNames(ask=lambda text: (asked.append(text), '{"name": "Timur"}')[1], path=self.path).name_for("Timur")
+        self.assertEqual(asked, ["<label>Timur</label>"])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -37,7 +37,8 @@ from live_call import LiveCall, SoundMeter, final_note, write_last_call
 from live_notes import INCOMING_LABELS, LiveNotes, NOTES_PROMPT
 from note_settings import NoteSettings
 from observer import OBSERVER_MODEL, Observer
-from phone_memory import ContactNotes, SUMMARY_LIMIT, SUMMARY_PROMPT, attempt_text, merge_call, number_key, summary_may_change
+from phone_memory import (MIN_HEARD_CHARS, NOTES_REQUEST, ContactNotes, SUMMARY_LIMIT, SUMMARY_PROMPT, attempt_text, merge_call,
+                          number_key, summary_may_change)
 from phone_numbers import international_number
 from private_numbers import PrivateNumbers
 from user_profile import UserProfile, setup_refusal
@@ -1405,16 +1406,18 @@ def start_brain(args, brief, opening, nonce, notes):
     return brain
 
 
-def start_observer(args, brief, transcript):
-    """Returns (observer, its Claude). A call can go on without Sonnet if Sonnet won't start."""
+def start_observer(args, brief, transcript, notes=""):
+    """Returns (observer, its Claude). A call can go on without Sonnet if Sonnet won't start.
+    notes: what earlier calls left about this number. Sonnet has them; Haiku doesn't."""
     if args.no_observer:
         return None, None
     try:
-        sonnet = Brain("en", system_prompt=brief.observer_prompt(args.owner), model=OBSERVER_MODEL)
+        sonnet = Brain("en", system_prompt=brief.observer_prompt(args.owner, notes=notes), model=OBSERVER_MODEL)
     except Exception as error:
         print(f"[Sonnet won't be watching this call: {error}]", flush=True)
         return None, None
-    return Observer(lambda text: "".join(sonnet.ask(text)), transcript.spoken, args.owner), sonnet
+    return Observer(lambda text: "".join(sonnet.ask(text)), transcript.spoken, args.owner, interrupt=sonnet.interrupt,
+                    log=lambda text: transcript.add("Pat", text)), sonnet
 
 
 def write_result(args, **result):
@@ -1427,23 +1430,37 @@ def write_result(args, **result):
 
 
 def load_notes(key, args):
-    """Returns (notes, what to tell Claude). No notes for a hidden number, or with --no-memory."""
+    """Returns (notes, what Haiku gets, what Sonnet gets). None and "" for a hidden number, or with --no-memory."""
     if args.no_memory or not key:
-        return None, ""
+        return None, "", ""
     notes = ContactNotes(key)
     if notes.calls:
         print(f"Known number: {notes.calls} earlier calls, last {notes.last_call}. {notes.path}", flush=True)
-    return notes, notes.for_prompt(args.owner)
+    return notes, notes.for_haiku(args.owner), notes.for_supervisor(args.owner)
 
 
-def remember_call(notes, transcript, owner, brief, reached):
-    """Runs after the hang-up. The summary, if it may change, comes from a separate Claude that sees only the notes and the transcript."""
+def notes_request(notes, transcript, owner, brief, reached):
+    """What Sonnet's end report also asks for, so it writes this number's new notes: "" when they must not change."""
+    if not (notes and transcript and summary_may_change(reached, brief.who_answers())):
+        return ""
+    if sum(len(text) for who, text in transcript.spoken if who == "Them") < MIN_HEARD_CHARS:
+        return ""
+    return NOTES_REQUEST.format(owner=owner, limit=SUMMARY_LIMIT)
+
+
+def remember_call(notes, transcript, owner, brief, reached, written=None):
+    """Runs after the hang-up. written: the new notes Sonnet gave with its report. Without them, or if they are too long,
+    the summary, if it may change, comes from a separate Claude that sees only the notes and the transcript."""
     print("Updating notes for this number...", flush=True)
     when = current_time().isoformat(timespec="minutes")
     attempt = attempt_text(reached, brief.name.strip() or brief.company.strip())
     if not summary_may_change(reached, brief.who_answers()):
         report = merge_call(notes, transcript.spoken, None, when, attempt=attempt, update_summary=False)
         print(report, notes.path)
+        return report
+    if isinstance(written, str) and written.strip() and len(written.strip()) <= SUMMARY_LIMIT:
+        report = merge_call(notes, transcript.spoken, lambda text: written, when, attempt=attempt)
+        print(f"{report} Written by Sonnet with its report.", notes.path)
         return report
     brain = None
     try:
@@ -1520,7 +1537,8 @@ def start_live_notes(brief, spoken_so_far):
     wanted = list(brief.need_from_them) or ["Who is calling", "Why they are calling", "Any message for the owner"]
     labels = ["Person"] if brief.name.strip() else []
     brain = Brain("en", system_prompt=NOTES_PROMPT)
-    notes = LiveNotes(lambda text: "".join(brain.ask(text)), wanted, labels if brief.need_from_them else INCOMING_LABELS)
+    notes = LiveNotes(lambda text: "".join(brain.ask(text)), wanted, labels if brief.need_from_them else INCOMING_LABELS,
+                      memory=lambda: brain.proc.pid if brain.proc and brain.proc.poll() is None else None)
     notes.request(spoken_so_far)
     return notes, brain
 
@@ -1697,11 +1715,11 @@ def main():
     brain = None
     notes = None
     key = None
-    known = ""
+    known = supervisor_notes = ""
     if args.action == "dial":
         # Started before dialing, so a Claude failure can't leave someone on a silent call.
         key = number_key(args.number)
-        notes, known = load_notes(key, args)
+        notes, known, supervisor_notes = load_notes(key, args)
         try:
             brain = start_brain(args, brief, opening, nonce, known)
         except RuntimeError as error:
@@ -1754,7 +1772,7 @@ def main():
                 print(f"Incoming: {incoming[1]}", flush=True)
                 # Only now is the number known, so Claude starts with the right notes while it rings.
                 key = number_key(incoming[1])
-                notes, known = load_notes(key, args)
+                notes, known, supervisor_notes = load_notes(key, args)
                 caller_id = display_book.display_name(incoming[1])
                 spoken_name = CallerNames().start(caller_id)  # checked while Claude starts; never the number
                 brain = start_brain(args, brief, opening, nonce, known)
@@ -1790,7 +1808,7 @@ def main():
         transcript = Transcript(key=key)
         transcript.add("Pat", f"task: {brief.text()}")
         transcript.add("Pat", f"hearing through: {caller.name}; call audio: {line.audio}")
-        observer, sonnet = start_observer(args, brief, transcript)
+        observer, sonnet = start_observer(args, brief, transcript, supervisor_notes)
         if caller_name:
             transcript.add("Status", f"caller ID name: {caller_name}")
         if observer and brief.incoming:
@@ -1888,12 +1906,14 @@ def main():
             if close:
                 close()
         reached = conversation.reached if conversation else None
-        report = observer.final_report(f"{reason} (who was reached: {reached})") if observer else None
+        also = notes_request(notes, transcript, args.owner, brief, reached)
+        report = observer.final_report(f"{reason} (who was reached: {reached})", also=also) if observer else None
+        written = report.pop("notes", None) if isinstance(report, dict) else None  # the notes stay out of the agent's report
         if sonnet:
             sonnet.close()
         notes_report = None
         if notes and transcript:
-            notes_report = remember_call(notes, transcript, args.owner, brief, reached)
+            notes_report = remember_call(notes, transcript, args.owner, brief, reached, written=written if also else None)
         elif notes:
             notes.add_attempt(current_time().isoformat(timespec="minutes"), reason)  # same zone and form as remember_call's
             notes.save()
@@ -1917,6 +1937,7 @@ def main():
                      transcript_file=transcript.path if transcript else None,
                      interventions=observer.interventions if observer else 0,
                      reviews=observer.reviews if observer else 0,
+                     sonnet_stopped=observer.stops if observer else 0,
                      corrections=conversation.corrections if conversation else [])
         if last_call:
             write_last_call(calls_folder, **last_call, poem=poem, poem_style=args.summary_style if poem else "")

@@ -160,6 +160,13 @@ class Brain:
         for _ in self.ask("Reply with just the word ready."):
             pass
 
+    def interrupt(self):
+        """Stops the reply being written; the waiting ask raises at once. The conversation, and its cache, stay."""
+        if self.proc and self.proc.poll() is None:
+            self.proc.stdin.write(json.dumps({"type": "control_request", "request_id": f"stop-{time.monotonic_ns()}",
+                                              "request": {"subtype": "interrupt"}}) + "\n")
+            self.proc.stdin.flush()
+
     def close(self):
         if self.proc and self.proc.poll() is None:
             self.proc.stdin.close()

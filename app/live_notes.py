@@ -12,6 +12,7 @@ MAX_SUMMARY_WORDS = 4
 MAX_VALUE_CHARS = 200  # only so a runaway reply can't fill the screen: the note wraps, it doesn't cut
 INCOMING_LABELS = ("Person", "Reason", "Message")
 NOTES_PROMPT = """You keep a tiny sticky note about a phone call happening right now. You get what we want to find out and what has been said so far.
+Later messages bring only the lines said since then. The note always covers the whole call: if they change something they said earlier, the new value replaces the old one under the same label.
 Reply with one JSON line and nothing else, like this:
 {"facts": [{"label": "Time", "value": "11:00"}, {"label": "Place", "value": null}], "summary": "Confirming the meeting"}
 
@@ -63,8 +64,13 @@ def parse_notes(reply):
 class LiveNotes:
     """`ask` takes a prompt and returns the model's reply. Reads are safe from any thread."""
 
-    def __init__(self, ask, wanted, labels=(), today=None):
+    def __init__(self, ask, wanted, labels=(), today=None, memory=None):
+        """`memory` returns an id for the model's current conversation, or None if it has none (its process stopped).
+        When it changes, the next update sends the whole transcript again instead of only the new lines."""
         self.ask = ask
+        self.memory = memory or (lambda: "same")
+        self.remembered = None  # the conversation that has seen the first `sent` lines
+        self.sent = 0
         self.today = today
         self.wanted = list(wanted)
         self.facts = [{"label": label, "value": None} for label in labels][:MAX_FACTS]
@@ -81,10 +87,20 @@ class LiveNotes:
         self.wake.set()
 
     def _prompt(self, spoken):
-        wanted = "\n".join(f"- {item}" for item in self.wanted)
+        """The whole transcript the first time; after that only the lines the model hasn't seen, since it remembers the rest.
+        Returns (prompt, how many lines it covers); the prompt is None when nothing new was said."""
+        lines = without_unheard_answers(spoken)  # a line's fate depends only on earlier lines, so a line already sent never changes
         labels = ", ".join(fact["label"] for fact in self.facts) or "none yet"
-        said = "\n".join(f"{who}: {text}" for who, text in without_unheard_answers(spoken)) or "(nothing yet)"
-        return f"{date_lines(self.today)}\n\nWhat we want to find out:\n{wanted}\n\nLabels so far: {labels}\n\nTranscript:\n{said}"
+        if self.remembered is not None and self.remembered == self.memory():
+            new = lines[self.sent:]
+            if not new:
+                return None, len(lines)
+            said = "\n".join(f"{who}: {text}" for who, text in new)
+            return f"New lines:\n{said}\n\nLabels so far: {labels}", len(lines)
+        wanted = "\n".join(f"- {item}" for item in self.wanted)
+        said = "\n".join(f"{who}: {text}" for who, text in lines) or "(nothing yet)"
+        return (f"{date_lines(self.today)}\n\nWhat we want to find out:\n{wanted}\n\nLabels so far: {labels}\n\n"
+                f"Transcript:\n{said}"), len(lines)
 
     def _run(self):
         while True:
@@ -95,9 +111,14 @@ class LiveNotes:
             spoken, self.pending = self.pending, None
             if spoken is None:
                 continue
+            prompt, covered = self._prompt(spoken)
+            if prompt is None:
+                continue
             try:
-                notes = parse_notes(self.ask(self._prompt(spoken)))
+                notes = parse_notes(self.ask(prompt))
+                self.remembered, self.sent = self.memory(), covered
             except Exception as error:
+                self.remembered, self.sent = None, 0  # unsure what it saw, so the next update starts over
                 print(f"[sticky note wasn't updated: {error}]", flush=True)
                 continue
             if notes and notes[0]:

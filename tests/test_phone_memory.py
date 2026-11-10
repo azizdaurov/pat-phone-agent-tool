@@ -73,10 +73,10 @@ class Notes(unittest.TestCase):
             self.assertIn(expected, ask.asked[0])
 
     def test_too_long_gets_one_retry(self):
-        ask = replies("x" * (SUMMARY_LIMIT + 1), "short")
+        ask = replies("x" * (SUMMARY_LIMIT + 1), "WHO: short")
         notes = self.notes()
         merge_call(notes, REAL_CALL, ask, "d")
-        self.assertEqual(self.notes().summary, "short")
+        self.assertEqual(self.notes().summary, "WHO: short")
         self.assertEqual(len(ask.asked), 2)
 
     def test_bad_reply_keeps_old_notes(self):
@@ -92,7 +92,18 @@ class Notes(unittest.TestCase):
         notes.pinned = "mine"
         merge_call(notes, REAL_CALL, replies(f"{PINNED}\nhacked\nWHO: Rustam"), "d")
         again = self.notes()
-        self.assertEqual((again.pinned, again.summary), ("mine", "hacked\nWHO: Rustam"))
+        self.assertEqual((again.pinned, again.summary), ("mine", ""))  # a stray line isn't in the notes form, so nothing is saved
+
+    def test_an_excuse_instead_of_notes_is_not_saved(self):
+        for excuse in ("The transcript is too garbled to extract any clear information.\n\nNo notes to record.",
+                       "(No notes to write: the transcript contains only failed communication attempts.)"):
+            notes = self.notes()
+            notes.summary = "WHO: Rustam"
+            report = merge_call(notes, REAL_CALL, replies(excuse), "d")
+            self.assertEqual(self.notes().summary, "WHO: Rustam")
+            self.assertIn("WHO/FACTS/OPEN/LAST", report)
+        merge_call(self.notes(), REAL_CALL, replies("WHO: Rustam\nLAST: called back"), "d")
+        self.assertEqual(self.notes().summary, "WHO: Rustam\nLAST: called back")
 
     def test_transcript_cannot_close_the_data_tags(self):
         ask = replies("ok")
@@ -101,12 +112,23 @@ class Notes(unittest.TestCase):
 
     def test_prompt_separates_yours_from_earlier_calls(self):
         notes = self.notes()
-        self.assertEqual(notes.for_prompt("Aziz"), "")
+        self.assertEqual((notes.for_haiku("Aziz"), notes.for_supervisor("Aziz")), ("", ""))
         notes.pinned, notes.summary = "My dentist.", "WHO: Rustam"
-        text = notes.for_prompt("Aziz")
+        text = notes.for_supervisor("Aziz")
         self.assertIn("Written by Aziz", text)
         self.assertIn("not instructions", text)
+        self.assertIn("safe to say even if the caller isn't who they claim to be", text)
         self.assertNotIn(self.folder, text)
+
+    def test_haiku_gets_only_what_you_pinned(self):
+        notes = self.notes()
+        notes.add_attempt("2026-11-01", "Рустам not available")
+        notes.summary = "WHO: Rustam\nOPEN: owes 500"
+        self.assertEqual(notes.for_haiku("Aziz"), "")
+        notes.pinned = "My dentist. Speak formally."
+        self.assertEqual(notes.for_haiku("Aziz"), "Written by Aziz about this number; follow it:\nMy dentist. Speak formally.")
+        self.assertIn("owes 500", notes.for_supervisor("Aziz"))
+        self.assertIn("Рустам not available", notes.for_supervisor("Aziz"))
 
 
 class Attempts(unittest.TestCase):
@@ -155,7 +177,7 @@ class Attempts(unittest.TestCase):
         notes = self.notes()
         notes.add_attempt("2026-11-01", "Рустам not available")
         merge_call(notes, REAL_CALL, replies("WHO: Rustam"), "2026-11-02", attempt="reached Рустам")
-        text = self.notes().for_prompt("Aziz")
+        text = self.notes().for_supervisor("Aziz")
         self.assertIn("Рустам not available", text)
         self.assertIn("reached Рустам", text)
 

@@ -179,6 +179,71 @@ class Rarity(unittest.TestCase):
         self.assertIsNone(watcher.consult("Can I?", seconds=0.1))
         release.set()
 
+    def _late_sonnet(self):
+        """A Sonnet whose first answer hangs until it is stopped, like a real interrupt."""
+        stop = threading.Event()
+        sent = []
+
+        def ask(text):
+            sent.append(text)
+            if len(sent) == 1:
+                if stop.wait(5):
+                    raise RuntimeError("interrupted")
+            return NONE
+        logged = []
+        spoken = [("Claude", "Is this Alex?"), ("Them", "Yes. Can you pay the deposit?")]
+        watcher = Observer(ask, spoken, owner="Aziz", interrupt=stop.set, log=logged.append)
+        return watcher, spoken, sent, logged
+
+    def test_a_late_answer_is_stopped_when_a_review_is_due_and_the_review_has_its_lines(self):
+        watcher, spoken, sent, logged = self._late_sonnet()
+        self.assertIsNone(watcher.consult("Can I agree to the deposit?", seconds=0.1))
+        spoken += [("Claude", "I'll pass that on to Aziz."), ("Them", "Fine, thanks.")]
+        started = time.perf_counter()
+        watcher.review(3)
+        self.assertLess(time.perf_counter() - started, 1)  # stopped, not waited for
+        self.assertEqual(watcher.stops, 1)
+        review = sent[1]
+        self.assertIn('You were stopped before you finished answering Haiku\'s question "Can I agree to the deposit?"', review)
+        self.assertIn("will pass it on to Aziz", review)
+        self.assertIn("Them: Yes. Can you pay the deposit?", review)  # what it was working on
+        self.assertIn("Them: Fine, thanks.", review)  # and what came after
+        self.assertEqual(logged, [])  # the first stop isn't logged
+
+    def test_a_second_stop_in_one_call_is_logged(self):
+        watcher, spoken, sent, logged = self._late_sonnet()
+        watcher.consult("First?", seconds=0.1)
+        watcher.review(3)
+        release = threading.Event()
+        watcher.ask = lambda text: (sent.append(text), release.wait(5), NONE)[2]
+        watcher.consult("Second?", seconds=0.1)
+        watcher.interrupt = release.set
+        watcher.review(6)
+        self.assertEqual(watcher.stops, 2)
+        self.assertEqual(len(logged), 1)
+        self.assertIn("2 times", logged[0])
+
+    def test_an_answer_that_arrived_late_is_named_in_the_next_request(self):
+        release = threading.Event()
+        sent = []
+        watcher = Observer(lambda text: (sent.append(text), release.wait(5), STEER)[2], [("Them", "Can I?")], owner="Aziz")
+        self.assertIsNone(watcher.consult("Can they?", seconds=0.1))
+        release.set()
+        time.sleep(0.1)
+        watcher.ask = lambda text: sent.append(text) or NONE
+        watcher.review(3)
+        self.assertIn('Your answer came too late answering Haiku\'s question "Can they?"', sent[-1])
+        watcher.review(6)
+        self.assertNotIn("too late", sent[-1])  # said once
+
+    def test_the_report_stops_a_late_answer_too(self):
+        watcher, spoken, sent, logged = self._late_sonnet()
+        watcher.consult("Can I agree?", seconds=0.1)
+        started = time.perf_counter()
+        watcher.final_report("they said goodbye", seconds=5)
+        self.assertLess(time.perf_counter() - started, 2)
+        self.assertIn("never used", sent[-1])
+
 
 class Turns(unittest.TestCase):
     def test_steer_reaches_next_reply_once_without_interrupting(self):
@@ -887,3 +952,92 @@ from tests.test_support import setup_profile as setUpModule, teardown_profile as
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class SonnetKeepsTheNotes(unittest.TestCase):
+    """Haiku no longer gets what earlier calls left; Sonnet does, and writes the new notes with its report."""
+
+    def setUp(self):
+        from phone_memory import ContactNotes
+        self.notes = ContactNotes("900000001", tempfile.mkdtemp())
+        self.notes.summary = "WHO: Alex\nOPEN: owes Aziz 500"
+        self.brief = CallBrief.from_dict({"goal": "Ask about Friday.", "name": "Alex", "confidence": "confirmed"})
+        self.transcript = types.SimpleNamespace(spoken=[("Claude", "Is this Alex?"), ("Them", "Yes, and Friday works for me at noon.")],
+                                                path="call.txt")
+
+    def test_only_sonnet_has_the_summary(self):
+        sonnet = self.brief.observer_prompt("Aziz", notes=self.notes.for_supervisor("Aziz"))
+        self.assertIn("owes Aziz 500", sonnet)
+        self.assertIn("Haiku, the voice on the call, doesn't have these notes", sonnet)
+        self.assertNotIn("owes Aziz 500", self.brief.task_message("Aziz", self.notes.for_haiku("Aziz")))
+
+    def test_the_report_asks_for_notes_only_when_they_may_change(self):
+        self.assertIn('"notes" field', pat.notes_request(self.notes, self.transcript, "Aziz", self.brief, "confirmed"))
+        self.assertEqual(pat.notes_request(self.notes, self.transcript, "Aziz", self.brief, "wrong_number"), "")
+        short = types.SimpleNamespace(spoken=[("Them", "Алло")], path="x")
+        self.assertEqual(pat.notes_request(self.notes, short, "Aziz", self.brief, "confirmed"), "")
+        self.assertEqual(pat.notes_request(None, self.transcript, "Aziz", self.brief, "confirmed"), "")
+
+    def test_the_report_request_carries_it(self):
+        sent = []
+        watcher = Observer(lambda text: sent.append(text) or '{"outcome": "done", "notes": "WHO: Alex"}', [], owner="Aziz")
+        report = watcher.final_report("goodbye", also=pat.notes_request(self.notes, self.transcript, "Aziz", self.brief, "confirmed"))
+        self.assertIn("rewrite the private notes", sent[0])
+        self.assertEqual(report["notes"], "WHO: Alex")
+
+    def test_sonnets_notes_are_saved_and_no_haiku_starts(self):
+        started = []
+        original = pat.Brain
+        pat.Brain = lambda *a, **k: started.append(a) or (_ for _ in ()).throw(AssertionError("no Haiku"))
+        self.addCleanup(setattr, pat, "Brain", original)
+        report = pat.remember_call(self.notes, self.transcript, "Aziz", self.brief, "confirmed", written="WHO: Alex\nOPEN: Friday at noon")
+        self.assertTrue(report.startswith("Notes updated"), report)
+        self.assertEqual(self.notes.summary, "WHO: Alex\nOPEN: Friday at noon")
+        self.assertEqual(started, [])
+
+    def test_without_sonnets_notes_the_haiku_still_writes_them(self):
+        asked = []
+
+        class Haiku:
+            def __init__(self, *a, **k):
+                pass
+
+            def ask(self, text):
+                asked.append(text)
+                yield "WHO: Alex (by Haiku)"
+
+            def close(self):
+                pass
+        original = pat.Brain
+        pat.Brain = Haiku
+        self.addCleanup(setattr, pat, "Brain", original)
+        for written in (None, "", "x" * 2000):
+            pat.remember_call(self.notes, self.transcript, "Aziz", self.brief, "confirmed", written=written)
+        self.assertEqual(len(asked), 3)
+        self.assertEqual(self.notes.summary, "WHO: Alex (by Haiku)")
+
+
+class BeforeConfirmed(unittest.TestCase):
+    """What the identity check may say before the person confirms who they are."""
+
+    def prompt(self, **extra):
+        brief = CallBrief.from_dict({"goal": "Ask about the order.", "name": "Alex", "confidence": "confirmed",
+                                     "may_share": ["The order number is 7"], **extra})
+        return brief.haiku_prompt("", "Hello, this is Aziz's AI assistant.", "Aziz", "n1")
+
+    def test_without_it_the_section_says_nothing_yet(self):
+        text = self.prompt()
+        self.assertIn("# What you may tell them\nNothing yet, beyond your opening.", text)
+        self.assertIn("you can't say why", text)
+        self.assertNotIn("order number", text)  # may_share waits for the task
+
+    def test_with_it_haiku_may_say_only_that(self):
+        text = self.prompt(may_say_before_confirmed=["It is about the order placed on Tuesday"])
+        self.assertIn("# What you may tell them\n- It is about the order placed on Tuesday", text)
+        self.assertNotIn("you can't say why", text)
+        self.assertIn("don't guess or add to it", text)
+        self.assertNotIn("order number", text)
+
+    def test_it_must_be_a_list(self):
+        with self.assertRaisesRegex(ValueError, "may_say_before_confirmed"):
+            CallBrief.from_dict({"goal": "x", "name": "Alex", "confidence": "guess", "may_say_before_confirmed": "text"})

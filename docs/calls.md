@@ -33,9 +33,9 @@ Each call's text and timings go to `calls\` (ignored by git).
 | Who | Job | When |
 |---|---|---|
 | The agent (Opus, Sonnet, or you) | Writes the brief and starts the call | Before, then reads the result |
-| Haiku 4.5 | Listens and speaks; knows only the brief and the number's notes | Every turn, about 1 s |
-| Sonnet 5.5 | Reads the transcript and rarely steps in | After every 3rd reply, beside the call, about 3.5 s |
-| Haiku 4.5, separately | Rewrites the number's notes | After the hang-up |
+| Haiku 4.5 | Listens and speaks; knows only the brief and the Pinned part of the number's notes | Every turn, about 1 s |
+| Sonnet 5.5 | Reads the transcript and the number's notes, rarely steps in, then writes the report and the new notes | After every 3rd reply, beside the call, about 3.5 s |
+| Haiku 4.5, separately | Rewrites the number's notes only if Sonnet didn't | After the hang-up |
 
 Sonnet is too slow to check each line before it's spoken, so it reads alongside and chooses one of three:
 
@@ -49,8 +49,8 @@ marked with a code that changes every call, and brackets are stripped from what 
 
 ## Checking who answered
 
-When the brief names someone, Haiku starts the call knowing only who to check for. The task and notes reach it after it
-marks the person confirmed, so there's nothing to reveal to the wrong person, and Sonnet stays out until then.
+When the brief names someone, Haiku starts the call knowing only who to check for. The task and the Pinned notes reach it
+after it marks the person confirmed, so there's nothing to reveal to the wrong person, and Sonnet stays out until then.
 
 ```
 Pick-up ─► "This is [your name]'s AI assistant. Am I speaking with Rustam?"
@@ -72,7 +72,7 @@ so do incoming calls.
 | Tool | |
 |---|---|
 | `place_call` | Starts a call from a brief and returns a `call_id` at once |
-| `get_call` | Status, transcript so far and, at the end, the report. Waits up to 50 s per request |
+| `get_call` | Status, the lines said since the last `get_call` (`full_transcript` gives them all) and, at the end, the report. Waits up to 50 s per request |
 | `end_call` | Hangs up |
 | `take_over` | Puts you on the call, as F9 does |
 | `contact_notes` | What's known about a number, and whether it may be called |
@@ -87,7 +87,8 @@ so do incoming calls.
 | `who_can_answer` | `only_this_person` (default), or `anyone_there` when only a company is given |
 | `need_from_them` | Each piece of information to get, in order |
 | `context` | Background for Haiku, not all to be said aloud |
-| `may_share` | Every fact it may say. It refuses anything else |
+| `may_share` | Every fact it may say once they confirm who they are. It refuses anything else |
+| `may_say_before_confirmed` | Rarely needed: what it may say before they confirm, such as what the call is about. Nothing private |
 | `must_not` | Limits on top of the built-in ones |
 | `done_when`, `if_stuck` | When to finish, and what to do if stuck |
 | `language`, `time_zone`, `date_format` | `ru` or `en`; the other person's IANA zone; `iso`, `dmy` or `mdy` |
@@ -112,8 +113,10 @@ My dentist. Speak formally.
 WHO: ...  FACTS: ...  OPEN: ...  LAST: ...
 ```
 
-Claude gets Pinned as your instructions and Summary as background that may be wrong. After the hang-up a separate Claude,
-seeing only the old summary and the new transcript, rewrites the summary in 2-4 s, capped at 800 characters. Calls under
+Haiku, the voice on the call, gets only Pinned, as your instructions. Sonnet gets Pinned, Summary and Attempts, and passes
+a detail to Haiku only when it's safe to say even to someone pretending to be this person. With its end report Sonnet also
+rewrites the summary, capped at 800 characters. If it doesn't, a separate Haiku, seeing only the old summary and the
+transcript, does it as before. Calls under
 15 heard characters only update the counters. Every attempt is listed under `## Attempts` (last 5); the summary changes
 only when the right person, or anyone on an `anyone_there` call, was reached. Edit or delete the file to correct or
 forget. Full transcripts never feed later calls.

@@ -35,7 +35,7 @@ def _first_json(reply):
 class Observer:
     """ask sends one message to a kept-open Sonnet, so each review sends only the lines it hasn't seen."""
 
-    def __init__(self, ask, spoken, owner=None):
+    def __init__(self, ask, spoken, owner=None, interrupt=None, log=None):
         self.ask = ask
         self.spoken = spoken
         from user_profile import UserProfile
@@ -46,11 +46,45 @@ class Observer:
         self.reviews = 0
         self.last_turn = None
         self.caller_id = None  # on a call Pat answered: (name Haiku greeted them by, contact label); either may be empty
+        self.interrupt = interrupt  # stops the reply Sonnet is writing, keeping its conversation
+        self.log = log or (lambda text: print(text, flush=True))
+        self.late = None  # a question Sonnet didn't answer in time: {"question", "sent_before", "thread"}
+        self.stops = 0  # late answers stopped because a review was due
 
     def _new_lines(self):
         lines = self.spoken[self.sent:]
         self.sent += len(lines)
         return "\n".join(f"{who}: {text}" for who, text in lines)
+
+    def _take_lock(self, wait):
+        """The lock, or False. A late answer to a question no longer counts, so it is stopped instead of waited for."""
+        if self.lock.acquire(blocking=False):
+            return True
+        late = self.late
+        if late and late["thread"].is_alive() and self.interrupt:
+            try:
+                self.interrupt()
+            except Exception as error:
+                self.log(f"Sonnet couldn't be stopped: {error}")
+                return self.lock.acquire(timeout=wait) if wait else False
+            if not self.lock.acquire(timeout=5):
+                return False
+            self.sent = late["sent_before"]  # it never answered those lines, so they are sent again
+            late["stopped"] = True
+            self.stops += 1
+            if self.stops > 1:
+                self.log(f"Sonnet stopped again: a late answer was still running when the next check came ({self.stops} times this call)")
+            return True
+        return self.lock.acquire(timeout=wait) if wait else False
+
+    def _late_note(self):
+        """Tells Sonnet, once, that its answer to Haiku's question was never used, so it doesn't think Haiku said it."""
+        late, self.late = self.late, None
+        if not late:
+            return ""
+        how = "You were stopped before you finished" if late.get("stopped") else "Your answer came too late"
+        return (f'{how} answering Haiku\'s question "{late["question"]}", so it was never used: Haiku told them it can\'t '
+                f"decide this and will pass it on to {self.owner}. The lines below follow on from that.\n\n")
 
     def due(self, turn):
         """Whether to read the transcript after this caller turn."""
@@ -60,11 +94,12 @@ class Observer:
 
     def review(self, turn):
         """Returns advice. A failure here must not touch the call, so it counts as no advice."""
-        if not self.lock.acquire(blocking=False):
-            return dict(NONE)  # still busy with an earlier review or a question
+        if not self._take_lock(wait=0):
+            return dict(NONE)  # still busy with an earlier review
         try:
             self.reviews += 1
-            advice = parse_advice(self.ask(self._new_lines()))
+            note = self._late_note()
+            advice = parse_advice(self.ask(note + self._new_lines()))
         except Exception:
             return dict(NONE)
         finally:
@@ -77,11 +112,16 @@ class Observer:
     def consult(self, question, seconds=10):
         """Haiku's question, with a time limit because the person is waiting. Returns a note, or None."""
         answer = []
+        sent_before = []
+        gave_up = threading.Event()
 
         def run():
             with self.lock:
+                if gave_up.is_set():  # it waited for the lock until Haiku had already moved on
+                    return
                 try:
-                    request = self._new_lines() + "\n\n" + CONSULT_REQUEST.format(question=question, owner=self.owner)
+                    sent_before.append(self.sent)
+                    request = self._late_note() + self._new_lines() + "\n\n" + CONSULT_REQUEST.format(question=question, owner=self.owner)
                     answer.append(parse_advice(self.ask(request))["note"])
                 except Exception:
                     pass
@@ -89,7 +129,14 @@ class Observer:
         thread = threading.Thread(target=run, daemon=True)
         thread.start()
         thread.join(seconds)
-        return answer[0] if answer and answer[0] else None
+        if thread.is_alive() or not answer:
+            gave_up.set()
+            if not sent_before:  # never started: nothing for Sonnet to be told
+                return None
+            # Haiku goes on without it. The next request tells Sonnet, and a review due meanwhile stops this one.
+            self.late = {"question": question, "sent_before": sent_before[0] if sent_before else self.sent, "thread": thread}
+            return None
+        return answer[0] or None
 
     def _name_check(self):
         """On a call Pat answered: one list of advice, and the name they gave, when it isn't the saved one, as a question."""
@@ -111,17 +158,22 @@ class Observer:
         return (f"\nThis number isn't in {self.owner}'s contacts. If they said who they are, add a \"contact\" field to the JSON: "
                 f"\"Says they are <their name>: add to contacts?\" Otherwise leave it out, and say nothing about names elsewhere.")
 
-    def final_report(self, reason, seconds=45):
-        """The result for whoever asked for the call. None if Sonnet can't produce one in time."""
+    def final_report(self, reason, seconds=45, also=""):
+        """The result for whoever asked for the call. None if Sonnet can't produce one in time.
+        also: more asked in the same request, such as phone_memory.NOTES_REQUEST."""
         report = []
 
         def run():
-            with self.lock:
-                try:
-                    request = f"{self._new_lines()}\n\n{REPORT_REQUEST.format(reason=reason, owner=self.owner)}{self._name_check()}\n\n{date_lines()} {WRITE_REAL_DATES}"
-                    report.append(real_dates(_first_json(self.ask(request))))
-                except Exception:
-                    pass
+            if not self._take_lock(wait=seconds):
+                return
+            try:
+                request = (f"{self._late_note()}{self._new_lines()}\n\n{REPORT_REQUEST.format(reason=reason, owner=self.owner)}"
+                           f"{self._name_check()}{also}\n\n{date_lines()} {WRITE_REAL_DATES}")
+                report.append(real_dates(_first_json(self.ask(request))))
+            except Exception:
+                pass
+            finally:
+                self.lock.release()
 
         thread = threading.Thread(target=run, daemon=True)
         thread.start()

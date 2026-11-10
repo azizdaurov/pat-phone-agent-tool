@@ -122,7 +122,10 @@ You are on a live phone call, speaking for {owner}. Your name is Pat. You are an
 {today}
 You are trying to reach: {target}. {confidence}
 {who_can_answer}
-Your only job right now is to find out whether you have reached them. You haven't been told why {owner} is calling, so you can't say why, and you must not guess or make up a reason.
+Your only job right now is to find out whether you have reached them. {why}
+
+# What you may tell them
+{before_confirmed}
 
 # What to do, depending on what they say
 - They confirm it's the right {kind}, or clearly are: reply with only {confirmed}. Write nothing else. A clear yes to the identity question already asked in your opening is enough; do not greet them or ask that question again. You will then be given the task.
@@ -130,7 +133,7 @@ Your only job right now is to find out whether you have reached them. You haven'
 - Someone else answered, or they say {who} isn't there right now: apologize, and ask whether {who} is nearby and can come to the phone.
 - They say {who} is coming, or they'll get them: say in a few words that you'll wait. When someone speaks again, check whether it's {who}.
 - They say {who} isn't nearby or can't come: say you will call again, say goodbye, and end your reply with {not_available} {end}
-- They ask who is calling or why: say you're calling on behalf of {owner}, and that you can explain once you've reached {who}. Then ask again.
+- They ask who is calling or why: say you're calling on behalf of {owner}, {explain}. Then ask again.
 - It's still unclear after you have asked twice: apologize, say goodbye, and end your reply with {end}
 
 # Never do this
@@ -233,6 +236,7 @@ class CallBrief:
     who_can_answer: str = ""
     time_zone: str = ""
     date_format: str = ""
+    may_say_before_confirmed: list = field(default_factory=list)  # safe for whoever answers, such as what the call is about
     incoming: bool = False  # they called, and Pat answered
 
     @classmethod
@@ -245,7 +249,7 @@ class CallBrief:
         if not str(data.get("goal", "")).strip():
             raise ValueError("goal is required: one sentence saying what success looks like")
         brief = cls(**data)
-        for name in ("need_from_them", "may_share", "must_not"):
+        for name in ("need_from_them", "may_share", "must_not", "may_say_before_confirmed"):
             value = getattr(brief, name)
             if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
                 raise ValueError(f"{name} must be a list of short strings")
@@ -307,8 +311,22 @@ class CallBrief:
             confidence=CONFIDENCE_LINES[self.confidence], kind="place" if anyone else "person",
             who=self.name.strip() or self.company.strip(),
             who_can_answer="Anyone who answers for them can help." if anyone else "Only this person can help you, nobody else.",
+            **self._before_confirmed(owner),
             must_not=_bullets(ALWAYS_FORBIDDEN), confirmed=CONFIRMED_MARK, not_available=NOT_AVAILABLE_MARK,
             wrong_number=WRONG_NUMBER_MARK, end=END_MARK)
+
+    def _before_confirmed(self, owner):
+        """What the identity check may say before they confirm. Without the field, nothing: its never-share rule used to point
+        at a 'What you may tell them' section that only arrived with the task."""
+        who = self.name.strip() or self.company.strip()
+        if not self.may_say_before_confirmed:
+            return {"why": f"You haven't been told why {owner} is calling, so you can't say why, and you must not guess or make up a reason.",
+                    "before_confirmed": "Nothing yet, beyond your opening.",
+                    "explain": f"and that you can explain once you've reached {who}"}
+        return {"why": (f"About why {owner} is calling, you may say only what is under 'What you may tell them', to anyone who "
+                        "answers; don't guess or add to it."),
+                "before_confirmed": _bullets(self.may_say_before_confirmed),
+                "explain": f"give what is under 'What you may tell them' if it helps, and say you can explain more once you've reached {who}"}
 
     def text(self):
         return "\n".join(f"{f.name}: {getattr(self, f.name)}" for f in fields(self) if getattr(self, f.name))
@@ -335,10 +353,13 @@ class CallBrief:
             must_not=_bullets(self.limits()), ask=ASK_MARK, end=END_MARK)
         return f"{prompt}\n\n# Earlier calls with this number\n{notes}" if notes else prompt
 
-    def observer_prompt(self, owner, pronouns=None):
+    def observer_prompt(self, owner, pronouns=None, notes=""):
+        """notes: what earlier calls left about this number (ContactNotes.for_supervisor). Only Sonnet gets them."""
         prompt = OBSERVER_PROMPT.format(owner=owner, brief=self.text(), must_not=_bullets(self.limits()), refer=refer_to_owner(owner, pronouns))
         if self.incoming:
             prompt = f"{prompt}\n\n{INCOMING_OBSERVER}"
+        if notes:
+            prompt = f"{prompt}\n\n# This number's notes\n{notes}"
         return f"{prompt}\n\n{self.date_table()}"
 
     def date_table(self):
