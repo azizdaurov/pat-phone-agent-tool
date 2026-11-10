@@ -15,7 +15,7 @@ import pat
 import note
 import phone_mcp
 from call_card import TEXT_WIDTH, display_width, render_card
-from easter_eggs import (CALL_FACTS, FACTS, HATCH_KEY, HATCHED_NAME, NO_DIAL_REPLY, OCTO_NUMBER, POEM_PROMPTS, SERIOUS_REPLY, UNHATCHED_NAME, EasterEggs,
+from easter_eggs import (CALL_FACTS, FACTS, HATCH_KEY, HATCHED_NAME, NO_DIAL_REPLY, OCTO_NUMBER, OCTOPUS, POEM_PROMPTS, SERIOUS_REPLY, UNHATCHED_NAME, EasterEggs,
                          as_text, choose_next_style, number_joke, split_style, take_next_style, write_poem)
 from private_numbers import PrivateNumbers
 from tests.test_note import DeskCase
@@ -262,6 +262,34 @@ class Facts(Eggs):
         with open(hatched, "rb") as f:
             self.assertEqual(f.read(), picture)
 
+    def test_call_15_says_both_their_names_and_the_found_list_keeps_the_fact(self):
+        self.eggs.names = lambda: ("Aziz", "azizd")
+        egg = self.run_calls(15)[-1][0]
+        self.assertEqual(egg["lines"], [["Pat calls you Aziz.", "", ""], ["Unless...", "", ""], ["You'd rather be ", "azizd", "."]])
+        self.assertEqual(egg["art"], OCTOPUS)
+        self.assertTrue(all(len(row) <= max(map(len, OCTOPUS.splitlines())) for row in egg["bubbles"]))  # no wider than Pat
+        self.assertIn(f"#15: {FACTS[15]}", self.say("facts")["lines"])
+        self.assertEqual(self.call(), [f"Pat fact #16: {FACTS[16]}"])
+
+    def test_the_plain_fact_shows_without_two_names_that_are_a_persons(self):
+        for names in (("", "azizd"), ("Aziz", ""), ("Aziz", "Aziz"), ("Aziz", "User"), ("Aziz", "ADMIN")):
+            eggs = EasterEggs(tempfile.mkdtemp(), self.folder, nest=self.nest, names=lambda names=names: names)
+            shown = [eggs.after_call(60, "goodbye", "confirmed", datetime.date(2027, 1, 4)) for _ in range(15)]
+            self.assertEqual(shown[-1], [f"Pat fact #15: {FACTS[15]}"], names)
+
+    def test_with_facts_off_the_names_never_show(self):
+        self.eggs.names = lambda: ("Aziz", "azizd")
+        self.eggs.set_facts_on(False)
+        self.assertEqual(self.run_calls(15)[-1], [])
+
+    def test_the_names_come_from_setup_and_from_windows(self):
+        with open(os.path.join(self.folder, "user-profile.json"), "w", encoding="utf-8") as f:
+            json.dump({"name": " Aziz "}, f)
+        with mock.patch("getpass.getuser", return_value="azizd"):
+            self.assertEqual(EasterEggs(self.folder, self.folder).names(), ("Aziz", "azizd"))
+        with mock.patch("getpass.getuser", side_effect=OSError("no name")):
+            self.assertEqual(EasterEggs(self.folder, self.folder).names(), ("Aziz", ""))
+
     def test_a_missing_egg_is_no_crash(self):
         self.assertEqual(len(self.run_calls(24)), 24)
 
@@ -473,6 +501,15 @@ class TheNote(DeskCase):
         live_call.write_last_call(self.folder, id="new", number="", name="Dentist", facts=[], summary="ok", contact_question="", pat_facts=["Pat fact #1: Pat has eight arms."])
         self.assertEqual(self.desk.state()["pat_facts"], ["Pat fact #1: Pat has eight arms."])
         self.assertNotIn("eight arms", render_card({"status": "done", "pat_facts": ["Pat fact #1: Pat has eight arms."]}))
+
+    def test_the_name_egg_plays_once_and_never_reaches_the_agents_result(self):
+        import live_call
+        egg = {"egg": "names", "bubbles": [], "art": OCTOPUS, "lines": [["Pat calls you Aziz.", "", ""]]}
+        live_call.write_last_call(self.folder, id="new", number="", name="Dentist", facts=[], summary="ok", contact_question="", pat_facts=[egg, "Pat fact #20: x"])
+        self.assertEqual(self.desk.state()["pat_facts"], [egg, "Pat fact #20: x"])
+        self.desk.name_egg_shown()
+        self.assertEqual(self.desk.state()["pat_facts"], ["Pat fact #20: x"])
+        self.assertNotIn("Pat calls you", render_card({"status": "done", "pat_facts": [egg]}))
 
     def test_a_tray_request_shows_the_found_list(self):
         self.desk.show_facts()

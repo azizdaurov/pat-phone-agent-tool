@@ -5,6 +5,7 @@ What has already played is kept in contacts/easter_eggs.json, so most jokes appe
 Try one without the note: .venv\\Scripts\\python.exe easter_eggs.py "Mom"
 """
 import datetime
+import getpass
 import glob
 import json
 import os
@@ -30,6 +31,12 @@ OCTO_NUMBER_AT_CALL = 13
 OCTO_APPEARS_WITH_FACT = 9
 OCTO_RING_SECONDS = 8
 OCTO_SPEAKS_TIMES = 2
+NAME_EGG_FACT = 15  # this call shows Pat saying your names instead of the fact; the found list still shows the fact
+NAME_EGG_SHOWN = "name_egg_shown"
+NAME_EGG_BUBBLES = ["   o    O", "     .   o", "   O   o", "    o  . O"]  # as wide as the octopus
+# Windows names that aren't a person's, so seeing them wouldn't feel like Pat knows you.
+GENERIC_LOGINS = {"user", "users", "admin", "administrator", "owner", "pc", "guest", "default", "home", "me", "test", "windows",
+                  "microsoft", "hp", "dell", "lenovo", "asus", "acer", "msi", "samsung", "toshiba", "sony", "huawei", "xiaomi"}
 
 # A fact's number is the call it shows on. The gaps are on purpose: some numbers unlock on rare moments, some are in project files
 # ending in #fisheggs, and some don't exist. Pat is lonely, never suspicious, so no fact hints that Pat calls or listens behind anyone's back.
@@ -202,13 +209,14 @@ def finished_calls(calls_folder):
 
 
 class EasterEggs:
-    def __init__(self, folder=None, calls_folder=None, choose=random.choice, nest=None):
+    def __init__(self, folder=None, calls_folder=None, choose=random.choice, nest=None, names=None):
         self.folder = folder or os.path.join(HERE, "contacts")
         self.calls_folder = calls_folder or os.path.join(HERE, "calls")
         self.nest = nest or os.path.join(HERE, "fisheggs")
         self.path = os.path.join(self.folder, FILE_NAME)
         self.choose = choose
         self.pending = None  # what the open joke's buttons act on
+        self.names = names or self._names
 
     # What has played
 
@@ -276,7 +284,7 @@ class EasterEggs:
         for number in moments:
             line = self._unlock(number) if number else None
             if line:
-                lines.append(line)
+                lines.append((self._name_egg() if number == NAME_EGG_FACT else None) or line)
                 if number == HATCH_AT_FACT:
                     self._hatch()
         return lines
@@ -290,6 +298,27 @@ class EasterEggs:
                 f.write(bytes(byte ^ HATCH_KEY[index % len(HATCH_KEY)] for index, byte in enumerate(egg)))
         except OSError as error:
             print(f"An egg didn't hatch: {error}", flush=True)
+
+    def _names(self):
+        """(the name typed into Pat's setup, the Windows sign-in name). Either can be empty."""
+        from user_profile import UserProfile
+        try:
+            login = getpass.getuser().strip()
+        except Exception:
+            login = ""
+        return UserProfile(os.path.join(self.folder, "user-profile.json")).name, login
+
+    def _name_egg(self):
+        """Pat says the name you gave it, then the Windows one you never did. The note plays it: lines are (text, name in
+        italics, text). Only with two different names that are a person's."""
+        owner, login = self.names()
+        if not owner or not login or login == owner or login.casefold() in GENERIC_LOGINS:
+            return None
+        return {"egg": "names", "bubbles": NAME_EGG_BUBBLES, "art": OCTOPUS,
+                "lines": [[f"Pat calls you {owner}.", "", ""], ["Unless...", "", ""], ["You'd rather be ", login, "."]]}
+
+    def name_egg_shown(self):
+        self.mark(NAME_EGG_SHOWN)
 
     def found_panel(self):
         found = sorted(number for number in self._load().get("facts", []) if number in FACTS)

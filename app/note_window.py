@@ -165,6 +165,10 @@ class Bridge(QObject):
     def dismiss(self):
         self.window.desk.dismiss()
 
+    @Slot()
+    def name_egg_shown(self):
+        self.window.desk.name_egg_shown()
+
     @Slot(str)
     def choose_route(self, route):
         self.window.desk.choose_route(route)

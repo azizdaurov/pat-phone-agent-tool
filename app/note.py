@@ -59,7 +59,7 @@ if sys.stdout is None:  # pythonw has no console
 
 from audio_defaults import CallDevices, headset_problem  # noqa: E402
 from claude_errors import plain_reason  # noqa: E402
-from easter_eggs import EasterEggs, choose_next_style, split_style  # noqa: E402
+from easter_eggs import NAME_EGG_SHOWN, EasterEggs, choose_next_style, split_style  # noqa: E402
 from live_call import SoundMeter, read_last_call, read_live, send_command, take_commands  # noqa: E402
 from note_settings import SETTINGS_NAME, NoteSettings  # noqa: E402
 from phone_memory import number_key  # noqa: E402
@@ -602,13 +602,21 @@ class Desk:
                 state["talking"] = state["level"] > 0
             elif screen == "done":
                 state.update(number=last.get("number", ""), name=last.get("name", ""), facts=last.get("facts", []), summary=last.get("summary", ""),
-                             contact_question=last.get("contact_question", ""), always=False, flair=last.get("flair", []), pat_facts=last.get("pat_facts", []), poem=last.get("poem", ""),
+                             contact_question=last.get("contact_question", ""), always=False, flair=last.get("flair", []), pat_facts=self._pat_facts(last), poem=last.get("poem", ""),
                              poem_style=last.get("poem_style", ""), poem_pending=last.get("poem_pending", False))
                 self.showing_last = last.get("id")
             supplied_name, number = split_caller(state.get("number", ""))
             state["name"] = state.get("name") or self.private.name_for(number) or supplied_name
             state["number"] = number
             return state
+
+    def _pat_facts(self, last):
+        """The name egg plays once, so it isn't there again when this call's note is shown again."""
+        shown = self.eggs.seen(NAME_EGG_SHOWN)
+        return [fact for fact in last.get("pat_facts", []) if isinstance(fact, str) or not shown]
+
+    def name_egg_shown(self):
+        self.eggs.name_egg_shown()
 
     def dismiss(self):
         """The end-of-call summary stays until this."""

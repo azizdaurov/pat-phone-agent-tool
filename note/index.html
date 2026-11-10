@@ -113,6 +113,9 @@ pre{margin:0 0 7px;font:12px/1.15 Consolas,'Courier New',monospace;color:var(--m
 #panel-lines::-webkit-scrollbar{width:6px}
 #panel-lines::-webkit-scrollbar-thumb{background:var(--pale);border-radius:3px}
 .pat-fact{margin-top:6px;font-size:12px;color:var(--muted)}
+.name-egg{font-style:normal}
+.name-egg p{min-height:18px;margin:0}
+.name-egg button{margin-top:8px;padding:0 14px}
 #panel-buttons{display:flex;gap:7px;margin-top:9px}
 #panel-buttons button{flex:1;padding:0 8px}
 #done-flair{margin:11px 0 0;padding-top:10px;font-size:13px;font-style:italic;line-height:1.35;border-top:1px solid var(--rule)}
@@ -478,6 +481,7 @@ function renderAfterCall(state) {
     block.appendChild(document.createTextNode(extra.text || ''));
     return block;
   }).concat(patFacts.map((text) => {
+    if (typeof text !== 'string') return nameEgg(text);
     const line = document.createElement('div');
     line.className = 'pat-fact';
     line.textContent = text;
@@ -490,6 +494,61 @@ function renderAfterCall(state) {
   if ($('poem').textContent !== poem) $('poem').textContent = poem;
   $('poem').hidden = !poem;
   $('copy-poem').hidden = !poem;
+}
+
+// In fact #15's place: bubbles, then Pat, then three lines, one at a time, each waiting for OK. After the last, only Pat stays
+// a moment, then that goes too. Nothing explains it, and it plays once.
+const NAME_EGG_SPEEDS = [70, 170, 90];  // milliseconds a letter; "Unless..." comes slowest
+function nameEgg(egg) {
+  const block = document.createElement('div');
+  block.className = 'name-egg';
+  const art = document.createElement('pre');
+  const line = document.createElement('p');
+  const ok = document.createElement('button');
+  ok.type = 'button';
+  ok.className = 'tag';
+  ok.textContent = 'OK';
+  ok.hidden = true;
+  block.append(art, line, ok);
+  const later = (ms, step) => setTimeout(() => { if (block.isConnected) { step(); fit(); } }, ms);
+  const show = (count, parts) => {  // the first count letters, the name part in italics
+    line.replaceChildren();
+    let left = count;
+    parts.forEach((part, index) => {
+      const piece = part.slice(0, Math.max(0, left));
+      left -= part.length;
+      if (!piece) return;
+      if (index !== 1) return line.append(piece);
+      const name = document.createElement('i');
+      name.textContent = piece;
+      line.append(name);
+    });
+  };
+  const say = (index) => {
+    const parts = egg.lines[index], speed = NAME_EGG_SPEEDS[index] || 90, length = parts.join('').length;
+    for (let count = 1; count <= length; count++) later(count * speed, () => show(count, parts));
+    later(length * speed + 300, () => { ok.hidden = false; });
+  };
+  let said = 0;
+  ok.onclick = () => {
+    ok.hidden = true;
+    line.replaceChildren();
+    fit();
+    said += 1;
+    if (said < egg.lines.length) return later(700, () => say(said));
+    later(3000, () => {
+      block.hidden = true;
+      if (api()) api().name_egg_shown();
+    });
+  };
+  const rising = [];
+  let t = 300;
+  egg.bubbles.forEach((row) => { later(t, () => { rising.unshift(row); art.textContent = rising.join('\n'); }); t += 380; });
+  later(t += 300, () => { art.textContent = ''; });
+  t += 500;
+  for (let count = 1; count <= egg.art.length; count++) later(t += 35, () => { art.textContent = egg.art.slice(0, count); });
+  later(t + 1000, () => say(0));
+  return block;
 }
 
 function fit() {
