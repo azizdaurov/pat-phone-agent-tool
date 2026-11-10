@@ -162,7 +162,6 @@ failed, send its log from `setup-logs\` (not cleaned: it shows your Windows user
 ## Roadmap
 
 - Sync the phone's contacts with Pat's. Until then, Pat's contacts win on the note, on the call and in what Haiku is told.
-- Give the name-check prompt a "What you may tell them" section, which its never-share rule already points at.
 
 ## Like Pat?
 
