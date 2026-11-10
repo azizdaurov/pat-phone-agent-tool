@@ -236,8 +236,7 @@ function Ask-To-Restart {
 
 Step 'Windows'
 $build = [Environment]::OSVersion.Version.Build
-if ($build -lt 19041) { throw "Pat needs Windows 10 version 2004 or later, or Windows 11; this is build $build." }
-if ($build -lt 22000) { Write-Host "Windows 10 (build $build): Pat is being tried here; it was tested on Windows 11." -ForegroundColor Yellow }
+if ($build -lt 22000) { throw "Pat needs Windows 11; this is build $build." }
 "Windows build $build"
 # Run as administrator, setup still works, but everything per-user (Python, the Claude login, the phone tool, the
 # mobile-devices switch) lands in the account that opened the window. Another account's password puts it in the wrong one.
